@@ -6,7 +6,7 @@
         "run", "--rm", "-i",
         "--env-file", "${CLAUDE_PLUGIN_ROOT}/.env",
         "-v", "${CLAUDE_PLUGIN_ROOT}/data:/app/data",
-        "omni_cortex-omni-cortex:latest"
+        "vzwjustin/omni-cortex:latest"
       ]
     }
   }
