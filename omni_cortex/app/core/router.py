@@ -97,260 +97,405 @@ class HyperRouter:
     # Just say what you want naturally - we'll figure out the right framework
     
     VIBE_DICTIONARY = {
-        # Debugging vibes
+        # Debugging vibes - hypothesis testing loop
         "active_inference": [
-            "why is this broken", "wtf is wrong", "this doesn't work", 
+            "why is this broken", "wtf is wrong", "this doesn't work",
             "find the bug", "debug this", "what's causing this",
             "figure out why", "track down", "root cause", "investigate",
-            "something's off", "it's acting weird", "unexpected behavior"
+            "something's off", "it's acting weird", "unexpected behavior",
+            "why does this", "what the hell", "broken af", "not working",
+            "keeps crashing", "throwing errors", "fails randomly",
+            "intermittent bug", "heisenbug", "works on my machine",
+            "production bug", "regression", "stopped working",
+            "used to work", "suddenly broke", "after update",
+            "null pointer", "undefined", "NaN", "empty result"
         ],
-        
-        # Refactoring vibes  
+
+        # Refactoring vibes - structured cleanup
         "graph_of_thoughts": [
             "clean this up", "this code is ugly", "make it not suck",
             "untangle this mess", "spaghetti code", "needs refactoring",
-            "reorganize", "restructure", "make it cleaner", "simplify this"
+            "reorganize", "restructure", "make it cleaner", "simplify this",
+            "code smell", "tech debt", "legacy code", "maintainable",
+            "readable", "DRY this up", "extract method", "decompose",
+            "too complex", "cyclomatic complexity", "nested hell",
+            "callback hell", "pyramid of doom", "deeply nested",
+            "hard to follow", "confusing code", "wtf per minute"
         ],
-        
-        # Architecture vibes
+
+        # Architecture vibes - system design
         "reason_flux": [
             "design a system", "architect this", "how should I structure",
             "plan this out", "big picture", "system design", "make it scalable",
-            "build from scratch", "greenfield", "new project", "overall approach"
+            "build from scratch", "greenfield", "new project", "overall approach",
+            "microservices", "monolith", "architecture", "high level design",
+            "design patterns", "SOLID", "clean architecture", "hexagonal",
+            "domain driven", "DDD", "event driven", "CQRS", "event sourcing",
+            "API design", "schema design", "data model", "ERD",
+            "infrastructure", "deployment", "CI/CD pipeline"
         ],
-        
-        # Algorithm vibes
+
+        # Algorithm/optimization vibes
         "tree_of_thoughts": [
             "make it faster", "optimize this", "too slow", "performance sucks",
             "better algorithm", "more efficient", "reduce complexity",
-            "speed this up", "it's laggy", "bottleneck"
+            "speed this up", "it's laggy", "bottleneck", "O(n^2)",
+            "time complexity", "space complexity", "memory leak",
+            "CPU intensive", "optimize query", "slow query", "N+1",
+            "caching", "memoization", "lazy loading", "pagination",
+            "batch processing", "async", "parallel", "concurrent",
+            "profiling", "benchmark", "perf issues", "latency"
         ],
-        
-        # Fast generation vibes
+
+        # Fast generation vibes - scaffolding
         "skeleton_of_thought": [
             "just generate", "scaffold", "boilerplate", "quick template",
             "stub this out", "starter code", "basic structure", "skeleton",
-            "rough draft", "get me started", "wireframe"
+            "rough draft", "get me started", "wireframe", "prototype",
+            "MVP", "proof of concept", "POC", "quick prototype",
+            "bare bones", "minimal version", "starting point",
+            "init project", "create new", "bootstrap", "setup"
         ],
-        
-        # API vibes
+
+        # API/library vibes - external integration
         "critic": [
-            "using this library", "api integration", "third party", 
+            "using this library", "api integration", "third party",
             "how do I use", "sdk", "package", "library docs",
-            "correct usage", "best practice for"
+            "correct usage", "best practice for", "npm package",
+            "pip install", "import", "dependency", "module",
+            "REST API", "GraphQL", "webhook", "OAuth", "JWT",
+            "external service", "integration", "connect to",
+            "API call", "fetch", "axios", "requests"
         ],
-        
-        # Security vibes
+
+        # Security/verification vibes
         "chain_of_verification": [
             "is this secure", "security check", "audit this", "vulnerabilities",
             "could this be hacked", "pen test", "code review",
-            "sanity check", "validate this", "double check"
+            "sanity check", "validate this", "double check",
+            "verify", "confirm", "make sure", "correct?",
+            "looks right?", "review my code", "spot check",
+            "find issues", "catch bugs", "QA", "quality check",
+            "before merging", "PR review", "pull request"
         ],
-        
-        # Math/compute vibes
+
+        # Math/compute vibes - calculations
         "program_of_thoughts": [
             "calculate", "compute", "do the math", "run the numbers",
-            "data processing", "transform data", "crunch", "analyze data"
+            "data processing", "transform data", "crunch", "analyze data",
+            "formula", "equation", "statistics", "aggregate",
+            "sum", "average", "median", "percentile", "distribution",
+            "pandas", "numpy", "dataframe", "CSV", "JSON transform",
+            "ETL", "data pipeline", "data munging", "wrangling"
         ],
-        
-        # Creative/novel vibes
+
+        # Creative/novel vibes - unique problems
         "self_discover": [
             "I have no idea", "weird problem", "never seen this",
             "creative solution", "think outside box", "novel approach",
-            "unconventional", "unique situation", "edge case"
+            "unconventional", "unique situation", "edge case",
+            "bizarre", "strange bug", "unusual", "one-off",
+            "special case", "corner case", "rare scenario",
+            "no documentation", "undocumented", "black box",
+            "reverse engineering", "figure it out", "puzzling"
         ],
-        
-        # Deep debugging vibes
+
+        # Deep search vibes - complex exploration
         "mcts_rstar": [
             "really hard bug", "been stuck for hours", "complex issue",
             "multi-step problem", "deep issue", "intricate bug",
-            "need to explore options", "thorough search"
+            "need to explore options", "thorough search",
+            "exhaustive", "all possibilities", "brute force",
+            "search space", "combinatorial", "permutations",
+            "game tree", "decision tree", "branch and bound",
+            "stuck for days", "impossible bug", "nightmare"
         ],
-        
-        # Decision vibes
+
+        # Decision vibes - weighing options
         "multi_agent_debate": [
             "should I use A or B", "trade-offs", "pros and cons",
             "which approach", "compare options", "decision", "evaluate",
-            "weigh options", "what would you recommend"
+            "weigh options", "what would you recommend", "best choice",
+            "React or Vue", "SQL or NoSQL", "REST or GraphQL",
+            "which framework", "which library", "which database",
+            "monorepo or multirepo", "serverless or containers",
+            "build vs buy", "roll own or use existing", "opinions"
         ],
-        
-        # Big change vibes
+
+        # Big change vibes - major overhaul
         "everything_of_thought": [
             "major rewrite", "big migration", "overhaul", "massive change",
             "complete redesign", "from scratch", "total refactor",
-            "modernize", "upgrade everything"
+            "modernize", "upgrade everything", "v2", "next version",
+            "breaking changes", "deprecate", "sunset", "EOL",
+            "migration path", "upgrade path", "replatform",
+            "technical transformation", "rebuild", "redo everything"
         ],
-        
-        # Pattern vibes
+
+        # Pattern vibes - known solutions
         "buffer_of_thoughts": [
             "I've done this before", "standard pattern", "common task",
-            "typical", "usual approach", "boilerplate", "routine"
+            "typical", "usual approach", "boilerplate", "routine",
+            "CRUD", "login flow", "auth", "pagination",
+            "search filter", "form validation", "file upload",
+            "email sending", "notifications", "logging",
+            "error handling", "retry logic", "rate limiting"
         ],
-        
-        # Long context vibes
+
+        # Long context vibes - multi-file awareness
         "coala": [
             "lots of files", "whole codebase", "across multiple files",
-            "context from", "remember earlier", "stateful", "keep track"
+            "context from", "remember earlier", "stateful", "keep track",
+            "monorepo", "large codebase", "enterprise", "legacy system",
+            "multiple services", "cross-cutting", "shared code",
+            "dependencies between", "imports from", "circular dependency",
+            "file structure", "project organization", "modules"
         ],
-        
-        # Research vibes
+
+        # Research vibes - understanding code
         "chain_of_note": [
             "understand this code", "explain", "what does this do",
             "learn the codebase", "document", "figure out how",
-            "reverse engineer", "how does it work"
+            "reverse engineer", "how does it work", "explain like",
+            "ELI5", "walk through", "code walkthrough",
+            "documentation", "comments", "README", "wiki",
+            "onboarding", "new to codebase", "ramping up"
         ],
-        
-        # Abstraction vibes
+
+        # Abstraction vibes - first principles
         "step_back": [
             "big O", "complexity analysis", "fundamentals", "first principles",
-            "underlying concept", "theory behind", "abstract thinking"
+            "underlying concept", "theory behind", "abstract thinking",
+            "CS fundamentals", "data structures", "algorithms",
+            "design principles", "patterns", "anti-patterns",
+            "why does this work", "how does this work", "under the hood",
+            "internals", "implementation details", "deep dive"
         ],
-        
-        # Analogy vibes
+
+        # Analogy vibes - similar solutions
         "analogical": [
             "like when", "similar to", "pattern from", "reminds me of",
-            "same as", "analogous", "comparable to"
+            "same as", "analogous", "comparable to", "like in",
+            "inspired by", "borrowed from", "adapted from",
+            "seen this before", "familiar pattern", "like that other",
+            "copy from", "based on", "reference implementation"
         ],
-        
-        # Mixed vibes
+
+        # Adaptive vibes - flexible approach
         "adaptive_injection": [
             "just figure it out", "do your thing", "whatever works",
-            "adapt", "flex", "go with the flow"
+            "adapt", "flex", "go with the flow", "surprise me",
+            "your call", "you decide", "best judgment",
+            "improvise", "wing it", "play it by ear",
+            "dynamic approach", "flexible solution"
         ],
-        
-        # Requirements vibes
+
+        # Requirements vibes - spec driven
         "re2": [
             "requirements", "spec", "constraints", "must have",
-            "needs to", "requirements doc", "acceptance criteria"
+            "needs to", "requirements doc", "acceptance criteria",
+            "user story", "ticket", "JIRA", "specification",
+            "functional requirements", "non-functional", "NFR",
+            "SLA", "compliance", "regulatory", "legal requirements",
+            "business rules", "validation rules", "invariants"
         ],
-        
-        # Quick vibes
+
+        # Quick vibes - simple tasks
         "system1": [
             "quick question", "simple fix", "easy", "obvious",
             "just do it", "no brainer", "trivial", "one liner",
-            "fast answer", "real quick"
+            "fast answer", "real quick", "simple", "straightforward",
+            "basic", "elementary", "beginner", "101",
+            "quick fix", "hotfix", "patch", "typo",
+            "rename", "move", "delete", "add comment"
         ],
 
-        # New framework vibes (2026 Edition)
+        # Code decomposition vibes
         "chain_of_code": [
             "code blocks", "pseudocode", "execution trace", "logic puzzle",
             "recursive logic", "algorithmic complexity", "structured thinking",
-            "break into code", "code decomposition"
+            "break into code", "code decomposition", "step through",
+            "trace execution", "follow the code", "code flow",
+            "control flow", "data flow", "call stack",
+            "breakpoints", "debugger", "line by line"
         ],
 
+        # Pre-validation vibes
         "self_debugging": [
             "test before showing", "mental execution", "trace through",
             "prevent bugs", "check my work", "simulate execution",
-            "off by one", "edge case check", "dry run"
+            "off by one", "edge case check", "dry run",
+            "desk check", "code review myself", "self review",
+            "before committing", "sanity test", "smoke test",
+            "manual testing", "walkthrough", "trace"
         ],
 
+        # TDD vibes
         "tdd_prompting": [
             "test first", "write tests", "TDD", "test driven",
             "unit tests", "edge cases", "test coverage",
-            "red green refactor", "tests then code"
+            "red green refactor", "tests then code", "jest",
+            "pytest", "mocha", "junit", "testing framework",
+            "mock", "stub", "spy", "fixture",
+            "assertion", "expect", "should", "test case"
         ],
 
+        # Reverse debugging vibes
         "reverse_cot": [
             "wrong output", "expected vs actual", "why different output",
             "output delta", "silent bug", "calculation error",
-            "backwards debugging", "work backward", "reverse engineer bug"
+            "backwards debugging", "work backward", "reverse engineer bug",
+            "expected X got Y", "off by", "incorrect result",
+            "wrong answer", "bad output", "unexpected result",
+            "diff", "mismatch", "discrepancy"
         ],
 
+        # Socratic vibes
         "rubber_duck": [
             "explain to me", "walk me through", "ask me questions",
             "guide me", "help me think", "rubber duck",
-            "Socratic method", "lead me to answer", "questioning approach"
+            "Socratic method", "lead me to answer", "questioning approach",
+            "talk it through", "think aloud", "verbalize",
+            "explain my thinking", "work through it", "reasoning"
         ],
 
+        # Tool use vibes
         "react": [
             "use tools", "multi-step", "action reasoning",
             "tool use", "step and observe", "interact with",
-            "reasoning acting", "ReAct pattern", "observe results"
+            "reasoning acting", "ReAct pattern", "observe results",
+            "API calls", "external tools", "shell commands",
+            "file operations", "database queries", "web requests"
         ],
 
+        # Learning vibes
         "reflexion": [
             "learn from mistakes", "retry", "failed attempt",
             "try again", "reflect on", "what went wrong",
-            "iterative learning", "self-evaluation", "memory-based"
+            "iterative learning", "self-evaluation", "memory-based",
+            "previous attempt", "last time", "improve on",
+            "lessons learned", "retrospective", "post-mortem"
         ],
 
+        # Quality vibes
         "self_refine": [
             "improve quality", "polish", "refine",
             "make it better", "iterative improvement", "critique and improve",
-            "self-critique", "refinement loop", "quality pass"
+            "self-critique", "refinement loop", "quality pass",
+            "clean up", "tighten up", "optimize",
+            "beautify", "format", "lint", "prettier"
         ],
 
+        # Bottom-up vibes
         "least_to_most": [
             "atomic functions", "dependency graph", "bottom up",
             "layered", "base functions first", "decompose completely",
-            "building blocks", "hierarchical build", "least dependent first"
+            "building blocks", "hierarchical build", "least dependent first",
+            "utils first", "helpers", "primitives",
+            "foundation", "core functions", "base layer"
         ],
 
+        # Comparison vibes
         "comparative_arch": [
             "compare approaches", "readability vs performance", "trade-offs",
             "multiple solutions", "which is faster", "optimize for",
-            "different versions", "performance vs memory", "three approaches"
+            "different versions", "performance vs memory", "three approaches",
+            "show me options", "alternatives", "variations",
+            "different ways", "multiple implementations", "compare"
         ],
 
+        # Planning vibes
         "plan_and_solve": [
             "plan first", "think before coding", "explicit plan",
             "strategy", "outline approach", "plan then execute",
-            "methodical", "step by step plan", "planning phase"
+            "methodical", "step by step plan", "planning phase",
+            "roadmap", "game plan", "action plan",
+            "checklist", "todo list", "phases", "milestones"
         ],
 
+        # Security audit vibes
         "red_team": [
             "security audit", "vulnerabilities", "pen test",
             "security review", "find exploits", "attack vectors",
-            "OWASP", "SQLi", "XSS", "security threats", "hack this"
+            "OWASP", "SQLi", "XSS", "security threats", "hack this",
+            "injection", "CSRF", "SSRF", "RCE",
+            "privilege escalation", "authentication bypass",
+            "broken access control", "sensitive data exposure"
         ],
 
+        # State management vibes
         "state_machine": [
             "state machine", "FSM", "states and transitions",
             "workflow", "state diagram", "UI states",
-            "game states", "state management", "transitions"
+            "game states", "state management", "transitions",
+            "Redux", "Zustand", "MobX", "Vuex",
+            "finite automata", "statechart", "xstate",
+            "loading states", "error states", "success states"
         ],
 
+        # Basic reasoning vibes
         "chain_of_thought": [
             "think step by step", "reason through", "work through",
             "logical steps", "step by step", "reasoning chain",
-            "think carefully", "show your work", "explicit reasoning"
+            "think carefully", "show your work", "explicit reasoning",
+            "break it down", "one step at a time", "systematically",
+            "logically", "methodically", "carefully"
         ],
 
-        # Additional coding frameworks (2026 expansion)
+        # Competitive programming vibes
         "alphacodium": [
             "competitive programming", "code contest", "algorithm challenge",
             "iterative code", "test-based", "multi-stage",
-            "code generation", "contest problem", "leetcode"
+            "code generation", "contest problem", "leetcode",
+            "hackerrank", "codeforces", "topcoder", "advent of code",
+            "interview question", "coding interview", "whiteboard",
+            "DSA", "data structures and algorithms"
         ],
 
+        # Modular vibes
         "codechain": [
             "modular code", "sub-modules", "self-revision",
             "incremental", "chain revisions", "module by module",
-            "component based", "build incrementally", "refine modules"
+            "component based", "build incrementally", "refine modules",
+            "microservices", "packages", "libraries",
+            "separation of concerns", "single responsibility"
         ],
 
+        # Evolutionary vibes
         "evol_instruct": [
             "evolve solution", "add constraints", "increase complexity",
             "challenging problem", "constraint-based", "evolutionary",
-            "harder version", "more constraints", "complex requirements"
+            "harder version", "more constraints", "complex requirements",
+            "additional requirements", "scope creep", "feature creep",
+            "extend", "enhance", "augment", "expand"
         ],
 
+        # Iteration vibes
         "llmloop": [
             "feedback loop", "iterate until", "compile and fix",
             "test loop", "automated testing", "quality assurance",
-            "production ready", "lint and fix", "keep iterating"
+            "production ready", "lint and fix", "keep iterating",
+            "CI/CD", "build pipeline", "automated checks",
+            "pre-commit hooks", "continuous improvement"
         ],
 
+        # Project integration vibes
         "procoder": [
             "compiler feedback", "project level", "codebase integration",
             "API usage", "large project", "integrate with",
-            "project context", "compiler errors", "fix imports"
+            "project context", "compiler errors", "fix imports",
+            "type errors", "typescript", "mypy", "pylint",
+            "ESLint errors", "build errors", "dependency issues"
         ],
 
+        # High-stakes vibes
         "recode": [
             "multiple candidates", "cross validate", "CFG debugging",
             "control flow", "reliable code", "high stakes",
-            "validate candidates", "majority voting", "robust solution"
+            "validate candidates", "majority voting", "robust solution",
+            "mission critical", "production critical", "can't fail",
+            "financial", "healthcare", "safety critical",
+            "consensus", "redundancy", "fault tolerant"
         ]
     }
     
