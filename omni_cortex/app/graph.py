@@ -10,6 +10,7 @@ from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 import aiosqlite
 import structlog
+import os
 
 from .state import GraphState
 from .core.router import HyperRouter
@@ -20,7 +21,7 @@ from .langchain_integration import (
     AVAILABLE_TOOLS
 )
 
-CHECKPOINT_PATH = "/app/data/checkpoints.sqlite"
+CHECKPOINT_PATH = os.getenv("CHECKPOINT_PATH", "/app/data/checkpoints.sqlite")
 logger = structlog.get_logger("graph")
 
 # Import all framework nodes
@@ -249,8 +250,9 @@ def create_reasoning_graph(checkpointer=None) -> StateGraph:
 
 async def get_checkpointer():
     """Get async SQLite checkpointer for LangGraph."""
-    import os
-    os.makedirs("/app/data", exist_ok=True)
+    # Ensure directory exists
+    checkpoint_dir = os.path.dirname(CHECKPOINT_PATH)
+    os.makedirs(checkpoint_dir, exist_ok=True)
     return AsyncSqliteSaver.from_conn_string(CHECKPOINT_PATH)
 
 

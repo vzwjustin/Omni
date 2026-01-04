@@ -27,7 +27,6 @@ from langchain_anthropic import ChatAnthropic
 from langchain_openai import ChatOpenAI
 from langchain_openai import OpenAIEmbeddings
 from langchain_chroma import Chroma
-from langchain_core.embeddings import Embeddings
 from pydantic import BaseModel, Field
 import structlog
 
@@ -93,21 +92,21 @@ class OmniCortexMemory:
 
 # Global memory store (keyed by thread_id) with simple LRU eviction
 _memory_store: "OrderedDict[str, OmniCortexMemory]" = OrderedDict()
-_memory_lock = asyncio.Lock()  # Protect concurrent access
+_memory_store_lock = asyncio.Lock()
 MAX_MEMORY_THREADS = 100
 
 
 async def get_memory(thread_id: str) -> OmniCortexMemory:
-    """Get or create memory for a thread (thread-safe)."""
-    async with _memory_lock:
+    """Get or create memory for a thread with thread-safe access."""
+    async with _memory_store_lock:
         if thread_id in _memory_store:
             _memory_store.move_to_end(thread_id)
             return _memory_store[thread_id]
-
+        
         # Evict oldest if over capacity
         if len(_memory_store) >= MAX_MEMORY_THREADS:
             _memory_store.popitem(last=False)
-
+        
         mem = OmniCortexMemory(thread_id)
         _memory_store[thread_id] = mem
         return mem
@@ -184,101 +183,25 @@ AVAILABLE_TOOLS = [search_documentation, execute_code, retrieve_context] + _enha
 _vectorstore: Optional[Chroma] = None
 
 
-def get_embedding_function() -> Optional[Embeddings]:
-    """
-    Get embedding function based on configured provider.
-
-    Supported providers:
-    - openrouter: OpenRouter API (default) - supports OpenAI, Morph, and other models
-    - openai: Direct OpenAI API
-    - huggingface: Local HuggingFace sentence-transformers (free, no API key)
-
-    Configure via environment variables:
-    - EMBEDDING_PROVIDER: openrouter (default), openai, huggingface
-    - EMBEDDING_MODEL: model name (default: text-embedding-3-small)
-    - OPENROUTER_API_KEY: for OpenRouter provider
-    - OPENAI_API_KEY: for direct OpenAI provider
-    """
-    provider = settings.embedding_provider.lower()
-    model = settings.embedding_model
-
-    try:
-        if provider == "openrouter":
-            api_key = settings.openrouter_api_key
-            if not api_key:
-                logger.warning("embedding_no_api_key", provider="openrouter")
-                return None
-            # OpenRouter uses OpenAI-compatible API
-            return OpenAIEmbeddings(
-                model=model,
-                api_key=api_key,
-                base_url=settings.openrouter_base_url
-            )
-
-        elif provider == "openai":
-            api_key = settings.openai_api_key
-            if not api_key:
-                logger.warning("embedding_no_api_key", provider="openai")
-                return None
-            return OpenAIEmbeddings(model=model, api_key=api_key)
-
-        elif provider == "huggingface":
-            # Local embeddings - no API key needed
-            try:
-                from langchain_huggingface import HuggingFaceEmbeddings
-                return HuggingFaceEmbeddings(model_name=model or "all-MiniLM-L6-v2")
-            except ImportError:
-                logger.error("huggingface_not_installed",
-                           hint="pip install langchain-huggingface sentence-transformers")
-                return None
-
-        else:
-            logger.error("unknown_embedding_provider", provider=provider)
-            return None
-
-    except Exception as e:
-        logger.error("embedding_init_failed", provider=provider, error=str(e))
-        return None
-
-
-def is_rag_enabled() -> bool:
-    """Check if RAG/embeddings are available (API key configured)."""
-    provider = settings.embedding_provider.lower()
-    if provider == "none":
-        return False
-    if provider == "openrouter":
-        return bool(settings.openrouter_api_key)
-    if provider == "openai":
-        return bool(settings.openai_api_key)
-    if provider == "huggingface":
-        return True  # No API key needed
-    return False
-
-
 def get_vectorstore() -> Optional[Chroma]:
     """Get or initialize a persistent Chroma vector store."""
     global _vectorstore
     if _vectorstore:
         return _vectorstore
-
+    
     persist_dir = os.getenv("CHROMA_PERSIST_DIR", "/app/data/chroma")
     os.makedirs(persist_dir, exist_ok=True)
-
+    
     try:
-        embeddings = get_embedding_function()
-        if not embeddings:
-            logger.warning("vectorstore_no_embeddings",
-                         hint="Set EMBEDDING_PROVIDER and API key in .env")
-            return None
-
+        embeddings = OpenAIEmbeddings(
+            model="text-embedding-3-large",
+            api_key=settings.openai_api_key or settings.openrouter_api_key
+        )
         _vectorstore = Chroma(
             collection_name="omni-cortex-context",
             persist_directory=persist_dir,
             embedding_function=embeddings
         )
-        logger.info("vectorstore_initialized",
-                   provider=settings.embedding_provider,
-                   model=settings.embedding_model)
         return _vectorstore
     except Exception as e:
         logger.error("vectorstore_init_failed", error=str(e))
@@ -370,16 +293,9 @@ class OmniCortexCallback(BaseCallbackHandler):
     
     def on_llm_end(self, response, **kwargs) -> None:
         """Track LLM call completion and token usage."""
-        # Handle both object (from LangChain) and dict (from our wrappers)
-        llm_output = None
-        if hasattr(response, 'llm_output'):
-            llm_output = response.llm_output
-        elif isinstance(response, dict):
-            llm_output = response.get('llm_output')
-
-        if llm_output:
-            tokens = llm_output.get('token_usage', {}) if isinstance(llm_output, dict) else {}
-            total = tokens.get('total_tokens', 0) if isinstance(tokens, dict) else 0
+        if hasattr(response, 'llm_output') and response.llm_output:
+            tokens = response.llm_output.get('token_usage', {})
+            total = tokens.get('total_tokens', 0)
             self.total_tokens += total
             logger.info(
                 "llm_call_end",
@@ -541,11 +457,11 @@ async def enhance_state_with_langchain(state: GraphState, thread_id: str) -> Gra
     """
     memory = await get_memory(thread_id)
     context = memory.get_context()
-
+    
     # Add to working memory
     state["working_memory"]["chat_history"] = context["chat_history"]
     state["working_memory"]["framework_history"] = context["framework_history"]
-
+    
     return state
 
 
