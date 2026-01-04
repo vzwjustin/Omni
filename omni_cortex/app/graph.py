@@ -249,7 +249,24 @@ def create_reasoning_graph(checkpointer=None) -> StateGraph:
 
 
 async def get_checkpointer():
-    """Get async SQLite checkpointer for LangGraph."""
+    """
+    Get async SQLite checkpointer for LangGraph.
+
+    IMPORTANT: Lifecycle Management
+    -------------------------------
+    The returned AsyncSqliteSaver maintains an internal connection pool.
+    Callers are responsible for cleanup when done:
+
+        checkpointer = await get_checkpointer()
+        try:
+            graph = create_reasoning_graph(checkpointer=checkpointer)
+            # ... use graph ...
+        finally:
+            await checkpointer.conn.close()  # Close the underlying connection
+
+    For long-running servers, consider using the checkpointer as a singleton
+    that persists for the application lifetime, closing only on shutdown.
+    """
     # Ensure directory exists
     checkpoint_dir = os.path.dirname(CHECKPOINT_PATH)
     os.makedirs(checkpoint_dir, exist_ok=True)

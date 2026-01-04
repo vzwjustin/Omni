@@ -312,11 +312,29 @@ class _SafetyValidator(ast.NodeVisitor):
         self.generic_visit(node)
 
 
+def _execute_code_sync(code: str, safe_globals: dict) -> tuple[str, str]:
+    """
+    Synchronous code execution helper to be run in a thread pool.
+
+    Returns: (stdout_output, stderr_output)
+    Raises: Any exception from exec()
+    """
+    stdout_capture = io.StringIO()
+    stderr_capture = io.StringIO()
+
+    with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
+        exec(code, safe_globals, safe_globals)
+
+    return stdout_capture.getvalue(), stderr_capture.getvalue()
+
+
 async def _safe_execute(code: str, timeout: float = 5.0) -> dict:
     """
     Safely execute Python code in a sandboxed environment.
 
     Uses AST parsing to detect dangerous patterns (not bypassable string matching).
+    Runs exec() in a thread pool to avoid blocking the event loop.
+    Enforces the timeout parameter using asyncio.wait_for().
 
     Returns: {"success": bool, "output": str, "error": str}
     """
@@ -345,32 +363,35 @@ async def _safe_execute(code: str, timeout: float = 5.0) -> dict:
 
         # Prepare safe globals
         safe_globals = {"__builtins__": SAFE_BUILTINS.copy()}
-        
+
         # Add allowed imports
         for module_name in ALLOWED_IMPORTS:
             try:
                 safe_globals[module_name] = __import__(module_name)
             except ImportError:
                 pass
-        
-        # Capture output
-        stdout_capture = io.StringIO()
-        stderr_capture = io.StringIO()
-        
-        # Execute with timeout simulation (asyncio-friendly)
-        # Use safe_globals for both globals and locals to properly capture variables
-        with redirect_stdout(stdout_capture), redirect_stderr(stderr_capture):
-            exec(code, safe_globals, safe_globals)
-        
-        output = stdout_capture.getvalue()
-        error_output = stderr_capture.getvalue()
-        
+
+        # Execute in thread pool with timeout enforcement
+        # asyncio.to_thread() prevents blocking the event loop
+        # asyncio.wait_for() enforces the timeout parameter
+        try:
+            output, error_output = await asyncio.wait_for(
+                asyncio.to_thread(_execute_code_sync, code, safe_globals),
+                timeout=timeout
+            )
+        except asyncio.TimeoutError:
+            return {
+                "success": False,
+                "output": "",
+                "error": f"Execution timed out after {timeout} seconds"
+            }
+
         return {
             "success": True,
             "output": output + (f"\nStderr: {error_output}" if error_output else ""),
             "error": ""
         }
-        
+
     except Exception as e:
         return {
             "success": False,

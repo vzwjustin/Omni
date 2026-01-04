@@ -150,19 +150,37 @@ async def execute_code(code: str, language: str = "python") -> dict:
 
 
 @tool
-async def retrieve_context(query: str) -> str:
-    """Retrieve recent chat and framework history as lightweight context."""
-    logger.info("tool_called", tool="retrieve_context", query=query)
-    # Pull most recent memory if available
-    history_snippets = []
-    for mem in _memory_store.values():
+async def retrieve_context(query: str, thread_id: Optional[str] = None) -> str:
+    """Retrieve recent chat and framework history as lightweight context.
+
+    Args:
+        query: The query to contextualize
+        thread_id: Optional thread ID to filter context to specific session
+    """
+    logger.info("tool_called", tool="retrieve_context", query=query, thread_id=thread_id)
+
+    # If thread_id is provided, only get context from that specific thread
+    if thread_id and thread_id in _memory_store:
+        mem = _memory_store[thread_id]
         if mem.messages:
             # Take last 6 messages (3 exchanges)
             recent = mem.messages[-6:]
-            history_snippets.append("\n".join(str(m.content) for m in recent))
-    if not history_snippets:
-        return "No prior context available."
-    return "Recent context:\n\n" + "\n\n---\n\n".join(history_snippets)
+            history = "\n".join(str(m.content) for m in recent)
+            return f"Recent context (thread {thread_id}):\n\n{history}"
+        return "No prior context available for this thread."
+
+    # If no thread_id provided, only return context from the most recently accessed thread
+    # to avoid leaking context between sessions
+    if _memory_store:
+        # OrderedDict keeps insertion/access order - get the most recent
+        most_recent_thread_id = next(reversed(_memory_store))
+        mem = _memory_store[most_recent_thread_id]
+        if mem.messages:
+            recent = mem.messages[-6:]
+            history = "\n".join(str(m.content) for m in recent)
+            return f"Recent context:\n\n{history}"
+
+    return "No prior context available."
 
 
 # Import enhanced search tools
@@ -183,20 +201,75 @@ AVAILABLE_TOOLS = [search_documentation, execute_code, retrieve_context] + _enha
 _vectorstore: Optional[Chroma] = None
 
 
+def _get_embeddings():
+    """
+    Get the appropriate embedding model based on provider configuration.
+
+    Supports:
+    - openai: Uses OpenAI's embedding API (requires OPENAI_API_KEY)
+    - huggingface: Uses HuggingFace sentence-transformers (local, no API key needed)
+    - openrouter: Falls back to HuggingFace (OpenRouter doesn't support embeddings)
+
+    Returns:
+        An embedding model instance compatible with LangChain
+    """
+    provider = settings.llm_provider.lower()
+
+    # OpenAI embeddings - requires valid OpenAI API key
+    if provider == "openai" and settings.openai_api_key:
+        logger.info("embeddings_init", provider="openai", model="text-embedding-3-large")
+        return OpenAIEmbeddings(
+            model="text-embedding-3-large",
+            api_key=settings.openai_api_key
+        )
+
+    # HuggingFace embeddings - local, no API key required
+    # Also used as fallback when OpenRouter is selected (OpenRouter doesn't support embeddings)
+    try:
+        from langchain_huggingface import HuggingFaceEmbeddings
+
+        hf_model = "sentence-transformers/all-MiniLM-L6-v2"
+
+        if provider == "openrouter":
+            logger.warning(
+                "embeddings_fallback",
+                reason="OpenRouter does not support embeddings API",
+                fallback_provider="huggingface",
+                fallback_model=hf_model
+            )
+        else:
+            logger.info("embeddings_init", provider="huggingface", model=hf_model)
+
+        return HuggingFaceEmbeddings(model_name=hf_model)
+
+    except ImportError:
+        logger.error(
+            "embeddings_init_failed",
+            error="langchain-huggingface not installed. Install with: pip install langchain-huggingface"
+        )
+        # Last resort: try OpenAI with whatever key is available
+        if settings.openai_api_key:
+            return OpenAIEmbeddings(
+                model="text-embedding-3-large",
+                api_key=settings.openai_api_key
+            )
+        raise ValueError(
+            "No embedding provider available. Either set OPENAI_API_KEY for OpenAI embeddings, "
+            "or install langchain-huggingface for local embeddings: pip install langchain-huggingface"
+        )
+
+
 def get_vectorstore() -> Optional[Chroma]:
     """Get or initialize a persistent Chroma vector store."""
     global _vectorstore
     if _vectorstore:
         return _vectorstore
-    
+
     persist_dir = os.getenv("CHROMA_PERSIST_DIR", "/app/data/chroma")
     os.makedirs(persist_dir, exist_ok=True)
-    
+
     try:
-        embeddings = OpenAIEmbeddings(
-            model="text-embedding-3-large",
-            api_key=settings.openai_api_key or settings.openrouter_api_key
-        )
+        embeddings = _get_embeddings()
         _vectorstore = Chroma(
             collection_name="omni-cortex-context",
             persist_directory=persist_dir,

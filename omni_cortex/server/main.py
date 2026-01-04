@@ -910,8 +910,8 @@ def create_server() -> Server:
             context = arguments.get("context")  # None if not provided
             thread_id = arguments.get("thread_id")
 
-            # Use HyperRouter for vibe-based selection
-            hyper_router = HyperRouter()
+            # Use singleton router imported from app.graph (not new instance each time)
+            hyper_router = router
 
             # First check vibe dictionary, then heuristics, ensure fallback
             selected = hyper_router._check_vibe_dictionary(query)
@@ -1128,7 +1128,7 @@ def create_server() -> Server:
             return [TextContent(type="text", text=json.dumps({
                 "status": "healthy",
                 "frameworks": len(FRAMEWORKS),
-                "tools": len(FRAMEWORKS) + 15,  # 40 think_* + 15 utility tools (reason, list_frameworks, recommend, get_context, save_context, 6 search tools, execute_code, health)
+                "tools": len(FRAMEWORKS) + 14,  # 40 think_* + 14 utility tools
                 "collections": collections,
                 "memory_enabled": True,
                 "rag_enabled": True
@@ -1147,7 +1147,7 @@ async def main():
     logger.info(f"Graph nodes: {len(FRAMEWORK_NODES)} LangGraph nodes")
     logger.info("Memory: LangChain ConversationBufferMemory")
     logger.info("RAG: ChromaDB with 6 collections")
-    logger.info(f"Tools: {len(FRAMEWORKS)} think_* + 1 reason + 14 utility = {len(FRAMEWORKS) + 15} total")
+    logger.info(f"Tools: {len(FRAMEWORKS)} think_* + 14 utility = {len(FRAMEWORKS) + 14} total")
     logger.info("=" * 60)
 
     server = create_server()
