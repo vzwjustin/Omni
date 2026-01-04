@@ -38,6 +38,10 @@ COPY --chown=cortex:cortex . .
 # Create data directory for persistent memory
 RUN mkdir -p /app/data && chown -R cortex:cortex /app/data
 
+# Copy and setup startup script
+COPY scripts/startup.sh /app/scripts/startup.sh
+RUN chmod +x /app/scripts/startup.sh && chown cortex:cortex /app/scripts/startup.sh
+
 # Switch to non-root user
 USER cortex
 
@@ -47,5 +51,5 @@ USER cortex
 # No health check for stdio-based server
 # Health is checked via successful stdio communication
 
-# Run the MCP server (stdio mode)
-ENTRYPOINT ["python", "-m", "server.main"]
+# Run startup script which handles ingestion and starts server
+ENTRYPOINT ["/app/scripts/startup.sh"]
