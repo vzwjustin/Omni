@@ -22,7 +22,8 @@ logging.basicConfig(
     format="%(levelname)s:%(name)s:%(message)s"
 )
 
-# Configure structlog to use stderr
+# Configure structlog to use stdlib logging (required for ChromaDB/LangChain compatibility)
+# PrintLoggerFactory lacks .disabled attribute that these libraries expect
 structlog.configure(
     processors=[
         structlog.stdlib.filter_by_level,
@@ -35,7 +36,7 @@ structlog.configure(
     ],
     wrapper_class=structlog.stdlib.BoundLogger,
     context_class=dict,
-    logger_factory=structlog.PrintLoggerFactory(file=sys.stderr),
+    logger_factory=structlog.stdlib.LoggerFactory(),
     cache_logger_on_first_use=True,
 )
 
