@@ -9,7 +9,35 @@ LangGraph orchestrates, LangChain handles memory/RAG.
 import asyncio
 import json
 import logging
+import sys
 from typing import Any
+
+import structlog
+
+# CRITICAL: Configure ALL logging to stderr BEFORE any other imports
+# MCP uses stdio - stdout is for JSON-RPC, stderr for logs
+logging.basicConfig(
+    level=logging.INFO,
+    stream=sys.stderr,
+    format="%(levelname)s:%(name)s:%(message)s"
+)
+
+# Configure structlog to use stderr
+structlog.configure(
+    processors=[
+        structlog.stdlib.filter_by_level,
+        structlog.stdlib.add_logger_name,
+        structlog.stdlib.add_log_level,
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.format_exc_info,
+        structlog.dev.ConsoleRenderer()
+    ],
+    wrapper_class=structlog.stdlib.BoundLogger,
+    context_class=dict,
+    logger_factory=structlog.PrintLoggerFactory(file=sys.stderr),
+    cache_logger_on_first_use=True,
+)
 
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
@@ -31,7 +59,6 @@ from app.langchain_integration import (
 from app.collection_manager import get_collection_manager
 from app.core.router import HyperRouter
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("omni-cortex")
 
 # Framework definitions - what the LLM gets when it calls the tool

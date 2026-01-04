@@ -1,6 +1,10 @@
 #!/bin/bash
 set -e
 
+# ALL output MUST go to stderr - stdout is reserved for MCP JSON-RPC
+exec 3>&1  # Save original stdout
+exec 1>&2  # Redirect all stdout to stderr
+
 echo "==================================="
 echo "Omni-Cortex Startup"
 echo "==================================="
@@ -98,6 +102,9 @@ fi
 echo "==================================="
 echo "Starting MCP Server"
 echo "==================================="
+
+# Restore stdout for MCP server (JSON-RPC needs clean stdout)
+exec 1>&3 3>&-
 
 # Start the MCP server
 exec python -m server.main
