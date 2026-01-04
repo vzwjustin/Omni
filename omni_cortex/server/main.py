@@ -937,7 +937,7 @@ def create_server() -> Server:
                 logger.error(f"LangGraph execution failed: {e}", exc_info=True)
                 return [TextContent(type="text", text=f"Error executing framework: {str(e)}")]
 
-        # Framework tools (think_*) - Direct framework invocation via LangGraph
+        # Framework tools (think_*) - Force through LangGraph workflow with pre-selection
         if name.startswith("think_"):
             fw_name = name[6:]
             if fw_name in FRAMEWORK_NODES:
@@ -956,25 +956,25 @@ def create_server() -> Server:
                 if thread_id:
                     state["working_memory"]["thread_id"] = thread_id
 
-                # Force selection of the requested framework
+                # PRE-SELECT framework to force routing to skip to execution
                 state["selected_framework"] = fw_name
 
-                # Invoke the specific framework node directly
+                # FORCE through full LangGraph workflow (route will be skipped due to pre-selection)
                 try:
-                    framework_fn = FRAMEWORK_NODES[fw_name]
-                    result = await framework_fn(state)
+                    result = await graph.ainvoke(state)
 
+                    selected = result.get("selected_framework", fw_name)
                     final_answer = result.get("final_answer", "")
                     confidence = result.get("confidence_score", 0.5)
 
-                    output = f"# Framework: {fw_name}\n"
+                    output = f"# Framework: {selected}\n"
                     output += f"**Confidence**: {confidence:.2f}\n\n"
                     output += f"## Result:\n{final_answer}"
 
                     return [TextContent(type="text", text=output)]
 
                 except Exception as e:
-                    logger.error(f"Framework {fw_name} execution failed: {e}", exc_info=True)
+                    logger.error(f"LangGraph execution for {fw_name} failed: {e}", exc_info=True)
                     return [TextContent(type="text", text=f"Error executing {fw_name}: {str(e)}")]
 
         # List frameworks
