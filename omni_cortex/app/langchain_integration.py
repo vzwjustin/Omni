@@ -27,6 +27,7 @@ from langchain_anthropic import ChatAnthropic
 from langchain_openai import ChatOpenAI
 from langchain_openai import OpenAIEmbeddings
 from langchain_chroma import Chroma
+from langchain_core.embeddings import Embeddings
 from pydantic import BaseModel, Field
 import structlog
 
@@ -183,25 +184,87 @@ AVAILABLE_TOOLS = [search_documentation, execute_code, retrieve_context] + _enha
 _vectorstore: Optional[Chroma] = None
 
 
+def get_embedding_function() -> Optional[Embeddings]:
+    """
+    Get embedding function based on configured provider.
+
+    Supported providers:
+    - openrouter: OpenRouter API (default) - supports OpenAI, Morph, and other models
+    - openai: Direct OpenAI API
+    - huggingface: Local HuggingFace sentence-transformers (free, no API key)
+
+    Configure via environment variables:
+    - EMBEDDING_PROVIDER: openrouter (default), openai, huggingface
+    - EMBEDDING_MODEL: model name (default: text-embedding-3-small)
+    - OPENROUTER_API_KEY: for OpenRouter provider
+    - OPENAI_API_KEY: for direct OpenAI provider
+    """
+    provider = settings.embedding_provider.lower()
+    model = settings.embedding_model
+
+    try:
+        if provider == "openrouter":
+            api_key = settings.openrouter_api_key
+            if not api_key:
+                logger.warning("embedding_no_api_key", provider="openrouter")
+                return None
+            # OpenRouter uses OpenAI-compatible API
+            return OpenAIEmbeddings(
+                model=model,
+                api_key=api_key,
+                base_url=settings.openrouter_base_url
+            )
+
+        elif provider == "openai":
+            api_key = settings.openai_api_key
+            if not api_key:
+                logger.warning("embedding_no_api_key", provider="openai")
+                return None
+            return OpenAIEmbeddings(model=model, api_key=api_key)
+
+        elif provider == "huggingface":
+            # Local embeddings - no API key needed
+            try:
+                from langchain_huggingface import HuggingFaceEmbeddings
+                return HuggingFaceEmbeddings(model_name=model or "all-MiniLM-L6-v2")
+            except ImportError:
+                logger.error("huggingface_not_installed",
+                           hint="pip install langchain-huggingface sentence-transformers")
+                return None
+
+        else:
+            logger.error("unknown_embedding_provider", provider=provider)
+            return None
+
+    except Exception as e:
+        logger.error("embedding_init_failed", provider=provider, error=str(e))
+        return None
+
+
 def get_vectorstore() -> Optional[Chroma]:
     """Get or initialize a persistent Chroma vector store."""
     global _vectorstore
     if _vectorstore:
         return _vectorstore
-    
+
     persist_dir = os.getenv("CHROMA_PERSIST_DIR", "/app/data/chroma")
     os.makedirs(persist_dir, exist_ok=True)
-    
+
     try:
-        embeddings = OpenAIEmbeddings(
-            model="text-embedding-3-large",
-            api_key=settings.openai_api_key or settings.openrouter_api_key
-        )
+        embeddings = get_embedding_function()
+        if not embeddings:
+            logger.warning("vectorstore_no_embeddings",
+                         hint="Set EMBEDDING_PROVIDER and API key in .env")
+            return None
+
         _vectorstore = Chroma(
             collection_name="omni-cortex-context",
             persist_directory=persist_dir,
             embedding_function=embeddings
         )
+        logger.info("vectorstore_initialized",
+                   provider=settings.embedding_provider,
+                   model=settings.embedding_model)
         return _vectorstore
     except Exception as e:
         logger.error("vectorstore_init_failed", error=str(e))

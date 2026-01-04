@@ -8,7 +8,6 @@ enabling precise retrieval based on context.
 import os
 from typing import List, Dict, Any, Optional
 from langchain_chroma import Chroma
-from langchain_openai import OpenAIEmbeddings
 from langchain_core.documents import Document
 import structlog
 
@@ -37,20 +36,11 @@ class CollectionManager:
         self._collections: Dict[str, Chroma] = {}
     
     def get_embedding_function(self):
-        """Lazy initialization of embedding function."""
+        """Lazy initialization of embedding function using shared config."""
         if self._embedding_function is None:
-            api_key = settings.openai_api_key or settings.openrouter_api_key
-            if not api_key:
-                logger.error("embedding_init_failed", error="No API key configured (OPENAI_API_KEY or OPENROUTER_API_KEY)")
-                return None
-            try:
-                self._embedding_function = OpenAIEmbeddings(
-                    model="text-embedding-3-large",
-                    api_key=api_key
-                )
-            except Exception as e:
-                logger.error("embedding_init_failed", error=str(e))
-                return None
+            # Import here to avoid circular import
+            from .langchain_integration import get_embedding_function
+            self._embedding_function = get_embedding_function()
         return self._embedding_function
     
     def get_collection(self, collection_name: str) -> Optional[Chroma]:

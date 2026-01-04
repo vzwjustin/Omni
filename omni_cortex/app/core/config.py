@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     openrouter_base_url: str = Field(default="https://openrouter.ai/api/v1", alias="OPENROUTER_BASE_URL")
     anthropic_api_key: Optional[str] = Field(default=None, alias="ANTHROPIC_API_KEY")
 
+    # Embedding configuration
+    embedding_provider: str = Field(default="openrouter", alias="EMBEDDING_PROVIDER")  # openrouter, openai, huggingface
+    embedding_model: str = Field(default="text-embedding-3-small", alias="EMBEDDING_MODEL")
+
     # LLM settings (for reference only - calling LLM does the reasoning)
     llm_provider: str = Field(default="pass-through", alias="LLM_PROVIDER")
     deep_reasoning_model: str = Field(default="anthropic/claude-3-opus", alias="DEEP_REASONING_MODEL")
