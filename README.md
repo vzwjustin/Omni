@@ -63,6 +63,7 @@ Or call directly: `think_active_inference`, `think_tree_of_thoughts`, etc.
 Your IDE calls Omni → gets a structured prompt → IDE's LLM executes it.
 
 Pass-through architecture. No API keys needed.
+(Unless using embeddings)
 
 ## Docs
 
