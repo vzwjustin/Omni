@@ -5,6 +5,7 @@ Implements working memory vs episodic memory management
 for long-context, multi-file, stateful tasks.
 """
 
+import logging
 from typing import Optional, Any
 from datetime import datetime
 from ...state import GraphState, MemoryStore
@@ -16,6 +17,8 @@ from ..common import (
     format_code_context,
     run_tool,
 )
+
+logger = logging.getLogger(__name__)
 
 
 # Memory layers
@@ -161,8 +164,7 @@ async def coala_node(state: GraphState) -> GraphState:
         retrieved_context = await run_tool("retrieve_context", state.get("query", ""), state)
     except Exception as e:
         # Log context retrieval failure but continue with empty context
-        import logging
-        logging.debug(f"Context retrieval failed: {e}")
+        logger.debug("Context retrieval failed", error=str(e))
         retrieved_context = ""
     
     # Learn from similar framework implementations for complex tasks
@@ -175,8 +177,7 @@ async def coala_node(state: GraphState) -> GraphState:
                                                state)
     except Exception as e:
         # Log framework search failure but continue - this is optional context enrichment
-        import logging
-        logging.debug(f"Framework context search failed: {e}")
+        logger.debug("Framework context search failed", error=str(e))
     
     # =========================================================================
     # Phase 1: PERCEIVE - Process input into working memory

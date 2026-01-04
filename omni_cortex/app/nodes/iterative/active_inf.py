@@ -5,6 +5,7 @@ Implements the Active Inference loop for debugging:
 Hypothesis -> Predict Error -> Compare with Log -> Update
 """
 
+import logging
 from typing import Optional
 from ...state import GraphState
 from ..common import (
@@ -15,6 +16,8 @@ from ..common import (
     format_code_context,
     run_tool
 )
+
+logger = logging.getLogger(__name__)
 
 
 @quiet_star
@@ -50,9 +53,8 @@ async def active_inference_node(state: GraphState) -> GraphState:
                                          {"query": f"debugging {query[:80]}", "framework_category": "iterative", "k": 2},
                                          state)
     except Exception as e:
-        # Silently continue - pattern search is optional enhancement
-        # Debug: uncomment to log: print(f"search_with_framework_context failed: {e}")
-        pass
+        logger.debug("search_with_framework_context failed (continuing without patterns)", error=str(e))
+        similar_patterns = ""
     
     # =========================================================================
     # Initial Analysis

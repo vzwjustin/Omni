@@ -5,6 +5,7 @@ Retrieves and applies successful thinking templates from
 a historical buffer for repetitive coding tasks.
 """
 
+import logging
 from typing import Optional
 from ...state import GraphState, MemoryStore
 from ..common import (
@@ -15,6 +16,8 @@ from ..common import (
     format_code_context,
     run_tool
 )
+
+logger = logging.getLogger(__name__)
 
 
 # Thought buffer storage - created per request to avoid cross-request pollution
@@ -77,8 +80,7 @@ async def buffer_of_thoughts_node(state: GraphState) -> GraphState:
                 matched_templates = [new_template]
         except Exception as e:
             # Log template retrieval failure but continue - fallback to generating new template
-            import logging
-            logging.debug(f"Template retrieval from vectorstore failed: {e}")
+            logger.debug("Template retrieval from vectorstore failed", error=str(e))
     
     add_reasoning_step(
         state=state,

@@ -47,7 +47,8 @@ async def watch_and_ingest():
         # Debounce simple sleep
         await asyncio.sleep(DEBOUNCE_SECONDS)
         try:
-            ingest_repo_main()
+            # Wrap sync function with asyncio.to_thread to avoid blocking event loop
+            await asyncio.to_thread(ingest_repo_main)
             logger.info("watch_ingest_complete", files=len(filtered))
         except Exception as e:
             logger.error("watch_ingest_failed", error=str(e))
