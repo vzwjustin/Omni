@@ -151,11 +151,16 @@ def main():
         logger.info("To enable seeding, set OPENAI_API_KEY in your environment or .env file.")
         return
 
-    # Curated list of high-quality documentation
+    # Curated list of high-quality documentation (Strictly llms.txt standard)
     CURATED_SOURCES = [
-        "https://raw.githubusercontent.com/tiangolo/fastapi/master/README.md",
-        "https://raw.githubusercontent.com/pydantic/pydantic/main/README.md",
-        "https://raw.githubusercontent.com/langchain-ai/langchain/master/README.md"
+        "https://docs.anthropic.com/llms.txt",                    # Anthropic Best Practices
+        "https://docs.docker.com/llms.txt",                       # Docker/DevOps
+        "https://python.langchain.com/llms.txt",                  # LangChain Python
+        "https://sdk.vercel.ai/llms.txt",                         # Vercel AI SDK
+        "https://docs.pydantic.dev/latest/llms.txt",              # Pydantic validation
+        "https://docs.stripe.com/llms.txt",                       # Stripe (Payment patterns)
+        "https://docs.pinecone.io/llms.txt",                      # Vector Database patterns
+        "https://daisyui.com/llms.txt",                           # UI/Tailwind Components
     ]
 
     if args.auto:
