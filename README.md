@@ -46,13 +46,14 @@ Add this to your IDE's MCP settings file (e.g., `claude_desktop_config.json` or 
         "run",
         "--rm",
         "-i",
-        "-v", "${workspaceFolder}:/code",
+        "-v", "/path/to/your/code:/code",
         "vzwjustin/omni-cortex:latest"
       ]
     }
   }
 }
 ```
+*(Replace `/path/to/your/code` with your actual project directory)*
 *(Note: Mounting your code volume allows Omni to read your codebase for context-aware strategies.)*
 
 ---
