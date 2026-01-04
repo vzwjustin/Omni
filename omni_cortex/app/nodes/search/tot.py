@@ -240,7 +240,8 @@ STEP 3: [Another option, or [SOLUTION] if complete]"""
     # =========================================================================
     
     best_path = tree.get_best_path()
-    
+
+    best_path_formatted = "\n".join(f"{i+1}. {n.thought} [Score: {n.score:.2f}]" for i, n in enumerate(best_path))
     synthesis_prompt = f"""Synthesize the solution from Tree of Thoughts exploration.
 
 PROBLEM: {query}
@@ -249,7 +250,7 @@ CONTEXT:
 {code_context}
 
 BEST PATH FOUND:
-{"\n".join(f"{i+1}. {n.thought} [Score: {n.score:.2f}]" for i, n in enumerate(best_path))}
+{best_path_formatted}
 
 Based on this exploration, provide:
 1. **SOLUTION**: Clear explanation of the chosen approach

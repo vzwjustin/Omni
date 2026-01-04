@@ -150,6 +150,7 @@ If the solution is already excellent, say so. Otherwise, provide detailed critiq
         # REFINE Phase: Improve based on critique
         # =====================================================================
 
+        code_format_hint = '' if not extract_code_blocks(current_solution) else '```python\n# refined code\n```'
         refine_prompt = f"""Refine the solution based on the critique.
 
 ORIGINAL TASK: {query}
@@ -169,7 +170,7 @@ Address each point raised in the critique:
 
 Provide the REFINED version (complete, not just diffs):
 
-{'' if not extract_code_blocks(current_solution) else '```python\n# refined code\n```'}"""
+{code_format_hint}"""
 
         refine_response, _ = await call_deep_reasoner(
             prompt=refine_prompt,
@@ -244,6 +245,7 @@ Be concise and clear."""
     final_code_blocks = extract_code_blocks(current_solution)
     final_code = final_code_blocks[0] if final_code_blocks else ""
 
+    final_code_section = f'```python\n{final_code}\n```' if final_code else 'No code generated'
     final_answer = f"""# Self-Refined Solution
 
 ## Task
@@ -256,7 +258,7 @@ Be concise and clear."""
 {finalize_response}
 
 ## Final Code
-{f'```python\n{final_code}\n```' if final_code else 'No code generated'}
+{final_code_section}
 
 ---
 *This solution was iteratively improved through self-critique and refinement.*

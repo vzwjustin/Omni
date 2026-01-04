@@ -4,16 +4,19 @@ An MCP (Model Context Protocol) server that provides 40 advanced reasoning frame
 
 ## Overview
 
-Omni-Cortex is a fully orchestrated MCP server that routes AI reasoning through 40 specialized frameworks using LangGraph workflows. Each framework is exposed as an MCP tool, with automatic routing via HyperRouter or explicit selection.
+Omni-Cortex is a **simple MCP server** that provides 40 specialized reasoning framework prompt templates. Each framework is exposed as an MCP tool that returns structured prompts for the calling AI to execute.
 
 **Key Architecture:**
-- **LangGraph Orchestration**: All execution flows through graph.ainvoke() with state management
-- **Smart Routing**: HyperRouter with vibe dictionary and LLM-based analysis
-- **Memory Persistence**: LangChain integration with conversation history
-- **RAG Integration**: ChromaDB vector store with 6 specialized collections
-- **Checkpointing**: SQLite-based workflow state persistence
+- **Prompt Templates**: Each framework returns a structured prompt template
+- **Smart Routing**: Auto-selects best framework based on task keywords
+- **No API Keys Required**: Server just returns prompts, calling LLM does all reasoning
+- **Optional Utilities**: Memory persistence, RAG search, code execution tools available
 
-The server orchestrates reasoning workflows while the calling AI (Claude, GPT, etc.) performs the actual reasoning within each framework's structured approach.
+**How it works:**
+1. Your AI (Claude Code, Cursor, Windsurf, etc.) calls a framework tool (e.g., `think_active_inference`)
+2. MCP server returns a structured prompt template with the framework's approach
+3. Your AI receives the prompt and performs the actual reasoning
+4. Simple, fast, no external API calls needed!
 
 ## 🧠 Available Frameworks (40 Total)
 
@@ -82,7 +85,10 @@ The server orchestrates reasoning workflows while the calling AI (Claude, GPT, e
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│              MCP Client (Claude/Cursor)              │
+│     MCP Client (Claude Code/Cursor/Windsurf)         │
+│  • Calls framework tool (e.g., think_active_inference)│
+│  • Receives prompt template                          │
+│  • Performs actual reasoning                         │
 └───────────────────┬─────────────────────────────────┘
                     │ MCP Protocol
 ┌───────────────────▼─────────────────────────────────┐
@@ -95,41 +101,39 @@ The server orchestrates reasoning workflows while the calling AI (Claude, GPT, e
 │  └────────────────┬───────────────────────────┘     │
 │                   │                                   │
 │  ┌────────────────▼───────────────────────────┐     │
-│  │  HyperRouter (AI-powered selection)         │     │
-│  │  • Vibe Dictionary (casual phrase matching) │     │
-│  │  • LLM analysis (complex selection)         │     │
-│  │  • Heuristic fallback                       │     │
+│  │  Framework Templates (FRAMEWORKS dict)      │     │
+│  │  • 40 prompt templates                      │     │
+│  │  • Each with category, description          │     │
+│  │  • Best-for use cases                       │     │
 │  └────────────────┬───────────────────────────┘     │
 │                   │                                   │
 │  ┌────────────────▼───────────────────────────┐     │
-│  │  LangGraph Workflow                         │     │
-│  │  • Route Node (framework selection)         │     │
-│  │  • Execute Node (run framework)             │     │
-│  │  • Checkpointing (SQLite)                   │     │
+│  │  Simple Router (for "reason" tool)          │     │
+│  │  • Vibe Dictionary (keyword matching)       │     │
+│  │  • Heuristic selection                      │     │
+│  │  • Returns selected framework template      │     │
 │  └────────────────┬───────────────────────────┘     │
 │                   │                                   │
 │  ┌────────────────▼───────────────────────────┐     │
-│  │  40 Framework Nodes                         │     │
-│  │  • Each implements specific strategy         │     │
-│  │  • PRM scoring for search algorithms        │     │
-│  │  • Tool integration where needed            │     │
-│  └────────────────┬───────────────────────────┘     │
-│                   │                                   │
-│  ┌────────────────▼───────────────────────────┐     │
-│  │  LangChain Integration                      │     │
-│  │  • Memory (conversation history)            │     │
-│  │  • Tools (code exec, search)                │     │
-│  │  • RAG (ChromaDB vector store)              │     │
+│  │  Optional Utilities                         │     │
+│  │  • Memory (LangChain conversation history)  │     │
+│  │  • RAG (ChromaDB vector search)             │     │
+│  │  • Code execution                           │     │
 │  └─────────────────────────────────────────────┘     │
-└───────────────────────────────────────────────────────┘
+└──────────┬────────────────────────────────────────────┘
+           │ Returns prompt template
+           ▼
+┌─────────────────────────────────────────────────────┐
+│     MCP Client executes the framework's approach     │
+└─────────────────────────────────────────────────────┘
 ```
 
 ## 📦 Installation
 
 ### Prerequisites
 - Python 3.11+
-- OpenAI API key or OpenRouter API key (for embeddings)
-- Optional: Anthropic API key (if using Anthropic models)
+- **No API keys required!** (Server just returns prompt templates)
+- Optional: API keys for RAG/embeddings features (if you want to use the optional search tools)
 
 ### Setup
 
@@ -144,22 +148,19 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
-
-# Configure environment
-cp .env.example .env
-# Edit .env with your API keys
 ```
 
-### Environment Variables
+### Optional Environment Variables
+
+Only needed if you want to use the optional RAG search tools:
 
 ```bash
-# Required
-OPENAI_API_KEY=sk-...              # For embeddings
+# Optional (for RAG search tools only)
+OPENAI_API_KEY=sk-...              # For embeddings/vector search
 # OR
 OPENROUTER_API_KEY=sk-or-...       # Alternative for embeddings
 
-# Optional
-ANTHROPIC_API_KEY=sk-ant-...       # If using Anthropic models
+# Optional settings
 CHROMA_PERSIST_DIR=/app/data/chroma  # Vector store location
 LOG_LEVEL=INFO                     # Logging level
 ```
@@ -185,40 +186,40 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
     "omni-cortex": {
       "command": "python",
       "args": ["-m", "server.main"],
-      "cwd": "/path/to/thinking-frameworks/omni_cortex",
-      "env": {
-        "OPENAI_API_KEY": "sk-...",
-        "CHROMA_PERSIST_DIR": "/path/to/data/chroma"
-      }
+      "cwd": "/path/to/thinking-frameworks/omni_cortex"
     }
   }
 }
 ```
 
-### Using in Claude/Cursor
+No API keys needed! The server just returns prompt templates.
 
-Once configured, the tools are available through the MCP protocol:
+### Using in Claude Code / Cursor / Windsurf
+
+Once configured, the framework tools are available:
 
 ```
-# Auto-select framework via LangGraph routing
+# Auto-select framework
 Use the "reason" tool with your query
-→ Creates GraphState
-→ Invokes graph.ainvoke(state)
-→ HyperRouter selects optimal framework
-→ Executes through LangGraph workflow
-→ Returns structured result with confidence
+→ Server analyzes your query
+→ Selects best framework (e.g., active_inference for debugging)
+→ Returns the framework's prompt template
+→ Your AI applies the framework's reasoning approach
 
 # Or explicitly select a framework
 Use "think_active_inference" for debugging
-Use "think_alphacodium" for competitive programming
-Use "think_llmloop" for production-ready code
-Use "think_chain_of_verification" for security review
+→ Returns Active Inference prompt template (hypothesis testing loop)
 
-# All tools execute through LangGraph orchestration
-→ Full state management
-→ Memory persistence (LangChain)
-→ Checkpointing (SQLite)
-→ Tool integration (code execution, RAG)
+Use "think_alphacodium" for competitive programming
+→ Returns AlphaCodium template (test-based iterative approach)
+
+Use "think_chain_of_verification" for security review
+→ Returns verification framework (draft → verify → patch)
+
+# What you get back:
+→ Structured prompt with the framework's methodology
+→ Framework description and best use cases
+→ Your AI then executes the reasoning following that structure
 ```
 
 ### Ingesting Documentation for RAG

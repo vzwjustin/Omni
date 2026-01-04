@@ -299,7 +299,8 @@ MERGED INSIGHT: [Your synthesis]"""
     # Get all current leaves (including merges)
     final_leaves = graph.get_leaves()
     leaf_thoughts = [n.thought for n in final_leaves]
-    
+
+    explored_thoughts_formatted = "\n".join(f"- {t[:200]}..." for t in leaf_thoughts)
     aggregate_prompt = f"""Create the final aggregated solution from Graph of Thoughts.
 
 PROBLEM: {query}
@@ -308,7 +309,7 @@ CONTEXT:
 {code_context}
 
 EXPLORED THOUGHTS:
-{"\n".join(f"- {t[:200]}..." for t in leaf_thoughts)}
+{explored_thoughts_formatted}
 
 Create a comprehensive FINAL SOLUTION that:
 1. Aggregates all valuable insights
