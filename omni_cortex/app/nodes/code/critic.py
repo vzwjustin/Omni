@@ -5,6 +5,7 @@ Uses vector store documentation search and real API validation
 to verify code correctness and API usage.
 """
 
+import logging
 from typing import Optional
 from ...state import GraphState
 from ..common import (
@@ -16,6 +17,8 @@ from ..common import (
 )
 from ...langchain_integration import search_vectorstore
 from ..langchain_tools import call_langchain_tool
+
+logger = logging.getLogger(__name__)
 
 
 @quiet_star
@@ -89,35 +92,44 @@ USAGE: [how it's being used]"""
     libraries = re.findall(r'Library:\s*([\w.]+)', extract_response)
     
     # Search for specific functions
+    func_lookup_failures = 0
     for func in functions[:3]:  # Limit to top 3
         try:
             result = await call_langchain_tool("search_function_implementation", func, state)
             if result and "No function" not in result:
                 docs_found.append(f"## Function: {func}\n{result[:1000]}")
         except Exception as e:
-            # Silently continue - function lookup is best-effort, not critical
-            pass
-    
+            func_lookup_failures += 1
+            logger.debug("search_function_implementation failed", func=func, error=str(e))
+    if func_lookup_failures > 0:
+        logger.info("function_lookups_partial", failed=func_lookup_failures, total=len(functions[:3]))
+
     # Search for specific classes
+    class_lookup_failures = 0
     for cls in classes[:3]:  # Limit to top 3
         try:
             result = await call_langchain_tool("search_class_implementation", cls, state)
             if result and "No class" not in result:
                 docs_found.append(f"## Class: {cls}\n{result[:1000]}")
         except Exception as e:
-            # Silently continue - class lookup is best-effort, not critical
-            pass
-    
+            class_lookup_failures += 1
+            logger.debug("search_class_implementation failed", cls=cls, error=str(e))
+    if class_lookup_failures > 0:
+        logger.info("class_lookups_partial", failed=class_lookup_failures, total=len(classes[:3]))
+
     # Fallback to documentation search for libraries
     if not docs_found and libraries:
+        doc_lookup_failures = 0
         for lib in libraries[:2]:
             try:
                 result = await call_langchain_tool("search_documentation_only", f"{lib} API usage", state)
                 if result:
                     docs_found.append(f"## Library: {lib}\n{result[:800]}")
             except Exception as e:
-                # Silently continue - doc lookup is best-effort, not critical
-                pass
+                doc_lookup_failures += 1
+                logger.debug("search_documentation_only failed", lib=lib, error=str(e))
+        if doc_lookup_failures > 0:
+            logger.info("doc_lookups_partial", failed=doc_lookup_failures, total=len(libraries[:2]))
     
     # Final fallback to legacy vector search
     if not docs_found:
