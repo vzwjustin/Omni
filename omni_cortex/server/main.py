@@ -27,6 +27,7 @@ from app.langchain_integration import (
     enhance_state_with_langchain,
     AVAILABLE_TOOLS,
     OmniCortexCallback,
+    is_rag_enabled,
 )
 from app.collection_manager import get_collection_manager
 from app.core.router import HyperRouter
@@ -608,100 +609,101 @@ def create_server() -> Server:
             }
         ))
 
-        # RAG/Search tools
-        tools.append(Tool(
-            name="search_documentation",
-            description="Search indexed documentation and code via vector store (RAG)",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string", "description": "Search query"},
-                    "k": {"type": "integer", "description": "Number of results (default: 5)"}
-                },
-                "required": ["query"]
-            }
-        ))
+        # RAG/Search tools - only register if embeddings API key is configured
+        if is_rag_enabled():
+            tools.append(Tool(
+                name="search_documentation",
+                description="Search indexed documentation and code via vector store (RAG)",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "Search query"},
+                        "k": {"type": "integer", "description": "Number of results (default: 5)"}
+                    },
+                    "required": ["query"]
+                }
+            ))
 
-        tools.append(Tool(
-            name="search_frameworks_by_name",
-            description="Search within a specific framework's implementation",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "framework_name": {"type": "string", "description": "Framework to search (e.g., 'active_inference')"},
-                    "query": {"type": "string"},
-                    "k": {"type": "integer", "description": "Number of results"}
-                },
-                "required": ["framework_name", "query"]
-            }
-        ))
+            tools.append(Tool(
+                name="search_frameworks_by_name",
+                description="Search within a specific framework's implementation",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "framework_name": {"type": "string", "description": "Framework to search (e.g., 'active_inference')"},
+                        "query": {"type": "string"},
+                        "k": {"type": "integer", "description": "Number of results"}
+                    },
+                    "required": ["framework_name", "query"]
+                }
+            ))
 
-        tools.append(Tool(
-            name="search_by_category",
-            description="Search within a code category: framework, documentation, config, utility, test, integration",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string"},
-                    "category": {"type": "string", "description": "One of: framework, documentation, config, utility, test, integration"},
-                    "k": {"type": "integer"}
-                },
-                "required": ["query", "category"]
-            }
-        ))
+            tools.append(Tool(
+                name="search_by_category",
+                description="Search within a code category: framework, documentation, config, utility, test, integration",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string"},
+                        "category": {"type": "string", "description": "One of: framework, documentation, config, utility, test, integration"},
+                        "k": {"type": "integer"}
+                    },
+                    "required": ["query", "category"]
+                }
+            ))
 
-        tools.append(Tool(
-            name="search_function",
-            description="Find specific function implementations by name",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "function_name": {"type": "string"},
-                    "k": {"type": "integer"}
-                },
-                "required": ["function_name"]
-            }
-        ))
+            tools.append(Tool(
+                name="search_function",
+                description="Find specific function implementations by name",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "function_name": {"type": "string"},
+                        "k": {"type": "integer"}
+                    },
+                    "required": ["function_name"]
+                }
+            ))
 
-        tools.append(Tool(
-            name="search_class",
-            description="Find specific class implementations by name",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "class_name": {"type": "string"},
-                    "k": {"type": "integer"}
-                },
-                "required": ["class_name"]
-            }
-        ))
+            tools.append(Tool(
+                name="search_class",
+                description="Find specific class implementations by name",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "class_name": {"type": "string"},
+                        "k": {"type": "integer"}
+                    },
+                    "required": ["class_name"]
+                }
+            ))
 
-        tools.append(Tool(
-            name="search_docs_only",
-            description="Search only markdown documentation files",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string"},
-                    "k": {"type": "integer"}
-                },
-                "required": ["query"]
-            }
-        ))
+            tools.append(Tool(
+                name="search_docs_only",
+                description="Search only markdown documentation files",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string"},
+                        "k": {"type": "integer"}
+                    },
+                    "required": ["query"]
+                }
+            ))
 
-        tools.append(Tool(
-            name="search_framework_category",
-            description="Search within a framework category: strategy, search, iterative, code, context, fast",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string"},
-                    "framework_category": {"type": "string", "description": "One of: strategy, search, iterative, code, context, fast"},
-                    "k": {"type": "integer"}
-                },
-                "required": ["query", "framework_category"]
-            }
-        ))
+            tools.append(Tool(
+                name="search_framework_category",
+                description="Search within a framework category: strategy, search, iterative, code, context, fast",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string"},
+                        "framework_category": {"type": "string", "description": "One of: strategy, search, iterative, code, context, fast"},
+                        "k": {"type": "integer"}
+                    },
+                    "required": ["query", "framework_category"]
+                }
+            ))
 
         # Code execution tool
         tools.append(Tool(
@@ -944,7 +946,9 @@ def create_server() -> Server:
 
         # Health check
         if name == "health":
-            return [TextContent(type="text", text=f"OK|40fw|55tools|RAG+MEM")]
+            rag = "RAG" if is_rag_enabled() else "noRAG"
+            tools = 48 if is_rag_enabled() else 41
+            return [TextContent(type="text", text=f"OK|40fw|{tools}tools|{rag}+MEM")]
 
         return [TextContent(type="text", text=f"Unknown tool: {name}")]
 
@@ -952,14 +956,17 @@ def create_server() -> Server:
 
 
 async def main():
+    rag_status = "enabled" if is_rag_enabled() else "disabled (no API key)"
+    tool_count = 48 if is_rag_enabled() else 41  # 40 think + 1 reason + 7 utility (or +7 RAG)
+
     logger.info("=" * 60)
     logger.info("Omni-Cortex MCP - Operating System for Vibe Coders")
     logger.info("=" * 60)
     logger.info(f"Frameworks: {len(FRAMEWORKS)} thinking frameworks")
     logger.info(f"Graph nodes: {len(FRAMEWORK_NODES)} LangGraph nodes")
     logger.info("Memory: LangChain ConversationBufferMemory")
-    logger.info("RAG: ChromaDB with 6 collections")
-    logger.info("Tools: 40 think_* + 1 reason + 14 utility = 55 total")
+    logger.info(f"RAG: {rag_status}")
+    logger.info(f"Tools: {tool_count} total")
     logger.info("=" * 60)
 
     server = create_server()

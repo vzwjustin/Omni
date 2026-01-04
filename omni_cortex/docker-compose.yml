@@ -8,11 +8,14 @@ services:
     container_name: omni-cortex
     stdin_open: true  # Keep stdin open for MCP stdio
     tty: true         # Allocate pseudo-TTY for interactive mode
+    env_file:
+      - .env
     environment:
       # Pass-through mode - calling LLM does reasoning
       - LLM_PROVIDER=pass-through
 
-      # Embeddings for RAG (ChromaDB)
+      # Embeddings for RAG (ChromaDB) - loaded from .env
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-none}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
 
       # ChromaDB persistence

@@ -39,8 +39,16 @@ docker-compose logs -f
 
 ## MCP Client Configuration
 
-After running `setup.sh`, MCP is auto-configured. For manual setup:
+After running `setup.sh`, MCP is auto-configured for Claude Code.
 
+For other IDEs, see **[MCP_SETUP.md](MCP_SETUP.md)** for copy-paste configs:
+- Claude Code
+- Cursor
+- VS Code (Cline)
+- Windsurf
+- Generic MCP clients
+
+**Quick example (Claude Code):**
 ```json
 {
   "mcpServers": {

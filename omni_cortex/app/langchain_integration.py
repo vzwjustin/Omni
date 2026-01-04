@@ -241,6 +241,20 @@ def get_embedding_function() -> Optional[Embeddings]:
         return None
 
 
+def is_rag_enabled() -> bool:
+    """Check if RAG/embeddings are available (API key configured)."""
+    provider = settings.embedding_provider.lower()
+    if provider == "none":
+        return False
+    if provider == "openrouter":
+        return bool(settings.openrouter_api_key)
+    if provider == "openai":
+        return bool(settings.openai_api_key)
+    if provider == "huggingface":
+        return True  # No API key needed
+    return False
+
+
 def get_vectorstore() -> Optional[Chroma]:
     """Get or initialize a persistent Chroma vector store."""
     global _vectorstore
