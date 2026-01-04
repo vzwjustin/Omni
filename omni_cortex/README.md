@@ -1,304 +1,193 @@
-# Omni-Cortex: Headless AI Reasoning MCP Server
+# Omni-Cortex: 40 Thinking Frameworks MCP Server
 
-A headless AI microservice that acts as a "Brain" for IDE agents, routing complex coding tasks to 20 specialized reasoning frameworks.
+A headless MCP server exposing 40 thinking frameworks for AI-assisted coding. Pass-through architecture - your IDE's LLM does the reasoning, Omni-Cortex provides the structured prompts.
 
-## 🧠 Overview
+## Overview
 
-Omni-Cortex exposes cognitive reasoning capabilities via the **Model Context Protocol (MCP)**, enabling seamless integration with IDE agents like Cursor, Claude Code, and any MCP-compatible client.
+Omni-Cortex provides cognitive scaffolding via **Model Context Protocol (MCP)**. When your IDE agent calls a framework tool, it receives a token-optimized prompt that guides its reasoning process.
 
-**Built for vibe coders** - just describe what you want naturally, and the AI picks the right framework.
+**Built for vibe coders** - describe what you want naturally, the router picks the right framework.
 
-## ✨ Vibe Coding - Just Say What You Want
+## Quick Start
 
-Don't know which framework to use? Just describe the vibe:
-
-| What You Say | Framework Selected |
-|--------------|-------------------|
-| "wtf is wrong with this", "why is this broken" | Active Inference (debugging) |
-| "clean this up", "this code is ugly" | Graph of Thoughts (refactoring) |
-| "make it faster", "too slow" | Tree of Thoughts (optimization) |
-| "pros and cons", "should I use A or B" | Multi-Agent Debate (decisions) |
-| "quick question", "easy fix" | System1 (fast mode) |
-| "major rewrite", "big migration" | Everything of Thought (deep) |
-| "I have no idea", "weird problem" | Self-Discover (exploration) |
-| "is this secure", "audit this" | Chain of Verification (security) |
-| "just generate", "boilerplate" | Skeleton of Thought (fast gen) |
-
-## 🚀 Quick Start
-
-### Docker (Recommended)
+### Automated Setup (Recommended)
 
 ```bash
-# Clone and navigate
 cd omni_cortex
+./setup.sh
+```
 
+This will:
+- Prompt for your OpenAI API key (for embeddings)
+- Create `.env` file
+- Build Docker image
+- Configure MCP for Claude Code
+
+### Manual Setup
+
+```bash
 # Copy environment file
 cp .env.example .env
-# Edit .env with your API keys
+# Edit .env with your OpenAI API key
 
 # Build and run
 docker-compose up -d
 
 # Check logs
-docker-compose logs -f omni-cortex
+docker-compose logs -f
 ```
 
-### Local Development
+## MCP Client Configuration
 
-```bash
-# Install dependencies
-pip install -r requirements.txt
-
-# Set environment variables
-export ANTHROPIC_API_KEY="your-key"
-export OPENAI_API_KEY="your-key"
-
-# Run the server
-python -m server.main
-```
-
-## 🔧 MCP Client Configuration
-
-Add to your MCP client configuration:
+After running `setup.sh`, MCP is auto-configured. For manual setup:
 
 ```json
 {
   "mcpServers": {
     "omni-cortex": {
       "command": "docker",
-      "args": ["exec", "-i", "omni-cortex", "python", "-m", "server.main"]
+      "args": [
+        "run", "--rm", "-i",
+        "--env-file", "/path/to/omni_cortex/.env",
+        "-v", "/path/to/omni_cortex/data:/app/data",
+        "omni_cortex-omni-cortex:latest"
+      ]
     }
   }
 }
 ```
 
-Or for local development:
+## Vibe Coding - Just Say What You Want
 
-```json
-{
-  "mcpServers": {
-    "omni-cortex": {
-      "command": "python",
-      "args": ["-m", "server.main"],
-      "cwd": "/path/to/omni_cortex"
-    }
-  }
-}
-```
+| What You Say | Framework Selected |
+|--------------|-------------------|
+| "wtf is wrong with this" | `active_inference` |
+| "clean this up" | `graph_of_thoughts` |
+| "make it faster" | `tree_of_thoughts` |
+| "pros and cons" | `multi_agent_debate` |
+| "quick fix" | `system1` |
+| "major rewrite" | `everything_of_thought` |
+| "is this secure" | `chain_of_verification` |
+| "write tests first" | `tdd_prompting` |
 
-## 📚 Available Frameworks (20)
+## 55 Tools Available
 
-### Strategy & Hierarchical
-| Framework | Best For |
-|-----------|----------|
-| **ReasonFlux** | Architecture, system design, planning |
-| **Self-Discover** | Novel problems, unclear requirements |
-| **Buffer-of-Thoughts** | Repetitive tasks, known patterns |
-| **CoALA** | Long-context, multi-file, stateful tasks |
+### 40 Framework Tools (`think_*`)
 
-### Search & Exploration
-| Framework | Best For |
-|-----------|----------|
-| **rStar-Code MCTS** | Complex bugs, optimization |
-| **Tree of Thoughts** | Algorithms, problem solving |
-| **Graph of Thoughts** | Refactoring, restructuring |
-| **Everything-of-Thought** | Complex migrations |
+| Category | Frameworks |
+|----------|------------|
+| **Strategy** | `reason_flux`, `self_discover`, `buffer_of_thoughts`, `coala`, `least_to_most`, `comparative_arch`, `plan_and_solve` |
+| **Search** | `mcts_rstar`, `tree_of_thoughts`, `graph_of_thoughts`, `everything_of_thought` |
+| **Iterative** | `active_inference`, `multi_agent_debate`, `adaptive_injection`, `re2`, `rubber_duck`, `react`, `reflexion`, `self_refine` |
+| **Code** | `program_of_thoughts`, `chain_of_verification`, `critic`, `chain_of_code`, `self_debugging`, `tdd_prompting`, `reverse_cot`, `alphacodium`, `codechain`, `evol_instruct`, `llmloop`, `procoder`, `recode` |
+| **Context** | `chain_of_note`, `step_back`, `analogical`, `red_team`, `state_machine`, `chain_of_thought` |
+| **Fast** | `skeleton_of_thought`, `system1` |
 
-### Iterative & Adversarial
-| Framework | Best For |
-|-----------|----------|
-| **Active Inference** | Debugging, root cause analysis |
-| **Multi-Agent Debate** | Design decisions, trade-offs |
-| **Adaptive Injection** | Variable complexity tasks |
-| **RE2 (Re-Reading)** | Complex specifications |
+### 15 Utility Tools
 
-### Code & Verification
-| Framework | Best For |
-|-----------|----------|
-| **Program of Thoughts** | Math, data processing, testing |
-| **Chain of Verification** | Security, code review |
-| **CRITIC** | API usage, library integration |
+| Tool | Purpose |
+|------|---------|
+| `reason` | Smart auto-routing to best framework |
+| `list_frameworks` | List all 40 frameworks by category |
+| `recommend` | Get framework recommendation |
+| `get_context` | Retrieve conversation memory |
+| `save_context` | Save to memory |
+| `search_documentation` | RAG search via ChromaDB |
+| `search_frameworks_by_name` | Search specific framework |
+| `search_by_category` | Search by code category |
+| `search_function` | Find function by name |
+| `search_class` | Find class by name |
+| `search_docs_only` | Search markdown docs |
+| `search_framework_category` | Search framework category |
+| `execute_code` | Sandboxed Python execution |
+| `health` | Health check |
 
-### Context & Research
-| Framework | Best For |
-|-----------|----------|
-| **Chain-of-Note** | Research, documentation |
-| **Step-Back** | Performance, complexity |
-| **Analogical** | Creative solutions, patterns |
-
-### Fast Execution
-| Framework | Best For |
-|-----------|----------|
-| **Skeleton-of-Thought** | Docs, boilerplate, scaffolding |
-| **System1** | Simple queries, quick fixes |
-
-## 🛠 MCP Tools
-
-### Two Access Patterns
-
-**Pattern 1: Smart Router (Recommended)**
-- Use `reason` tool - AI automatically selects the best framework
-- Best for: "vibe coding" where you describe what you want naturally
-
-**Pattern 2: Direct Framework Access**
-- Use `fw_{framework_name}` tools - call specific frameworks directly
-- Best for: sequential multi-agent workflows, explicit framework control
-- Example: `fw_active_inference`, `fw_tree_of_thoughts`, `fw_mcts_rstar`
-
-### Main Tools
-
-#### `reason` (Smart Router)
-Automatically routes to optimal framework based on task analysis.
-
-```json
-{
-    "query": "Debug this null pointer exception",
-    "code_snippet": "def foo(): return x.bar()",
-    "file_list": ["main.py"],
-    "ide_context": "Python 3.11 project",
-    "preferred_framework": "active_inference",
-    "max_iterations": 5,
-    "thread_id": "optional-for-continuity"
-}
-```
-
-#### `fw_{framework_name}` (Direct Access)
-Call any of the 20 frameworks directly. Same input schema as `reason`.
-
-Available:
-- `fw_reason_flux`, `fw_self_discover`, `fw_buffer_of_thoughts`, `fw_coala`
-- `fw_mcts_rstar`, `fw_tree_of_thoughts`, `fw_graph_of_thoughts`, `fw_everything_of_thought`
-- `fw_active_inference`, `fw_multi_agent_debate`, `fw_adaptive_injection`, `fw_re2`
-- `fw_program_of_thoughts`, `fw_chain_of_verification`, `fw_critic`
-- `fw_chain_of_note`, `fw_step_back`, `fw_analogical`
-- `fw_skeleton_of_thought`, `fw_system1`
-
-#### `list_frameworks`
-List all 20 frameworks with descriptions and best-use cases.
-
-#### `health`
-Server health check and statistics.
-
-### LangChain Tools (RAG & Code Execution)
-
-#### `search_documentation`
-Search indexed documentation/code via vector store (legacy).
-
-#### `execute_code`
-Execute Python code in sandboxed environment.
-
-#### `retrieve_context`
-Retrieve recent conversation/framework history.
-
-### Enhanced Vector Search Tools (Production Schema)
-
-**New in Enhanced Schema**: 6 specialized search tools with rich metadata filtering.
-
-#### `search_frameworks_by_name`
-Search within a specific framework's implementation.
-
-#### `search_by_category`
-Search by code category (framework, documentation, config, utility, test, integration).
-
-#### `search_function_implementation`
-Find function implementations by name with AST metadata.
-
-#### `search_class_implementation`
-Find class implementations by name with structure info.
-
-#### `search_documentation_only`
-Search only markdown documentation with section-level chunks.
-
-#### `search_with_framework_context`
-Search within framework categories (strategy, search, iterative, code, context, fast).
-
-**See `ENHANCED_VECTOR_SCHEMA.md` for complete details on the production-grade vector database.**
-
-## ⚙️ Configuration
-
-### Provider Selection
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `LLM_PROVIDER` | `openrouter`, `anthropic`, or `openai` | openrouter |
-
-### API Keys
-
-| Variable | Description | When Required |
-|----------|-------------|---------------|
-| `OPENROUTER_API_KEY` | OpenRouter API key (access all models) | When `LLM_PROVIDER=openrouter` |
-| `ANTHROPIC_API_KEY` | Anthropic API key (Claude models) | When `LLM_PROVIDER=anthropic` |
-| `OPENAI_API_KEY` | OpenAI API key (GPT models) | When `LLM_PROVIDER=openai` |
-
-### Model Configuration
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `DEEP_REASONING_MODEL` | Model for deep reasoning | anthropic/claude-4.5-sonnet |
-| `FAST_SYNTHESIS_MODEL` | Model for fast generation | openai/gpt-5.2 |
-| `ENABLE_DSPY_OPTIMIZATION` | DSPy prompt optimization | true |
-| `ENABLE_PRM_SCORING` | Process Reward Model | true |
-
-> **Note**: When using OpenRouter, model names use the format `provider/model-name`. When using direct APIs, just use `model-name`.
-
-## 🏗 Architecture
+## Architecture
 
 ```
-┌─────────────────────────────────────────────────┐
-│                 MCP Client (IDE)                │
-└─────────────────────┬───────────────────────────┘
-                      │ stdio/SSE
-┌─────────────────────▼───────────────────────────┐
-│              Omni-Cortex MCP Server             │
-├─────────────────────────────────────────────────┤
-│  ┌─────────────┐  ┌──────────────────────────┐  │
-│  │   Router    │──│   Framework Dispatcher   │  │
-│  └─────────────┘  └──────────────────────────┘  │
-├─────────────────────────────────────────────────┤
-│  ┌─────────┐ ┌────────┐ ┌─────────┐ ┌────────┐  │
-│  │Strategy │ │ Search │ │Iterative│ │  Code  │  │
-│  └─────────┘ └────────┘ └─────────┘ └────────┘  │
-│  ┌─────────┐ ┌────────┐                         │
-│  │ Context │ │  Fast  │                         │
-│  └─────────┘ └────────┘                         │
-├─────────────────────────────────────────────────┤
-│  ┌─────────────────────────────────────────────┐  │
-│  │            OpenRouter (Unified)              │  │
-│  │  ┌─────────────────┐  ┌──────────────────┐  │  │
-│  │  │  Claude Sonnet  │  │     GPT-5.2      │  │  │
-│  │  │ (Deep Thinking) │  │ (Fast Synthesis) │  │  │
-│  │  └─────────────────┘  └──────────────────┘  │  │
-│  └─────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────┘
+Pass-Through Mode (No API keys needed for frameworks)
+=====================================================
+
+IDE Agent (Claude Code, Cursor, etc.)
+         |
+         | calls think_active_inference(query="debug this")
+         v
++------------------+
+|  Omni-Cortex MCP |
+|------------------|
+| Returns prompt:  |
+| [active_inference] Hypothesis testing loop
+| TASK:{query}|CTX:{context}
+| 1.OBSERVE: Current state, form hypotheses
+| 2.PREDICT: Expected behavior if hypothesis true
+| 3.TEST: Gather evidence, update beliefs
+| 4.ACT: Implement fix
+| 5.VERIFY: Confirm fix worked
++------------------+
+         |
+         v
+IDE Agent executes the prompt with its own LLM
 ```
 
-## 📁 Project Structure
+## Token Efficiency
+
+Prompts are optimized to minimize token usage:
+
+| Component | Tokens |
+|-----------|--------|
+| Framework header | ~12 |
+| Prompt body | ~50-70 |
+| **Total per call** | **~60-80** |
+
+Compared to verbose alternatives (~150+ tokens), this saves ~50% on every framework call.
+
+## Components
+
+| Component | Purpose |
+|-----------|---------|
+| **LangGraph** | Workflow orchestration, 40 framework nodes |
+| **LangChain Memory** | Conversation history per thread |
+| **ChromaDB** | Vector store for RAG, 6 collections |
+| **HyperRouter** | Vibe-based framework selection |
+
+## Configuration
+
+```bash
+# .env file
+LLM_PROVIDER=pass-through          # Server doesn't call LLMs
+EMBEDDING_PROVIDER=openai          # For RAG/ChromaDB
+OPENAI_API_KEY=sk-...              # Required for embeddings
+ENABLE_AUTO_INGEST=true            # Index repo on startup
+```
+
+## Project Structure
 
 ```
 omni_cortex/
 ├── app/
-│   ├── __init__.py
-│   ├── schemas.py          # Pydantic models
-│   ├── state.py            # GraphState management
+│   ├── state.py              # GraphState
+│   ├── graph.py              # LangGraph workflow
+│   ├── langchain_integration.py  # Memory + RAG
+│   ├── collection_manager.py # ChromaDB collections
 │   ├── core/
-│   │   ├── config.py       # Settings & model clients
-│   │   └── router.py       # Hyper-Dispatcher
+│   │   ├── config.py         # Settings
+│   │   └── router.py         # HyperRouter
 │   └── nodes/
-│       ├── common.py       # Quiet-STaR, PRM, DSPy
-│       ├── strategy/       # 4 frameworks
-│       ├── search/         # 4 frameworks
-│       ├── iterative/      # 4 frameworks
-│       ├── code/           # 3 frameworks
-│       ├── context/        # 3 frameworks
-│       └── fast/           # 2 frameworks
+│       ├── common.py         # Shared utilities
+│       ├── strategy/         # 7 frameworks
+│       ├── search/           # 4 frameworks
+│       ├── iterative/        # 8 frameworks
+│       ├── code/             # 13 frameworks
+│       ├── context/          # 6 frameworks
+│       └── fast/             # 2 frameworks
 ├── server/
-│   └── main.py             # MCP server entry
+│   └── main.py               # MCP server (55 tools)
+├── setup.sh                  # Automated setup
 ├── Dockerfile
 ├── docker-compose.yml
-├── requirements.txt
 └── .env.example
 ```
 
-## 📜 License
+## License
 
 MIT

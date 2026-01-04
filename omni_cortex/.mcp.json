@@ -2,7 +2,12 @@
   "mcpServers": {
     "omni-cortex": {
       "command": "docker",
-      "args": ["run", "--rm", "-i", "omni_cortex-omni-cortex:latest"]
+      "args": [
+        "run", "--rm", "-i",
+        "--env-file", "${CLAUDE_PLUGIN_ROOT}/.env",
+        "-v", "${CLAUDE_PLUGIN_ROOT}/data:/app/data",
+        "omni_cortex-omni-cortex:latest"
+      ]
     }
   }
 }
