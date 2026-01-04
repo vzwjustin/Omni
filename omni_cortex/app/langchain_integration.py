@@ -92,22 +92,24 @@ class OmniCortexMemory:
 
 # Global memory store (keyed by thread_id) with simple LRU eviction
 _memory_store: "OrderedDict[str, OmniCortexMemory]" = OrderedDict()
+_memory_store_lock = asyncio.Lock()
 MAX_MEMORY_THREADS = 100
 
 
-def get_memory(thread_id: str) -> OmniCortexMemory:
-    """Get or create memory for a thread."""
-    if thread_id in _memory_store:
-        _memory_store.move_to_end(thread_id)
-        return _memory_store[thread_id]
-    
-    # Evict oldest if over capacity
-    if len(_memory_store) >= MAX_MEMORY_THREADS:
-        _memory_store.popitem(last=False)
-    
-    mem = OmniCortexMemory(thread_id)
-    _memory_store[thread_id] = mem
-    return mem
+async def get_memory(thread_id: str) -> OmniCortexMemory:
+    """Get or create memory for a thread with thread-safe access."""
+    async with _memory_store_lock:
+        if thread_id in _memory_store:
+            _memory_store.move_to_end(thread_id)
+            return _memory_store[thread_id]
+        
+        # Evict oldest if over capacity
+        if len(_memory_store) >= MAX_MEMORY_THREADS:
+            _memory_store.popitem(last=False)
+        
+        mem = OmniCortexMemory(thread_id)
+        _memory_store[thread_id] = mem
+        return mem
 
 
 # =============================================================================
@@ -449,11 +451,11 @@ def get_chat_model(model_type: str = "deep") -> Any:
 # Helper Functions
 # =============================================================================
 
-def enhance_state_with_langchain(state: GraphState, thread_id: str) -> GraphState:
+async def enhance_state_with_langchain(state: GraphState, thread_id: str) -> GraphState:
     """
     Enhance GraphState with LangChain memory and context.
     """
-    memory = get_memory(thread_id)
+    memory = await get_memory(thread_id)
     context = memory.get_context()
     
     # Add to working memory
@@ -463,12 +465,12 @@ def enhance_state_with_langchain(state: GraphState, thread_id: str) -> GraphStat
     return state
 
 
-def save_to_langchain_memory(
+async def save_to_langchain_memory(
     thread_id: str,
     query: str,
     answer: str,
     framework: str
 ) -> None:
     """Save interaction to LangChain memory."""
-    memory = get_memory(thread_id)
+    memory = await get_memory(thread_id)
     memory.add_exchange(query, answer, framework)

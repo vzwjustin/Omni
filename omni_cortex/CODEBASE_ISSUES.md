@@ -216,6 +216,11 @@ python3 -c "from app.langchain_integration import AVAILABLE_TOOLS; print(f'Avail
 
 | Date | Change |
 |------|--------|
+| 2026-01-04 | **BUG HUNT**: Fixed race condition in memory store (added asyncio.Lock) |
+| 2026-01-04 | Fixed embedding function to raise exceptions instead of returning None |
+| 2026-01-04 | Made CHECKPOINT_PATH configurable via environment variable |
+| 2026-01-04 | Added guaranteed fallback in router to prevent None/invalid selections |
+| 2026-01-04 | Removed magic string "None provided" for proper None handling |
 | 2026-01-03 | Exposed 6 enhanced search tools in MCP list_tools() |
 | 2026-01-03 | Fixed `_extract_framework()` missing method in router.py |
 | 2026-01-03 | Fixed circular import (runtime import in execute_code) |

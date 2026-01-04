@@ -540,32 +540,33 @@ def create_server() -> Server:
         # Smart routing with HyperRouter (reason tool)
         if name == "reason":
             query = arguments.get("query", "")
-            context = arguments.get("context", "None provided")
+            context = arguments.get("context")  # None if not provided
             thread_id = arguments.get("thread_id")
 
             # Use HyperRouter for vibe-based selection
             hyper_router = HyperRouter()
 
-            # First check vibe dictionary, then heuristics
+            # First check vibe dictionary, then heuristics, ensure fallback
             selected = hyper_router._check_vibe_dictionary(query)
             if not selected:
-                selected = hyper_router._heuristic_select(query, context if context != "None provided" else None)
+                selected = hyper_router._heuristic_select(query, context)
+            
+            # Guaranteed fallback to self_discover if both methods fail
+            if not selected or selected not in FRAMEWORKS:
+                selected = "self_discover"
 
             # Get framework info from router
             fw_info = hyper_router.get_framework_info(selected)
             complexity = hyper_router.estimate_complexity(query, context if context != "None provided" else None)
 
-            # Get the framework prompt (fallback to self_discover if not found)
-            fw = FRAMEWORKS.get(selected, FRAMEWORKS.get("self_discover"))
-            if not fw:
-                selected = "self_discover"
-                fw = FRAMEWORKS["self_discover"]
+            # Get the framework prompt (guaranteed to exist after fallback)
+            fw = FRAMEWORKS[selected]
 
-            prompt = fw["prompt"].format(query=query, context=context)
+            prompt = fw["prompt"].format(query=query, context=context or "None provided")
 
             # Prepend memory context if thread_id provided
             if thread_id:
-                memory = get_memory(thread_id)
+                memory = await get_memory(thread_id)
                 mem_context = memory.get_context()
                 if mem_context.get("chat_history"):
                     history_str = "\n".join(str(m) for m in mem_context["chat_history"][-5:])
@@ -586,14 +587,14 @@ def create_server() -> Server:
             fw_name = name[6:]
             if fw_name in FRAMEWORKS:
                 query = arguments.get("query", "")
-                context = arguments.get("context", "None provided")
+                context = arguments.get("context")  # None if not provided
                 thread_id = arguments.get("thread_id")
 
-                prompt = FRAMEWORKS[fw_name]["prompt"].format(query=query, context=context)
+                prompt = FRAMEWORKS[fw_name]["prompt"].format(query=query, context=context or "None provided")
 
                 # Include memory context if thread_id provided
                 if thread_id:
-                    memory = get_memory(thread_id)
+                    memory = await get_memory(thread_id)
                     mem_context = memory.get_context()
                     if mem_context.get("chat_history"):
                         history_str = "\n".join(str(m) for m in mem_context["chat_history"][-5:])
@@ -640,13 +641,13 @@ def create_server() -> Server:
         # Memory: get context
         if name == "get_context":
             thread_id = arguments.get("thread_id", "")
-            memory = get_memory(thread_id)
+            memory = await get_memory(thread_id)
             context = memory.get_context()
             return [TextContent(type="text", text=json.dumps(context, default=str, indent=2))]
 
         # Memory: save context
         if name == "save_context":
-            save_to_langchain_memory(
+            await save_to_langchain_memory(
                 arguments["thread_id"],
                 arguments["query"],
                 arguments["answer"],
