@@ -6,8 +6,8 @@ Copy-paste configurations for different IDEs and CLI tools.
 
 1. Clone and build Omni-Cortex:
 ```bash
-git clone https://github.com/vzwjustin/thinking-frameworks.git
-cd thinking-frameworks/omni_cortex
+git clone https://github.com/vzwjustin/Omni.git
+cd Omni/omni_cortex
 ./setup.sh  # Creates .env and builds Docker
 ```
 

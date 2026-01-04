@@ -9,7 +9,7 @@ Tell your IDE:
 
 Or run:
 ```bash
-curl -fsSL https://raw.githubusercontent.com/vzwjustin/thinking-frameworks/initial-release/omni_cortex/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/vzwjustin/Omni/initial-release/omni_cortex/install.sh | bash
 ```
 
 Or pull from Docker Hub:

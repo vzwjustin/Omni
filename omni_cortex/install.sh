@@ -1,6 +1,6 @@
 #!/bin/bash
 # Omni-Cortex MCP Server Installer
-# Usage: curl -fsSL https://raw.githubusercontent.com/vzwjustin/thinking-frameworks/main/omni_cortex/install.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/vzwjustin/Omni/initial-release/omni_cortex/install.sh | bash
 
 set -e
 
