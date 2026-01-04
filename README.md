@@ -1,18 +1,21 @@
 # Omni-Cortex: AI Thinking Frameworks MCP Server
 
-An MCP (Model Context Protocol) server that provides 20 advanced reasoning frameworks for AI assistants. Built with LangGraph for orchestration and LangChain for memory/RAG capabilities.
+An MCP (Model Context Protocol) server that provides 35 advanced reasoning frameworks for AI assistants. Built with LangGraph for orchestration and LangChain for memory/RAG capabilities.
 
 ## Overview
 
 Omni-Cortex exposes specialized thinking frameworks as MCP tools, allowing AI assistants to apply structured reasoning strategies for different types of tasks. The server itself doesn't call LLMs - it provides prompts and orchestration while the calling AI (Claude, GPT, etc.) does the actual reasoning.
 
-## 🧠 Available Frameworks (20 Total)
+## 🧠 Available Frameworks (35 Total)
 
-### Strategy (4 frameworks)
+### Strategy (7 frameworks)
 - **ReasonFlux** - Hierarchical planning: Template → Expand → Refine
 - **Self-Discover** - Discover and compose custom reasoning patterns
 - **Buffer of Thoughts** - Build context in a thought buffer
 - **CoALA** - Cognitive architecture with memory systems
+- **Least-to-Most** - Bottom-up atomic function decomposition
+- **Comparative Architecture** - Multiple solution approaches (readability/memory/speed)
+- **Plan-and-Solve** - Explicit planning before execution
 
 ### Search (4 frameworks)
 - **rStar-Code MCTS** - Monte Carlo Tree Search for code exploration
@@ -20,21 +23,32 @@ Omni-Cortex exposes specialized thinking frameworks as MCP tools, allowing AI as
 - **Graph of Thoughts** - Non-linear reasoning with idea graphs
 - **Everything of Thought** - Combine multiple reasoning approaches
 
-### Iterative (4 frameworks)
+### Iterative (8 frameworks)
 - **Active Inference** - Hypothesis testing loop for debugging
 - **Multi-Agent Debate** - Multiple perspectives argue trade-offs
 - **Adaptive Injection** - Inject strategies as needed
 - **RE2** - Read-Execute-Evaluate loop for requirements
+- **Rubber Duck Debugging** - Socratic questioning for self-discovery
+- **ReAct** - Interleaved reasoning and acting with tools
+- **Reflexion** - Self-evaluation with memory-based learning
+- **Self-Refine** - Iterative self-critique and improvement
 
-### Code (3 frameworks)
+### Code (7 frameworks)
 - **Program of Thoughts** - Generate executable code to solve problems
 - **Chain of Verification** - Draft → Verify → Patch cycle
 - **CRITIC** - Generate then critique with external validation
+- **Chain-of-Code** - Break problems into code blocks for structured thinking
+- **Self-Debugging** - Mental execution trace before presenting code
+- **TDD Prompting** - Write tests first, then implementation
+- **Reverse Chain-of-Thought** - Work backward from buggy output to source
 
-### Context (3 frameworks)
+### Context (6 frameworks)
 - **Chain of Note** - Research and note-taking approach
 - **Step-Back** - Abstract principles first, then apply
 - **Analogical** - Find and adapt similar solutions
+- **Red-Teaming** - Adversarial security analysis (STRIDE, OWASP)
+- **State-Machine Reasoning** - Formal FSM design before coding
+- **Chain-of-Thought** - Basic step-by-step reasoning
 
 ### Fast (2 frameworks)
 - **Skeleton of Thought** - Outline first, fill in details
@@ -59,8 +73,8 @@ Omni-Cortex exposes specialized thinking frameworks as MCP tools, allowing AI as
 ┌───────────────────▼─────────────────────────────────┐
 │           Omni-Cortex MCP Server                     │
 │  ┌────────────────────────────────────────────┐     │
-│  │  35 MCP Tools                               │     │
-│  │  • 20 think_* framework tools               │     │
+│  │  50 MCP Tools                               │     │
+│  │  • 35 think_* framework tools               │     │
 │  │  • 1 reason (smart routing)                 │     │
 │  │  • 14 utility tools (search, memory, etc)   │     │
 │  └────────────────┬───────────────────────────┘     │
@@ -80,7 +94,7 @@ Omni-Cortex exposes specialized thinking frameworks as MCP tools, allowing AI as
 │  └────────────────┬───────────────────────────┘     │
 │                   │                                   │
 │  ┌────────────────▼───────────────────────────┐     │
-│  │  20 Framework Nodes                         │     │
+│  │  35 Framework Nodes                         │     │
 │  │  • Each implements specific strategy         │     │
 │  │  • PRM scoring for search algorithms        │     │
 │  │  • Tool integration where needed            │     │

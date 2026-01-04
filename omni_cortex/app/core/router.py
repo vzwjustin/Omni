@@ -40,7 +40,22 @@ class HyperRouter:
         "analogical": "Find analogies to solve problems. Best for creative solutions and pattern recognition.",
         "adaptive_injection": "Dynamic thinking depth based on complexity. Best for mixed-complexity tasks.",
         "re2": "Two-pass: goals → constraints. Best for complex specs and requirements.",
-        "system1": "Fast heuristic, minimal thinking. Best for trivial quick fixes."
+        "system1": "Fast heuristic, minimal thinking. Best for trivial quick fixes.",
+        # New frameworks (2026 Edition + Modern LLM)
+        "chain_of_code": "Break problems into code blocks for structured thinking. Best for logic puzzles and algorithmic debugging.",
+        "self_debugging": "Mental execution trace before presenting code. Best for preventing off-by-one and null pointer bugs.",
+        "tdd_prompting": "Write tests first, then implementation. Best for edge case coverage and new features.",
+        "reverse_cot": "Work backward from buggy output to source. Best for silent bugs with wrong outputs.",
+        "rubber_duck": "Socratic questioning for self-discovery. Best for architectural bottlenecks and blind spots.",
+        "react": "Interleaved reasoning and acting with tools. Best for multi-step tasks requiring tool use.",
+        "reflexion": "Self-evaluation with memory-based learning. Best for learning from failed attempts.",
+        "self_refine": "Iterative self-critique and improvement. Best for code quality and documentation.",
+        "least_to_most": "Bottom-up atomic function decomposition. Best for complex systems and refactoring monoliths.",
+        "comparative_arch": "Multiple solution approaches (readability/memory/speed). Best for optimization and architecture decisions.",
+        "plan_and_solve": "Explicit planning before execution. Best for complex features and avoiding rushed implementations.",
+        "red_team": "Adversarial security analysis (STRIDE, OWASP). Best for security audits and vulnerability scanning.",
+        "state_machine": "Formal FSM design before coding. Best for UI/UX logic, game dev, and workflows.",
+        "chain_of_thought": "Basic step-by-step reasoning. Best for complex reasoning and logical deduction."
     }
     
     # Heuristic patterns (fallback)
@@ -207,6 +222,91 @@ class HyperRouter:
             "quick question", "simple fix", "easy", "obvious",
             "just do it", "no brainer", "trivial", "one liner",
             "fast answer", "real quick"
+        ],
+
+        # New framework vibes (2026 Edition)
+        "chain_of_code": [
+            "code blocks", "pseudocode", "execution trace", "logic puzzle",
+            "recursive logic", "algorithmic complexity", "structured thinking",
+            "break into code", "code decomposition"
+        ],
+
+        "self_debugging": [
+            "test before showing", "mental execution", "trace through",
+            "prevent bugs", "check my work", "simulate execution",
+            "off by one", "edge case check", "dry run"
+        ],
+
+        "tdd_prompting": [
+            "test first", "write tests", "TDD", "test driven",
+            "unit tests", "edge cases", "test coverage",
+            "red green refactor", "tests then code"
+        ],
+
+        "reverse_cot": [
+            "wrong output", "expected vs actual", "why different output",
+            "output delta", "silent bug", "calculation error",
+            "backwards debugging", "work backward", "reverse engineer bug"
+        ],
+
+        "rubber_duck": [
+            "explain to me", "walk me through", "ask me questions",
+            "guide me", "help me think", "rubber duck",
+            "Socratic method", "lead me to answer", "questioning approach"
+        ],
+
+        "react": [
+            "use tools", "multi-step", "action reasoning",
+            "tool use", "step and observe", "interact with",
+            "reasoning acting", "ReAct pattern", "observe results"
+        ],
+
+        "reflexion": [
+            "learn from mistakes", "retry", "failed attempt",
+            "try again", "reflect on", "what went wrong",
+            "iterative learning", "self-evaluation", "memory-based"
+        ],
+
+        "self_refine": [
+            "improve quality", "polish", "refine",
+            "make it better", "iterative improvement", "critique and improve",
+            "self-critique", "refinement loop", "quality pass"
+        ],
+
+        "least_to_most": [
+            "atomic functions", "dependency graph", "bottom up",
+            "layered", "base functions first", "decompose completely",
+            "building blocks", "hierarchical build", "least dependent first"
+        ],
+
+        "comparative_arch": [
+            "compare approaches", "readability vs performance", "trade-offs",
+            "multiple solutions", "which is faster", "optimize for",
+            "different versions", "performance vs memory", "three approaches"
+        ],
+
+        "plan_and_solve": [
+            "plan first", "think before coding", "explicit plan",
+            "strategy", "outline approach", "plan then execute",
+            "methodical", "step by step plan", "planning phase"
+        ],
+
+        "red_team": [
+            "security audit", "vulnerabilities", "pen test",
+            "security review", "find exploits", "attack vectors",
+            "OWASP", "SQLi", "XSS", "security threats", "hack this"
+        ],
+
+        "state_machine": [
+            "state machine", "FSM", "states and transitions",
+            "workflow", "state diagram", "UI states",
+            "game states", "state management", "transitions"
+        ],
+
+        "chain_of_thought": [
+            "think step by step", "reason through", "work through",
+            "logical steps", "step by step", "reasoning chain",
+            "think carefully", "show your work", "explicit reasoning"
         ]
     }
     
@@ -572,6 +672,105 @@ class HyperRouter:
                 "category": "fast",
                 "description": "Quick heuristic responses",
                 "best_for": ["simple queries", "quick fixes"],
+                "complexity": "low"
+            },
+            # New frameworks (2026 Edition)
+            "chain_of_code": {
+                "name": "Chain-of-Code",
+                "category": "code",
+                "description": "Code-based problem decomposition",
+                "best_for": ["logic puzzles", "algorithmic debugging"],
+                "complexity": "medium"
+            },
+            "self_debugging": {
+                "name": "Self-Debugging",
+                "category": "code",
+                "description": "Mental execution before presenting",
+                "best_for": ["preventing bugs", "edge case handling"],
+                "complexity": "medium"
+            },
+            "tdd_prompting": {
+                "name": "TDD Prompting",
+                "category": "code",
+                "description": "Test-first development",
+                "best_for": ["new features", "edge case coverage"],
+                "complexity": "medium"
+            },
+            "reverse_cot": {
+                "name": "Reverse Chain-of-Thought",
+                "category": "code",
+                "description": "Backward reasoning from output delta",
+                "best_for": ["silent bugs", "wrong outputs"],
+                "complexity": "medium"
+            },
+            "rubber_duck": {
+                "name": "Rubber Duck Debugging",
+                "category": "iterative",
+                "description": "Socratic questioning",
+                "best_for": ["architectural issues", "blind spots"],
+                "complexity": "medium"
+            },
+            "react": {
+                "name": "ReAct",
+                "category": "iterative",
+                "description": "Reasoning + Acting with tools",
+                "best_for": ["multi-step tasks", "tool use"],
+                "complexity": "high"
+            },
+            "reflexion": {
+                "name": "Reflexion",
+                "category": "iterative",
+                "description": "Self-evaluation with memory",
+                "best_for": ["learning from failures", "iterative improvement"],
+                "complexity": "high"
+            },
+            "self_refine": {
+                "name": "Self-Refine",
+                "category": "iterative",
+                "description": "Iterative self-critique",
+                "best_for": ["code quality", "documentation"],
+                "complexity": "medium"
+            },
+            "least_to_most": {
+                "name": "Least-to-Most Decomposition",
+                "category": "strategy",
+                "description": "Bottom-up atomic decomposition",
+                "best_for": ["complex systems", "monolith refactoring"],
+                "complexity": "high"
+            },
+            "comparative_arch": {
+                "name": "Comparative Architecture",
+                "category": "strategy",
+                "description": "Multi-approach comparison",
+                "best_for": ["optimization", "architecture decisions"],
+                "complexity": "high"
+            },
+            "plan_and_solve": {
+                "name": "Plan-and-Solve",
+                "category": "strategy",
+                "description": "Explicit planning before execution",
+                "best_for": ["complex features", "methodical development"],
+                "complexity": "medium"
+            },
+            "red_team": {
+                "name": "Red-Teaming",
+                "category": "context",
+                "description": "Adversarial security analysis",
+                "best_for": ["security audits", "vulnerability scanning"],
+                "complexity": "high"
+            },
+            "state_machine": {
+                "name": "State-Machine Reasoning",
+                "category": "context",
+                "description": "Formal FSM design",
+                "best_for": ["UI logic", "workflow systems"],
+                "complexity": "medium"
+            },
+            "chain_of_thought": {
+                "name": "Chain-of-Thought",
+                "category": "context",
+                "description": "Step-by-step reasoning",
+                "best_for": ["complex reasoning", "logical deduction"],
                 "complexity": "low"
             }
         }

@@ -28,7 +28,10 @@ from .nodes.strategy import (
     reason_flux_node,
     self_discover_node,
     buffer_of_thoughts_node,
-    coala_node
+    coala_node,
+    least_to_most_node,
+    comparative_architecture_node,
+    plan_and_solve_node
 )
 from .nodes.search import (
     mcts_rstar_node,
@@ -40,17 +43,28 @@ from .nodes.iterative import (
     active_inference_node,
     multi_agent_debate_node,
     adaptive_injection_node,
-    re2_node
+    re2_node,
+    rubber_duck_debugging_node,
+    react_node,
+    reflexion_node,
+    self_refine_node
 )
 from .nodes.code import (
     program_of_thoughts_node,
     chain_of_verification_node,
-    critic_node
+    critic_node,
+    chain_of_code_node,
+    self_debugging_node,
+    tdd_prompting_node,
+    reverse_chain_of_thought_node
 )
 from .nodes.context import (
     chain_of_note_node,
     step_back_node,
-    analogical_node
+    analogical_node,
+    red_team_node,
+    state_machine_node,
+    chain_of_thought_node
 )
 from .nodes.fast import (
     skeleton_of_thought_node,
@@ -65,6 +79,9 @@ FRAMEWORK_NODES = {
     "self_discover": self_discover_node,
     "buffer_of_thoughts": buffer_of_thoughts_node,
     "coala": coala_node,
+    "least_to_most": least_to_most_node,
+    "comparative_arch": comparative_architecture_node,
+    "plan_and_solve": plan_and_solve_node,
     # Search
     "mcts_rstar": mcts_rstar_node,
     "tree_of_thoughts": tree_of_thoughts_node,
@@ -75,14 +92,25 @@ FRAMEWORK_NODES = {
     "multi_agent_debate": multi_agent_debate_node,
     "adaptive_injection": adaptive_injection_node,
     "re2": re2_node,
+    "rubber_duck": rubber_duck_debugging_node,
+    "react": react_node,
+    "reflexion": reflexion_node,
+    "self_refine": self_refine_node,
     # Code
     "program_of_thoughts": program_of_thoughts_node,
     "chain_of_verification": chain_of_verification_node,
     "critic": critic_node,
+    "chain_of_code": chain_of_code_node,
+    "self_debugging": self_debugging_node,
+    "tdd_prompting": tdd_prompting_node,
+    "reverse_cot": reverse_chain_of_thought_node,
     # Context
     "chain_of_note": chain_of_note_node,
     "step_back": step_back_node,
     "analogical": analogical_node,
+    "red_team": red_team_node,
+    "state_machine": state_machine_node,
+    "chain_of_thought": chain_of_thought_node,
     # Fast
     "skeleton_of_thought": skeleton_of_thought_node,
     "system1": system1_node,

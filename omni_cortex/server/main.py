@@ -324,6 +324,221 @@ Context: {context}
 
 Provide a direct, efficient answer. Focus on the most likely correct solution."""
     },
+    # New frameworks (2026 Edition + Modern LLM)
+    "chain_of_code": {
+        "category": "code",
+        "description": "Break problems into code blocks for structured thinking",
+        "best_for": ["logic puzzles", "algorithmic debugging", "recursive logic"],
+        "prompt": """Apply Chain-of-Code reasoning:
+
+TASK: {query}
+CONTEXT: {context}
+
+1. TRANSLATE: Express problem as computational representation
+2. DECOMPOSE: Break into code blocks/functions
+3. EXECUTE: Mental execution trace of each block
+4. SYNTHESIZE: Extract answer from execution traces"""
+    },
+    "self_debugging": {
+        "category": "code",
+        "description": "Mental execution trace before presenting code",
+        "best_for": ["preventing bugs", "edge case handling", "off-by-one errors"],
+        "prompt": """Apply Self-Debugging framework:
+
+TASK: {query}
+CONTEXT: {context}
+
+1. GENERATE: Write initial code
+2. IDENTIFY: Generate test cases (normal + edge cases)
+3. TRACE: Line-by-line mental execution
+4. DEBUG: Fix identified errors
+5. VERIFY: Confirm fixes work"""
+    },
+    "tdd_prompting": {
+        "category": "code",
+        "description": "Write tests first, then implementation",
+        "best_for": ["new features", "edge case coverage", "TDD methodology"],
+        "prompt": """Apply TDD Prompting:
+
+TASK: {query}
+CONTEXT: {context}
+
+1. SPECIFY: Clarify requirements
+2. TEST: Write 5-8 unit tests FIRST (happy path, edge cases, errors)
+3. IMPLEMENT: Write minimal code to pass tests
+4. VERIFY: Mental test execution
+5. REFACTOR: Improve code quality"""
+    },
+    "reverse_cot": {
+        "category": "code",
+        "description": "Work backward from buggy output to source",
+        "best_for": ["silent bugs", "wrong outputs", "calculation errors"],
+        "prompt": """Apply Reverse Chain-of-Thought:
+
+TASK: {query}
+CONTEXT: {context}
+
+1. COMPARE: Analyze actual vs expected output delta
+2. HYPOTHESIZE: What could cause this specific difference?
+3. TRACE_BACK: Work backward through code
+4. LOCATE: Identify specific buggy lines
+5. FIX: Correct root cause"""
+    },
+    "rubber_duck": {
+        "category": "iterative",
+        "description": "Socratic questioning for self-discovery",
+        "best_for": ["architectural issues", "blind spots", "unclear problems"],
+        "prompt": """Apply Rubber Duck Debugging:
+
+TASK: {query}
+CONTEXT: {context}
+
+1. LISTEN: Understand the problem
+2. QUESTION: Ask clarifying questions about assumptions
+3. PROBE: Challenge logic gaps
+4. GUIDE: Lead toward self-discovery (don't give answers)
+5. REFLECT: Summarize insights revealed"""
+    },
+    "react": {
+        "category": "iterative",
+        "description": "Interleaved reasoning and acting with tools",
+        "best_for": ["multi-step tasks", "tool use", "information gathering"],
+        "prompt": """Apply ReAct (Reasoning + Acting):
+
+TASK: {query}
+CONTEXT: {context}
+
+Iterate: THOUGHT -> ACTION -> OBSERVATION
+1. THOUGHT: What should I do next?
+2. ACTION: Execute tool/command
+3. OBSERVATION: Record result
+(Repeat until ready for final answer)
+4. FINAL ANSWER: Synthesize from trace"""
+    },
+    "reflexion": {
+        "category": "iterative",
+        "description": "Self-evaluation with memory-based learning",
+        "best_for": ["learning from failures", "iterative improvement", "complex debugging"],
+        "prompt": """Apply Reflexion framework:
+
+TASK: {query}
+CONTEXT: {context}
+
+Loop (max 3 attempts):
+1. ATTEMPT: Try to solve
+2. EVALUATE: Assess success/failure
+3. REFLECT: Analyze what went wrong and why
+4. MEMORIZE: Store reflection insights
+5. RETRY: Use reflection to improve"""
+    },
+    "self_refine": {
+        "category": "iterative",
+        "description": "Iterative self-critique and improvement",
+        "best_for": ["code quality", "documentation", "polishing solutions"],
+        "prompt": """Apply Self-Refine:
+
+TASK: {query}
+CONTEXT: {context}
+
+1. GENERATE: Create initial solution
+2-4. Loop (3 refinements):
+   - CRITIQUE: Find flaws as editor
+   - REFINE: Improve based on critique
+5. FINALIZE: Present polished solution"""
+    },
+    "least_to_most": {
+        "category": "strategy",
+        "description": "Bottom-up atomic function decomposition",
+        "best_for": ["complex systems", "monolith refactoring", "large features"],
+        "prompt": """Apply Least-to-Most Decomposition:
+
+TASK: {query}
+CONTEXT: {context}
+
+1. DECOMPOSE: Break into atomic functions + dependencies
+2. ORDER: Topological sort (least dependent first)
+3. IMPLEMENT_BASE: Build Level 0 (no dependencies)
+4. BUILD_UP: Implement higher levels using base
+5. INTEGRATE: Combine into complete solution"""
+    },
+    "comparative_arch": {
+        "category": "strategy",
+        "description": "Multiple solution approaches comparison",
+        "best_for": ["optimization", "architecture decisions", "trade-off analysis"],
+        "prompt": """Apply Comparative Architecture:
+
+TASK: {query}
+CONTEXT: {context}
+
+1. ANALYZE: Requirements and constraints
+2. GENERATE_3: Create versions optimized for:
+   - Readability/Maintainability
+   - Memory Efficiency
+   - Execution Speed
+3. COMPARE: Trade-off analysis (table format)
+4. RECOMMEND: Best choice for context"""
+    },
+    "plan_and_solve": {
+        "category": "strategy",
+        "description": "Explicit planning before execution",
+        "best_for": ["complex features", "methodical development", "avoiding rushed code"],
+        "prompt": """Apply Plan-and-Solve:
+
+TASK: {query}
+CONTEXT: {context}
+
+1. UNDERSTAND: Clarify problem thoroughly
+2. PLAN: Detailed step-by-step plan (don't code yet!)
+3. VERIFY_PLAN: Check completeness
+4. EXECUTE: Implement following plan
+5. VALIDATE: Ensure execution matches plan"""
+    },
+    "red_team": {
+        "category": "context",
+        "description": "Adversarial security analysis (STRIDE, OWASP)",
+        "best_for": ["security audits", "vulnerability scanning", "penetration testing"],
+        "prompt": """Apply Red-Teaming (Security Analysis):
+
+TASK: {query}
+CONTEXT: {context}
+
+1. RECONNAISSANCE: Map attack surface
+2. THREAT_MODEL: Identify attack vectors (STRIDE, OWASP Top 10)
+3. EXPLOIT: Find specific vulnerabilities
+4. ASSESS: Rate severity (CVSS-style)
+5. PATCH: Provide secure fixes"""
+    },
+    "state_machine": {
+        "category": "context",
+        "description": "Formal FSM design before coding",
+        "best_for": ["UI logic", "workflow systems", "game development"],
+        "prompt": """Apply State-Machine Reasoning:
+
+TASK: {query}
+CONTEXT: {context}
+
+1. IDENTIFY_STATES: All possible states
+2. MAP_TRANSITIONS: State transitions + triggers
+3. DEFINE_ACTIONS: onEnter/onExit/whileIn for each state
+4. VALIDATE: Check for unreachable states, deadlocks
+5. IMPLEMENT: Code the state machine"""
+    },
+    "chain_of_thought": {
+        "category": "context",
+        "description": "Step-by-step reasoning (foundational technique)",
+        "best_for": ["complex reasoning", "logical deduction", "math problems"],
+        "prompt": """Apply Chain-of-Thought reasoning:
+
+TASK: {query}
+CONTEXT: {context}
+
+1. UNDERSTAND: Restate problem
+2. BREAK_DOWN: Decompose into logical steps
+3. REASON: Work through each step explicitly
+4. CONCLUDE: Final answer with justification
+
+Show all your work step-by-step!"""
+    },
 }
 
 
