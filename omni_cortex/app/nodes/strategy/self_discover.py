@@ -55,7 +55,10 @@ async def self_discover_node(state: GraphState) -> GraphState:
     # =========================================================================
     # Phase 1: SELECT - Choose relevant reasoning modules
     # =========================================================================
-    
+
+    # Build modules list (avoid backslash in f-string expression)
+    modules_list = "\n".join(f"- {m}: {_get_module_description(m)}" for m in ATOMIC_MODULES)
+
     select_prompt = f"""You are Self-Discover, a meta-reasoning system.
 
 TASK: {query}
@@ -64,7 +67,7 @@ CONTEXT:
 {code_context}
 
 AVAILABLE REASONING MODULES:
-{"\n".join(f"- {m}: {_get_module_description(m)}" for m in ATOMIC_MODULES)}
+{modules_list}
 
 Analyze the task and SELECT 3-5 modules that would be most useful.
 For each selected module, explain WHY it's relevant to this specific task.
