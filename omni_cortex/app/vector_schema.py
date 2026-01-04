@@ -80,11 +80,12 @@ class DocumentMetadata:
         """Convert to dict for Chroma storage."""
         data = asdict(self)
         # Convert lists to comma-separated strings for Chroma compatibility
-        if data.get('imports'):
+        # Convert lists to comma-separated strings for Chroma compatibility
+        if isinstance(data.get('imports'), list):
             data['imports'] = ','.join(data['imports'])
-        if data.get('decorators'):
+        if isinstance(data.get('decorators'), list):
             data['decorators'] = ','.join(data['decorators'])
-        if data.get('tags'):
+        if isinstance(data.get('tags'), list):
             data['tags'] = ','.join(data['tags'])
         # Remove None values
         return {k: v for k, v in data.items() if v is not None}

@@ -330,11 +330,16 @@ def get_vectorstore_by_collection(collection_name: str):
 
 def search_vectorstore(query: str, k: int = 5) -> List[Document]:
     """Search the vector store for relevant documents."""
-    vs = get_vectorstore()
-    if not vs:
-        return []
+
     try:
-        return vs.similarity_search(query, k=k)
+        from .collection_manager import get_collection_manager
+        manager = get_collection_manager()
+        # Search across all core collections to maintain legacy behavior of searching "everything"
+        return manager.search(
+            query, 
+            collection_names=['frameworks', 'documentation', 'utilities'], 
+            k=k
+        )
     except Exception as e:
         logger.error("vectorstore_search_failed", error=str(e))
         return []

@@ -225,18 +225,31 @@ def ingest_repository(
         return {"files": 0, "chunks": 0, "added": 0}
     
     # Separate texts and metadatas
-    texts = [chunk[0] for chunk in all_chunks]
-    metadatas = [chunk[1] for chunk in all_chunks]
+    from collections import defaultdict
+    chunks_by_collection = defaultdict(list)
     
-    # Add to vector store
-    added = add_documents_with_metadata(texts, metadatas, collection_name)
+    from .collection_manager import get_collection_manager
+    manager = get_collection_manager()
     
-    stats = {
-        "files": file_count,
-        "chunks": len(all_chunks),
-        "added": added
-    }
+    for text, metadata in all_chunks:
+        # Route logic currently resides in CollectionManager, but we can access it or replicate it.
+        # Ideally, we used the manager's routing
+        target_collection = manager.route_to_collection(metadata)
+        chunks_by_collection[target_collection].append((text, metadata))
     
+    total_added = 0
+    stats = {"files": file_count, "chunks": len(all_chunks)}
+    
+    for coll_name, items in chunks_by_collection.items():
+        coll_texts = [item[0] for item in items]
+        coll_metas = [item[1] for item in items]
+        
+        added = manager.add_documents(coll_texts, coll_metas, collection_name=coll_name)
+        total_added += added
+        logger.info("collection_populated", collection=coll_name, count=added)
+        stats[f"added_{coll_name}"] = added
+
+    stats["total_added"] = total_added
     logger.info("enhanced_ingest_complete", **stats)
     return stats
 
@@ -264,7 +277,7 @@ def main():
     print(f"Enhanced ingestion complete:")
     print(f"  Files processed: {stats['files']}")
     print(f"  Chunks created: {stats['chunks']}")
-    print(f"  Documents added: {stats['added']}")
+    print(f"  Documents added: {stats['total_added']}")
 
 
 if __name__ == "__main__":

@@ -85,7 +85,7 @@ if detect_codebase; then
         echo "==================================="
         echo "ChromaDB empty - ingesting codebase"
         echo "==================================="
-        python -m app.ingest_repo || echo "Warning: Ingestion failed, continuing anyway..."
+        python -m app.enhanced_ingestion || echo "Warning: Ingestion failed, continuing anyway..."
     else
         echo "ChromaDB already populated ($EMBEDDING_COUNT embeddings)"
         echo "Tip: To re-index, delete /app/data/chroma and restart"
