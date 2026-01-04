@@ -7,6 +7,12 @@ from .coc import chain_of_code_node
 from .self_debug import self_debugging_node
 from .tdd import tdd_prompting_node
 from .reverse_cot import reverse_chain_of_thought_node
+from .alphacodium import alphacodium_node
+from .codechain import codechain_node
+from .evol_instruct import evol_instruct_node
+from .llmloop import llmloop_node
+from .procoder import procoder_node
+from .recode import recode_node
 
 __all__ = [
     "program_of_thoughts_node",
@@ -15,5 +21,11 @@ __all__ = [
     "chain_of_code_node",
     "self_debugging_node",
     "tdd_prompting_node",
-    "reverse_chain_of_thought_node"
+    "reverse_chain_of_thought_node",
+    "alphacodium_node",
+    "codechain_node",
+    "evol_instruct_node",
+    "llmloop_node",
+    "procoder_node",
+    "recode_node",
 ]

@@ -56,7 +56,13 @@ from .nodes.code import (
     chain_of_code_node,
     self_debugging_node,
     tdd_prompting_node,
-    reverse_chain_of_thought_node
+    reverse_chain_of_thought_node,
+    alphacodium_node,
+    codechain_node,
+    evol_instruct_node,
+    llmloop_node,
+    procoder_node,
+    recode_node
 )
 from .nodes.context import (
     chain_of_note_node,
@@ -104,6 +110,12 @@ FRAMEWORK_NODES = {
     "self_debugging": self_debugging_node,
     "tdd_prompting": tdd_prompting_node,
     "reverse_cot": reverse_chain_of_thought_node,
+    "alphacodium": alphacodium_node,
+    "codechain": codechain_node,
+    "evol_instruct": evol_instruct_node,
+    "llmloop": llmloop_node,
+    "procoder": procoder_node,
+    "recode": recode_node,
     # Context
     "chain_of_note": chain_of_note_node,
     "step_back": step_back_node,
