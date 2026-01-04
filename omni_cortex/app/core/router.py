@@ -55,7 +55,14 @@ class HyperRouter:
         "plan_and_solve": "Explicit planning before execution. Best for complex features and avoiding rushed implementations.",
         "red_team": "Adversarial security analysis (STRIDE, OWASP). Best for security audits and vulnerability scanning.",
         "state_machine": "Formal FSM design before coding. Best for UI/UX logic, game dev, and workflows.",
-        "chain_of_thought": "Basic step-by-step reasoning. Best for complex reasoning and logical deduction."
+        "chain_of_thought": "Basic step-by-step reasoning. Best for complex reasoning and logical deduction.",
+        # Additional coding frameworks (2026 expansion)
+        "alphacodium": "Test-based multi-stage iterative code generation. Best for competitive programming and complex algorithms.",
+        "codechain": "Chain of self-revisions guided by sub-modules. Best for modular code generation and incremental refinement.",
+        "evol_instruct": "Evolutionary instruction complexity for code. Best for challenging code problems and constraint-based coding.",
+        "llmloop": "Automated iterative feedback loops for code+tests. Best for code quality assurance and production-ready code.",
+        "procoder": "Compiler-feedback-guided iterative refinement. Best for project-level code generation and API usage.",
+        "recode": "Multi-candidate validation with CFG-based debugging. Best for reliable code generation and high-stakes code."
     }
     
     # Heuristic patterns (fallback)
@@ -307,6 +314,43 @@ class HyperRouter:
             "think step by step", "reason through", "work through",
             "logical steps", "step by step", "reasoning chain",
             "think carefully", "show your work", "explicit reasoning"
+        ],
+
+        # Additional coding frameworks (2026 expansion)
+        "alphacodium": [
+            "competitive programming", "code contest", "algorithm challenge",
+            "iterative code", "test-based", "multi-stage",
+            "code generation", "contest problem", "leetcode"
+        ],
+
+        "codechain": [
+            "modular code", "sub-modules", "self-revision",
+            "incremental", "chain revisions", "module by module",
+            "component based", "build incrementally", "refine modules"
+        ],
+
+        "evol_instruct": [
+            "evolve solution", "add constraints", "increase complexity",
+            "challenging problem", "constraint-based", "evolutionary",
+            "harder version", "more constraints", "complex requirements"
+        ],
+
+        "llmloop": [
+            "feedback loop", "iterate until", "compile and fix",
+            "test loop", "automated testing", "quality assurance",
+            "production ready", "lint and fix", "keep iterating"
+        ],
+
+        "procoder": [
+            "compiler feedback", "project level", "codebase integration",
+            "API usage", "large project", "integrate with",
+            "project context", "compiler errors", "fix imports"
+        ],
+
+        "recode": [
+            "multiple candidates", "cross validate", "CFG debugging",
+            "control flow", "reliable code", "high stakes",
+            "validate candidates", "majority voting", "robust solution"
         ]
     }
     
@@ -772,6 +816,49 @@ class HyperRouter:
                 "description": "Step-by-step reasoning",
                 "best_for": ["complex reasoning", "logical deduction"],
                 "complexity": "low"
+            },
+            # Additional coding frameworks (2026 expansion)
+            "alphacodium": {
+                "name": "AlphaCodium",
+                "category": "code",
+                "description": "Test-based multi-stage iterative code generation",
+                "best_for": ["competitive programming", "complex algorithms"],
+                "complexity": "high"
+            },
+            "codechain": {
+                "name": "CodeChain",
+                "category": "code",
+                "description": "Chain of self-revisions guided by sub-modules",
+                "best_for": ["modular code generation", "incremental refinement"],
+                "complexity": "high"
+            },
+            "evol_instruct": {
+                "name": "Evol-Instruct",
+                "category": "code",
+                "description": "Evolutionary instruction complexity for code",
+                "best_for": ["challenging code problems", "constraint-based coding"],
+                "complexity": "high"
+            },
+            "llmloop": {
+                "name": "LLMLoop",
+                "category": "code",
+                "description": "Automated iterative feedback loops for code+tests",
+                "best_for": ["code quality assurance", "production-ready code"],
+                "complexity": "high"
+            },
+            "procoder": {
+                "name": "ProCoder",
+                "category": "code",
+                "description": "Compiler-feedback-guided iterative refinement",
+                "best_for": ["project-level code generation", "API usage"],
+                "complexity": "high"
+            },
+            "recode": {
+                "name": "RECODE",
+                "category": "code",
+                "description": "Multi-candidate validation with CFG-based debugging",
+                "best_for": ["reliable code generation", "high-stakes code"],
+                "complexity": "high"
             }
         }
         return INFO.get(framework, {

@@ -143,7 +143,7 @@ async def route_node(state: GraphState) -> GraphState:
     # Enhance state with LangChain memory if thread_id available
     thread_id = state.get("working_memory", {}).get("thread_id")
     if thread_id:
-        state = enhance_state_with_langchain(state, thread_id)
+        state = await enhance_state_with_langchain(state, thread_id)
         logger.info("state_enhanced_with_memory", thread_id=thread_id)
     
     # Make LangChain tools available to router if needed
@@ -186,7 +186,7 @@ async def execute_framework_node(state: GraphState) -> GraphState:
     
     # Save to LangChain memory after execution
     if thread_id and state.get("final_answer"):
-        save_to_langchain_memory(
+        await save_to_langchain_memory(
             thread_id=thread_id,
             query=state["query"],
             answer=state["final_answer"],

@@ -92,22 +92,24 @@ class OmniCortexMemory:
 
 # Global memory store (keyed by thread_id) with simple LRU eviction
 _memory_store: "OrderedDict[str, OmniCortexMemory]" = OrderedDict()
+_memory_lock = asyncio.Lock()  # Protect concurrent access
 MAX_MEMORY_THREADS = 100
 
 
-def get_memory(thread_id: str) -> OmniCortexMemory:
-    """Get or create memory for a thread."""
-    if thread_id in _memory_store:
-        _memory_store.move_to_end(thread_id)
-        return _memory_store[thread_id]
-    
-    # Evict oldest if over capacity
-    if len(_memory_store) >= MAX_MEMORY_THREADS:
-        _memory_store.popitem(last=False)
-    
-    mem = OmniCortexMemory(thread_id)
-    _memory_store[thread_id] = mem
-    return mem
+async def get_memory(thread_id: str) -> OmniCortexMemory:
+    """Get or create memory for a thread (thread-safe)."""
+    async with _memory_lock:
+        if thread_id in _memory_store:
+            _memory_store.move_to_end(thread_id)
+            return _memory_store[thread_id]
+
+        # Evict oldest if over capacity
+        if len(_memory_store) >= MAX_MEMORY_THREADS:
+            _memory_store.popitem(last=False)
+
+        mem = OmniCortexMemory(thread_id)
+        _memory_store[thread_id] = mem
+        return mem
 
 
 # =============================================================================
@@ -291,9 +293,16 @@ class OmniCortexCallback(BaseCallbackHandler):
     
     def on_llm_end(self, response, **kwargs) -> None:
         """Track LLM call completion and token usage."""
-        if hasattr(response, 'llm_output') and response.llm_output:
-            tokens = response.llm_output.get('token_usage', {})
-            total = tokens.get('total_tokens', 0)
+        # Handle both object (from LangChain) and dict (from our wrappers)
+        llm_output = None
+        if hasattr(response, 'llm_output'):
+            llm_output = response.llm_output
+        elif isinstance(response, dict):
+            llm_output = response.get('llm_output')
+
+        if llm_output:
+            tokens = llm_output.get('token_usage', {}) if isinstance(llm_output, dict) else {}
+            total = tokens.get('total_tokens', 0) if isinstance(tokens, dict) else 0
             self.total_tokens += total
             logger.info(
                 "llm_call_end",
@@ -449,26 +458,26 @@ def get_chat_model(model_type: str = "deep") -> Any:
 # Helper Functions
 # =============================================================================
 
-def enhance_state_with_langchain(state: GraphState, thread_id: str) -> GraphState:
+async def enhance_state_with_langchain(state: GraphState, thread_id: str) -> GraphState:
     """
     Enhance GraphState with LangChain memory and context.
     """
-    memory = get_memory(thread_id)
+    memory = await get_memory(thread_id)
     context = memory.get_context()
-    
+
     # Add to working memory
     state["working_memory"]["chat_history"] = context["chat_history"]
     state["working_memory"]["framework_history"] = context["framework_history"]
-    
+
     return state
 
 
-def save_to_langchain_memory(
+async def save_to_langchain_memory(
     thread_id: str,
     query: str,
     answer: str,
     framework: str
 ) -> None:
     """Save interaction to LangChain memory."""
-    memory = get_memory(thread_id)
+    memory = await get_memory(thread_id)
     memory.add_exchange(query, answer, framework)

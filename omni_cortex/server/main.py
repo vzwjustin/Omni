@@ -905,9 +905,7 @@ def create_server() -> Server:
             query = arguments.get("query", "")
             context = arguments.get("context", "None provided")
 
-            # Use HyperRouter to select best framework
-            from ..app.core.router import HyperRouter
-            router = HyperRouter()
+            # Use the global router instance (already imported at module level)
 
             # Simple framework selection (no LangGraph needed)
             selected_fw = router._check_vibe_dictionary(query)
@@ -1013,13 +1011,13 @@ def create_server() -> Server:
         # Memory: get context
         if name == "get_context":
             thread_id = arguments.get("thread_id", "")
-            memory = get_memory(thread_id)
+            memory = await get_memory(thread_id)
             context = memory.get_context()
             return [TextContent(type="text", text=json.dumps(context, default=str, indent=2))]
 
         # Memory: save context
         if name == "save_context":
-            save_to_langchain_memory(
+            await save_to_langchain_memory(
                 arguments["thread_id"],
                 arguments["query"],
                 arguments["answer"],

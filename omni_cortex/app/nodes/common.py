@@ -148,7 +148,7 @@ Respond with ONLY a single decimal number between 0.0 and 1.0."""
     try:
         response, _ = await call_fast_synthesizer(
             prompt=prompt,
-            state=state,
+            state=None,  # PRM doesn't need state context
             max_tokens=DEFAULT_PRM_TOKENS,
             temperature=DEFAULT_PRM_TEMP
         )
@@ -259,7 +259,7 @@ async def call_deep_reasoner(
         callback.on_llm_start({"name": "call_deep_reasoner"}, [prompt])
     # Check if Quiet-STaR is enabled
     if state and state.get("working_memory", {}).get("quiet_star_enabled"):
-        quiet_instruction = state["working_memory"].get("quiet_instruction", "")
+        quiet_instruction = state.get("working_memory", {}).get("quiet_instruction", "")
         if system:
             system = quiet_instruction + "\n\n" + system
         else:

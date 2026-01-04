@@ -5,11 +5,12 @@ Generates and executes Python scripts to compute answers
 rather than reasoning in text. Used for math, data, testing.
 """
 
+import ast
 import asyncio
 import io
 import sys
 import traceback
-from typing import Optional, Any
+from typing import Optional, Any, Set
 from contextlib import redirect_stdout, redirect_stderr
 from ...state import GraphState
 from ..common import (
@@ -247,33 +248,101 @@ Provide:
     return state
 
 
+class _SafetyValidator(ast.NodeVisitor):
+    """AST visitor to detect dangerous code patterns that must be BLOCKED."""
+
+    # Modules that are BLOCKED from being imported (security risk)
+    BLOCKED_IMPORTS: Set[str] = {
+        'os', 'sys', 'subprocess', 'shutil', 'socket', 'requests',
+        'urllib', 'ctypes', 'multiprocessing', 'threading',
+        'signal', 'pty', 'fcntl', 'resource', 'pwd', 'grp', 'crypt',
+        'tempfile', 'glob', 'pathlib', 'builtins', 'importlib', 'code',
+    }
+
+    # Function calls that are BLOCKED (security risk)
+    BLOCKED_CALLS: Set[str] = {
+        '__import__', 'exec', 'eval', 'compile', 'open', 'file',
+        'input', 'raw_input', 'globals', 'locals', 'vars', 'dir',
+        'setattr', 'getattr', 'delattr', 'hasattr', 'type', 'object',
+        'breakpoint', 'exit', 'quit', 'help', 'license', 'credits',
+    }
+
+    # Attribute names that are BLOCKED (security risk)
+    BLOCKED_ATTRS: Set[str] = {
+        '__builtins__', '__class__', '__mro__', '__globals__', '__code__',
+        '__dict__', '__loader__', '__spec__', '__subclasses__', '__bases__',
+        '__name__', '__qualname__', '__module__', '__func__', '__self__',
+        '__closure__', '__annotations__', '__kwdefaults__', '__defaults__',
+    }
+
+    def __init__(self, allowed_imports: Set[str]):
+        self.allowed_imports = allowed_imports
+        self.violations: list[str] = []
+
+    def visit_Import(self, node: ast.Import) -> None:
+        for alias in node.names:
+            module = alias.name.split('.')[0]
+            if module in self.BLOCKED_IMPORTS:
+                self.violations.append(f"Blocked import: {alias.name}")
+            elif module not in self.allowed_imports:
+                self.violations.append(f"Disallowed import: {alias.name}")
+        self.generic_visit(node)
+
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
+        if node.module:
+            module = node.module.split('.')[0]
+            if module in self.BLOCKED_IMPORTS:
+                self.violations.append(f"Blocked import from: {node.module}")
+            elif module not in self.allowed_imports:
+                self.violations.append(f"Disallowed import from: {node.module}")
+        self.generic_visit(node)
+
+    def visit_Call(self, node: ast.Call) -> None:
+        if isinstance(node.func, ast.Name):
+            if node.func.id in self.BLOCKED_CALLS:
+                self.violations.append(f"Blocked call: {node.func.id}()")
+        elif isinstance(node.func, ast.Attribute):
+            if node.func.attr in self.BLOCKED_CALLS:
+                self.violations.append(f"Blocked call: .{node.func.attr}()")
+        self.generic_visit(node)
+
+    def visit_Attribute(self, node: ast.Attribute) -> None:
+        if node.attr in self.BLOCKED_ATTRS:
+            self.violations.append(f"Blocked attribute access: .{node.attr}")
+        self.generic_visit(node)
+
+
 async def _safe_execute(code: str, timeout: float = 5.0) -> dict:
     """
     Safely execute Python code in a sandboxed environment.
-    
+
+    Uses AST parsing to detect dangerous patterns (not bypassable string matching).
+
     Returns: {"success": bool, "output": str, "error": str}
     """
     try:
-        # Filter dangerous operations
-        dangerous_patterns = [
-            'import os', 'import sys', 'import subprocess', 'import shutil',
-            'import socket', 'import requests', 'import urllib', 'import pickle',
-            '__import__', 'exec(', 'eval(', 'compile(',
-            'open(', 'file(', 'input(', 'raw_input(',
-            '__builtins__', '__class__', '__mro__', '__globals__', '__code__',
-            '__dict__', '__loader__', '__spec__', 'globals(', 'locals(',
-            'setattr(', 'delattr(', 'getattr(', '__subclasses__',
-            'sys.', 'os.', 'subprocess.', 'shutil.', 'socket.'
-        ]
-        
-        for pattern in dangerous_patterns:
-            if pattern in code:
-                return {
-                    "success": False,
-                    "output": "",
-                    "error": f"Forbidden operation: {pattern}"
-                }
-        
+        # Parse code to AST for safety validation
+        try:
+            tree = ast.parse(code)
+        except SyntaxError as e:
+            return {
+                "success": False,
+                "output": "",
+                "error": f"Syntax error: {e}"
+            }
+
+        # Validate AST for dangerous patterns
+        allowed = set(ALLOWED_IMPORTS)
+        validator = _SafetyValidator(allowed)
+        validator.visit(tree)
+
+        if validator.violations:
+            return {
+                "success": False,
+                "output": "",
+                "error": f"Security violation: {'; '.join(validator.violations)}"
+            }
+
         # Prepare safe globals
         safe_globals = {"__builtins__": SAFE_BUILTINS.copy()}
         
