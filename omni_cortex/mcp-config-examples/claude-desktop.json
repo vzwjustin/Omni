@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "omni-cortex": {
+      "command": "docker",
+      "args": [
+        "exec",
+        "-i",
+        "omni-cortex",
+        "python",
+        "-m",
+        "server.main"
+      ]
+    }
+  }
+}

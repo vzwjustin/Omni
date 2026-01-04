@@ -1,0 +1,27 @@
+{
+  "mcpServers": {
+    "omni-cortex": {
+      "command": "python",
+      "args": [
+        "-m",
+        "server.main"
+      ],
+      "cwd": "/absolute/path/to/omni_cortex",
+      "env": {
+        "ANTHROPIC_API_KEY": "your-anthropic-api-key-here",
+        "OPENAI_API_KEY": "your-openai-api-key-here",
+        "OPENROUTER_API_KEY": "your-openrouter-api-key-here",
+        "LLM_PROVIDER": "openrouter",
+        "DEEP_REASONING_MODEL": "anthropic/claude-4.5-sonnet",
+        "FAST_SYNTHESIS_MODEL": "openai/gpt-5.2",
+        "ENABLE_AUTO_INGEST": "true",
+        "ENABLE_DSPY_OPTIMIZATION": "true",
+        "ENABLE_PRM_SCORING": "true",
+        "MAX_TOKENS_PER_REQUEST": "16000",
+        "MAX_REASONING_DEPTH": "10",
+        "MCTS_MAX_ROLLOUTS": "50",
+        "DEBATE_MAX_ROUNDS": "5"
+      }
+    }
+  }
+}

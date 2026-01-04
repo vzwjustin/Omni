@@ -1,0 +1,25 @@
+{
+  "mcpServers": {
+    "omni-cortex": {
+      "command": "docker",
+      "args": [
+        "exec",
+        "-i",
+        "omni-cortex",
+        "python",
+        "-m",
+        "server.main"
+      ],
+      "env": {
+        "OPENROUTER_API_KEY": "your-openrouter-api-key-here",
+        "LLM_PROVIDER": "openrouter",
+        "DEEP_REASONING_MODEL": "anthropic/claude-4.5-sonnet",
+        "FAST_SYNTHESIS_MODEL": "openai/gpt-5.2"
+      },
+      "metadata": {
+        "description": "Omni-Cortex: 20 AI Reasoning Frameworks for Advanced Code Generation",
+        "version": "1.0.0"
+      }
+    }
+  }
+}

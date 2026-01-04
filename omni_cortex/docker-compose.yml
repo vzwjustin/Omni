@@ -1,0 +1,36 @@
+version: "3.9"
+
+services:
+  omni-cortex:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: omni-cortex
+    stdin_open: true  # Keep stdin open for MCP stdio
+    tty: true         # Allocate pseudo-TTY for interactive mode
+    environment:
+      # Pass-through mode - calling LLM does reasoning
+      - LLM_PROVIDER=pass-through
+
+      # Embeddings for RAG (ChromaDB)
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+
+      # ChromaDB persistence
+      - CHROMA_PERSIST_DIR=/app/data/chroma
+
+      # Feature Flags
+      - ENABLE_DSPY_OPTIMIZATION=${ENABLE_DSPY_OPTIMIZATION:-true}
+      - ENABLE_PRM_SCORING=${ENABLE_PRM_SCORING:-true}
+      - ENABLE_AUTO_INGEST=${ENABLE_AUTO_INGEST:-true}
+
+      # Limits
+      - MAX_REASONING_DEPTH=${MAX_REASONING_DEPTH:-10}
+      - MCTS_MAX_ROLLOUTS=${MCTS_MAX_ROLLOUTS:-50}
+      - DEBATE_MAX_ROUNDS=${DEBATE_MAX_ROUNDS:-5}
+
+      # Logging
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      # Persist ChromaDB and LangChain memory
+      - ./data:/app/data
+    restart: unless-stopped

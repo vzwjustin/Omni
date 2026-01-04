@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "omni-cortex": {
+      "command": "docker",
+      "args": [
+        "exec",
+        "-i",
+        "omni-cortex",
+        "python",
+        "-m",
+        "server.main"
+      ],
+      "env": {
+        "OPENROUTER_API_KEY": "your-openrouter-api-key-here",
+        "LLM_PROVIDER": "openrouter"
+      }
+    }
+  }
+}
