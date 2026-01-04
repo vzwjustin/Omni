@@ -12,6 +12,22 @@ Or run:
 curl -fsSL https://raw.githubusercontent.com/vzwjustin/thinking-frameworks/initial-release/omni_cortex/install.sh | bash
 ```
 
+Or manually pull from Docker Hub and add to your MCP config:
+```bash
+docker pull vzwjustin/omni-cortex:latest
+```
+
+```json
+{
+  "mcpServers": {
+    "omni-cortex": {
+      "command": "docker",
+      "args": ["run", "--rm", "-i", "vzwjustin/omni-cortex:latest"]
+    }
+  }
+}
+```
+
 Requires Docker. That's it.
 
 ## Use
