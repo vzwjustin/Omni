@@ -23,15 +23,7 @@ from ..common import (
 async def least_to_most_node(state: GraphState) -> GraphState:
     """
     Least-to-Most: Hierarchical Bottom-Up Decomposition.
-
-    Process:
-    1. DECOMPOSE: Break into atomic functions and dependencies
-    2. ORDER: Topological sort (least dependent → most dependent)
-    3. IMPLEMENT_BASE: Solve leaf nodes (no dependencies)
-    4. BUILD_UP: Implement higher levels using base functions
-    5. INTEGRATE: Combine into final solution
-
-    Best for: Complex systems, refactoring monoliths, large features
+    (Headless Mode: Returns Protocol Prompt for Client Execution)
     """
     query = state["query"]
     code_context = format_code_context(
@@ -41,224 +33,49 @@ async def least_to_most_node(state: GraphState) -> GraphState:
         state=state
     )
 
-    # =========================================================================
-    # Phase 1: DECOMPOSE into Atomic Functions
-    # =========================================================================
+    # Construct the Protocol Prompt for the Client
+    prompt = f"""# Least-to-Most Decomposition Protocol
 
-    decompose_prompt = f"""Decompose this task into atomic functions with dependencies.
-
-TASK: {query}
-
-CONTEXT:
-{code_context}
-
-Create a dependency graph:
-1. **Identify atomic functions**: What are the smallest, single-purpose functions needed?
-2. **Define dependencies**: Which functions depend on which?
-3. **Classify levels**:
-   - Level 0 (Leaf): No dependencies (utility functions, basic operations)
-   - Level 1: Depend only on Level 0
-   - Level 2: Depend on Level 0 and/or Level 1
-   - ... and so on
-
-Format as:
-```
-Level 0 (Atomic/Leaf):
-- function_name_1(params): description [depends on: none]
-- function_name_2(params): description [depends on: none]
-
-Level 1:
-- function_name_3(params): description [depends on: function_name_1, function_name_2]
-
-Level 2:
-- main_function(params): description [depends on: function_name_3, ...]
-```
-
-Make functions small, focused, and testable."""
-
-    decompose_response, _ = await call_deep_reasoner(
-        prompt=decompose_prompt,
-        state=state,
-        system="Decompose tasks into dependency hierarchies.",
-        temperature=0.6
-    )
-
-    add_reasoning_step(
-        state=state,
-        framework="least_to_most",
-        thought="Decomposed task into atomic functions with dependencies",
-        action="decomposition",
-        observation=decompose_response[:200]
-    )
-
-    # =========================================================================
-    # Phase 2: ORDER - Extract Levels
-    # =========================================================================
-
-    # Parse levels from decomposition
-    import re
-    level_pattern = r"Level (\d+)[^\n]*:(.*?)(?=Level \d+|$)"
-    levels_found = re.findall(level_pattern, decompose_response, re.DOTALL)
-
-    if not levels_found:
-        # Fallback if parsing fails
-        levels_found = [("0", decompose_response)]
-
-    add_reasoning_step(
-        state=state,
-        framework="least_to_most",
-        thought=f"Identified {len(levels_found)} dependency levels",
-        action="ordering",
-        observation=f"Levels: {[lvl[0] for lvl in levels_found]}"
-    )
-
-    # =========================================================================
-    # Phase 3: IMPLEMENT_BASE - Build Level 0 (Leaf) Functions
-    # =========================================================================
-
-    implementations: List[Dict] = []
-
-    for level_num, level_content in levels_found:
-        dependencies_section = ("DEPENDENCIES ALREADY IMPLEMENTED:\n" + "\n".join([f"Level {impl['level']}: {impl['summary']}" for impl in implementations]) if implementations else "This is the base level with no dependencies.")
-        implement_prompt = f"""Implement the functions for Level {level_num}.
-
-LEVEL {level_num} FUNCTIONS:
-{level_content}
-
-TASK CONTEXT: {query}
-
-{dependencies_section}
-
-Implement each function:
-- Write clean, documented code
-- Use dependencies from lower levels if available
-- Keep functions atomic and focused
-- Include error handling
-
-```python
-# Level {level_num} implementations
-# Function 1
-def function_name_1(...):
-    \"\"\"Docstring\"\"\"
-    # implementation
-    pass
-
-# Function 2
-def function_name_2(...):
-    \"\"\"Docstring\"\"\"
-    # implementation
-    pass
-```"""
-
-        implement_response, _ = await call_deep_reasoner(
-            prompt=implement_prompt,
-            state=state,
-            system=f"Implement Level {level_num} functions cleanly.",
-            temperature=0.5
-        )
-
-        code_blocks = extract_code_blocks(implement_response)
-        level_code = code_blocks[0] if code_blocks else implement_response
-
-        implementations.append({
-            "level": int(level_num),
-            "functions": level_content.strip(),
-            "code": level_code,
-            "summary": f"Level {level_num} with {level_code.count('def ')} functions"
-        })
-
-        add_reasoning_step(
-            state=state,
-            framework="least_to_most",
-            thought=f"Implemented Level {level_num} functions",
-            action=f"implement_level_{level_num}",
-            observation=f"Created {level_code.count('def ')} functions"
-        )
-
-    # =========================================================================
-    # Phase 4: INTEGRATE - Combine All Levels
-    # =========================================================================
-
-    all_code = "\n\n".join([
-        f"# ========================================\n"
-        f"# Level {impl['level']}\n"
-        f"# ========================================\n"
-        f"{impl['code']}"
-        for impl in sorted(implementations, key=lambda x: x['level'])
-    ])
-
-    integrate_prompt = f"""Review and integrate all levels into a cohesive solution.
-
-ORIGINAL TASK: {query}
-
-COMPLETE IMPLEMENTATION (all levels):
-```python
-{all_code}
-```
-
-Provide:
-1. **Integration review**: Are all levels working together correctly?
-2. **Main entry point**: How to use this complete solution?
-3. **Testing approach**: How to test each level?
-4. **Any refinements**: Optimizations or improvements?
-
-If any integration issues exist, provide fixes."""
-
-    integrate_response, _ = await call_deep_reasoner(
-        prompt=integrate_prompt,
-        state=state,
-        system="Integrate layered implementations cohesively.",
-        temperature=0.5
-    )
-
-    add_reasoning_step(
-        state=state,
-        framework="least_to_most",
-        thought="Integrated all levels into complete solution",
-        action="integration",
-        observation="Verified cross-level compatibility"
-    )
-
-    # =========================================================================
-    # Final Answer
-    # =========================================================================
-
-    dependency_summary = "\n".join([
-        f"Level {impl['level']}: {impl['summary']}"
-        for impl in sorted(implementations, key=lambda x: x['level'])
-    ])
-
-    final_answer = f"""# Least-to-Most Decomposition Solution
+I have selected the **Least-to-Most** strategy for this task. 
+This method breaks massive tasks into a dependency graph of atomic functions, solving the simplest (leaves) first.
 
 ## Task
 {query}
 
-## Dependency Hierarchy
-{decompose_response}
+## 🧠 Execution Protocol (Client-Side)
 
-## Implementation Summary
-{dependency_summary}
+Please execute the following steps using your internal reasoning:
 
-## Complete Code (Bottom-Up)
-```python
-{all_code}
-```
+### Phase 1: Decomposition
+1. **Identify Atomic Functions**: Break the problem down into the smallest possible single-purpose functions.
+2. **Define Dependencies**: Map out which function depends on which.
+3. **Levels**: Group them into levels (Level 0 = no dependencies).
 
-## Integration Analysis
-{integrate_response}
+### Phase 2: Bottom-Up Implementation
+1. **Implement Level 0**: Write the core utility/leaf functions first. Verify they work.
+2. **Implement Level 1**: Write functions that use Level 0.
+3. **Iterate**: Continue upwards until the Main Function is reached.
 
----
-*This solution was built bottom-up from atomic functions, ensuring each level
-is solid before building the next layer.*
+### Phase 3: Integration
+1. **Combine**: Assemble the pieces into the final solution.
+2. **Verify**: Ensure the integration logic holds together.
+
+## 📝 Code Context
+{code_context}
+
+**Please start by outputting your Decomposition Plan.**
 """
 
-    # Store decomposition info
-    state["working_memory"]["ltm_levels"] = len(implementations)
-    state["working_memory"]["ltm_implementations"] = implementations
+    state["final_answer"] = prompt
+    state["confidence_score"] = 1.0
 
-    # Update final state
-    state["final_answer"] = final_answer
-    state["final_code"] = all_code
-    state["confidence_score"] = 0.92
+    # Add a meta-step recording that we handed off control
+    add_reasoning_step(
+        state=state,
+        framework="least_to_most",
+        thought="Generated Least-to-Most execution protocol for client",
+        action="handoff",
+        observation="Prompt generated"
+    )
 
     return state
