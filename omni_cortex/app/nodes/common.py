@@ -484,21 +484,33 @@ CODE_BLOCK_PATTERN = r"```(?:\w+)?\n(.*?)```"
 def format_code_context(
     code_snippet: Optional[str],
     file_list: Optional[list[str]],
-    ide_context: Optional[str]
+    ide_context: Optional[str],
+    state: Optional[GraphState] = None
 ) -> str:
-    """Format code context for LLM prompts."""
+    """Format code context for LLM prompts, including RAG-retrieved context."""
     parts = []
-    
+
+    # Include RAG context if available (auto-fetched during routing)
+    if state:
+        rag_formatted = state.get("working_memory", {}).get("rag_context_formatted", "")
+        if rag_formatted:
+            parts.append(rag_formatted)
+
     if code_snippet:
         parts.append(f"CODE:\n```\n{code_snippet}\n```")
-    
+
     if file_list:
         parts.append(f"FILES: {', '.join(file_list)}")
-    
+
     if ide_context:
         parts.append(f"IDE CONTEXT: {ide_context}")
-    
+
     return "\n\n".join(parts) if parts else "No code context provided."
+
+
+def get_rag_context(state: GraphState) -> str:
+    """Get pre-fetched RAG context from state (populated during routing)."""
+    return state.get("working_memory", {}).get("rag_context_formatted", "")
 
 
 def generate_code_diff(original_code: str, updated_code: str) -> str:

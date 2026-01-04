@@ -526,16 +526,124 @@ def get_chat_model(model_type: str = "deep") -> Any:
 
 async def enhance_state_with_langchain(state: GraphState, thread_id: str) -> GraphState:
     """
-    Enhance GraphState with LangChain memory and context.
+    Enhance GraphState with LangChain memory, context, and RAG-retrieved documents.
+
+    This is the central enrichment point - ALL frameworks benefit from:
+    1. Chat history (conversation memory)
+    2. Framework history (what worked before)
+    3. RAG context (relevant code/docs from vector store)
     """
     memory = await get_memory(thread_id)
     context = memory.get_context()
-    
-    # Add to working memory
+
+    # Add conversation memory to working memory
     state["working_memory"]["chat_history"] = context["chat_history"]
     state["working_memory"]["framework_history"] = context["framework_history"]
-    
+
+    # ==========================================================================
+    # AUTOMATIC RAG PRE-FETCH: Enrich ALL frameworks with relevant context
+    # Only runs if embeddings are available (requires API key or HuggingFace)
+    # ==========================================================================
+    query = state.get("query", "")
+    code_snippet = state.get("code_snippet", "")
+
+    rag_context = []
+
+    # Check if RAG is available (need either OpenAI key or HuggingFace installed)
+    rag_available = False
+    try:
+        if settings.openai_api_key:
+            rag_available = True
+        else:
+            # Check if HuggingFace is available as fallback
+            from langchain_huggingface import HuggingFaceEmbeddings
+            rag_available = True
+    except ImportError:
+        pass
+
+    if not rag_available:
+        logger.debug("rag_prefetch_skipped", reason="no embedding provider available")
+        state["working_memory"]["rag_context"] = []
+        state["working_memory"]["rag_context_formatted"] = ""
+        return state
+
+    # Search with query
+    if query:
+        try:
+            from .collection_manager import get_collection_manager
+            manager = get_collection_manager()
+
+            # Search across all relevant collections
+            query_docs = manager.search(
+                query,
+                collection_names=["frameworks", "documentation", "utilities"],
+                k=3
+            )
+            for doc in query_docs:
+                meta = doc.metadata or {}
+                rag_context.append({
+                    "source": meta.get("path", "unknown"),
+                    "type": meta.get("chunk_type", "unknown"),
+                    "content": doc.page_content[:1500],
+                    "relevance": "query_match"
+                })
+            logger.info("rag_prefetch_query", docs_found=len(query_docs))
+        except Exception as e:
+            logger.warning("rag_prefetch_query_failed", error=str(e))
+
+    # Search with code context if provided
+    if code_snippet and len(code_snippet) > 50:
+        try:
+            from .collection_manager import get_collection_manager
+            manager = get_collection_manager()
+
+            # Extract key terms from code for better matching
+            code_query = code_snippet[:500]  # First 500 chars for embedding
+            code_docs = manager.search(
+                code_query,
+                collection_names=["frameworks", "utilities"],
+                k=2
+            )
+            for doc in code_docs:
+                meta = doc.metadata or {}
+                # Avoid duplicates
+                source = meta.get("path", "unknown")
+                if not any(r["source"] == source for r in rag_context):
+                    rag_context.append({
+                        "source": source,
+                        "type": meta.get("chunk_type", "unknown"),
+                        "content": doc.page_content[:1000],
+                        "relevance": "code_match"
+                    })
+            logger.info("rag_prefetch_code", docs_found=len(code_docs))
+        except Exception as e:
+            logger.warning("rag_prefetch_code_failed", error=str(e))
+
+    # Store RAG context for frameworks to use
+    state["working_memory"]["rag_context"] = rag_context
+    state["working_memory"]["rag_context_formatted"] = _format_rag_context(rag_context)
+
+    logger.info(
+        "state_enriched",
+        thread_id=thread_id,
+        chat_messages=len(context["chat_history"]),
+        rag_docs=len(rag_context)
+    )
+
     return state
+
+
+def _format_rag_context(rag_context: list) -> str:
+    """Format RAG context for injection into prompts."""
+    if not rag_context:
+        return ""
+
+    parts = ["## Relevant Context from Codebase\n"]
+    for item in rag_context:
+        parts.append(f"### {item['source']} ({item['type']})")
+        parts.append(f"```\n{item['content']}\n```\n")
+
+    return "\n".join(parts)
 
 
 async def save_to_langchain_memory(

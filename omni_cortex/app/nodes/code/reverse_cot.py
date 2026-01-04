@@ -37,7 +37,8 @@ async def reverse_chain_of_thought_node(state: GraphState) -> GraphState:
     code_context = format_code_context(
         state.get("code_snippet"),
         state.get("file_list"),
-        state.get("ide_context")
+        state.get("ide_context"),
+        state=state
     )
 
     # =========================================================================
