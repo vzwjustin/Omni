@@ -730,6 +730,17 @@ class HyperRouter:
         state["complexity_estimate"] = complexity
         state["task_type"] = self._infer_task_type(framework)
         
+        # Inject Past Learnings (Episodic Memory)
+        try:
+            from ..collection_manager import get_collection_manager
+            cm = get_collection_manager()
+            learnings = cm.search_learnings(state["query"], k=3)
+            if learnings:
+                state["episodic_memory"] = learnings
+        except Exception as e:
+            # Don't fail routing if memory search fails
+            pass
+            
         state["reasoning_steps"].append({
             "step": "routing",
             "framework": framework,
