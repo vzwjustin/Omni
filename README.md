@@ -1,6 +1,6 @@
 # Omni
 
-40 thinking frameworks for your IDE. Just describe what you want - the router picks the right framework.
+40 thinking framework templates for your IDE. Describe the task—Omni routes you to a best-fit template and tools
 
 ## Install
 
