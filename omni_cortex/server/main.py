@@ -1,7 +1,7 @@
 """
 Omni-Cortex MCP Server
 
-Exposes 20 thinking framework tools + utility tools.
+Exposes 40 thinking framework tools + utility tools.
 The calling LLM uses these tools and does the reasoning.
 LangGraph orchestrates, LangChain handles memory/RAG.
 """
@@ -324,6 +324,346 @@ Context: {context}
 
 Provide a direct, efficient answer. Focus on the most likely correct solution."""
     },
+    # =========================================================================
+    # NEW FRAMEWORKS (2026 Edition - Aligning with router.py)
+    # =========================================================================
+    "chain_of_code": {
+        "category": "code",
+        "description": "Code-based problem decomposition",
+        "best_for": ["logic puzzles", "algorithmic debugging", "structured thinking"],
+        "prompt": """Apply Chain-of-Code reasoning:
+
+TASK: {query}
+CONTEXT: {context}
+
+1. DECOMPOSE: Break the problem into code blocks
+2. TRACE: Walk through execution step by step
+3. IDENTIFY: Pinpoint where logic diverges from intent
+4. FIX: Apply targeted corrections with explanation
+5. VERIFY: Trace corrected code to confirm fix"""
+    },
+    "self_debugging": {
+        "category": "code",
+        "description": "Mental execution trace before presenting",
+        "best_for": ["preventing bugs", "edge case handling", "off-by-one errors"],
+        "prompt": """Apply Self-Debugging:
+
+TASK: {query}
+CONTEXT: {context}
+
+1. DRAFT: Write initial solution
+2. TRACE: Mentally execute with sample inputs
+3. EDGES: Test boundary conditions (0, 1, empty, null, max)
+4. CATCH: Identify potential bugs before presenting
+5. FIX: Present corrected code with trace verification"""
+    },
+    "tdd_prompting": {
+        "category": "code",
+        "description": "Test-first development approach",
+        "best_for": ["new features", "edge case coverage", "robust implementations"],
+        "prompt": """Apply TDD Prompting:
+
+TASK: {query}
+CONTEXT: {context}
+
+1. TESTS FIRST: Write test cases covering:
+   - Happy path
+   - Edge cases
+   - Error conditions
+2. IMPLEMENT: Write minimal code to pass tests
+3. REFACTOR: Clean up while keeping tests green
+4. VERIFY: All tests pass with clean implementation"""
+    },
+    "reverse_cot": {
+        "category": "code",
+        "description": "Backward reasoning from output delta",
+        "best_for": ["silent bugs", "wrong outputs", "calculation errors"],
+        "prompt": """Apply Reverse Chain-of-Thought:
+
+TASK: {query}
+CONTEXT: {context}
+
+1. EXPECTED: What output should the code produce?
+2. ACTUAL: What is it actually producing?
+3. DELTA: What's the difference?
+4. BACKTRACK: Work backward from the delta to find the cause
+5. FIX: Apply correction and verify expected output"""
+    },
+    "rubber_duck": {
+        "category": "iterative",
+        "description": "Socratic questioning for self-discovery",
+        "best_for": ["architectural issues", "blind spots", "stuck problems"],
+        "prompt": """Apply Rubber Duck Debugging:
+
+TASK: {query}
+CONTEXT: {context}
+
+Guide through questions:
+1. What are you trying to accomplish?
+2. What have you tried so far?
+3. What happened vs what you expected?
+4. What assumptions are you making?
+5. What haven't you checked yet?
+
+Lead to insight through questioning."""
+    },
+    "react": {
+        "category": "iterative",
+        "description": "Reasoning + Acting with tools",
+        "best_for": ["multi-step tasks", "tool use", "investigation"],
+        "prompt": """Apply ReAct (Reasoning + Acting):
+
+TASK: {query}
+CONTEXT: {context}
+
+Iterate:
+THOUGHT: What do I need to figure out next?
+ACTION: What tool/search/command would help?
+OBSERVATION: What did I learn?
+
+Continue until solution is found. Show your reasoning chain."""
+    },
+    "reflexion": {
+        "category": "iterative",
+        "description": "Self-evaluation with memory-based learning",
+        "best_for": ["learning from failures", "iterative improvement", "retry scenarios"],
+        "prompt": """Apply Reflexion:
+
+TASK: {query}
+CONTEXT: {context}
+
+1. ATTEMPT: Make first solution attempt
+2. EVALUATE: Did it work? What went wrong?
+3. REFLECT: What lessons to remember?
+4. RETRY: Apply lessons to improved attempt
+5. CONVERGE: Iterate until successful"""
+    },
+    "self_refine": {
+        "category": "iterative",
+        "description": "Iterative self-critique and improvement",
+        "best_for": ["code quality", "documentation", "polish"],
+        "prompt": """Apply Self-Refine:
+
+TASK: {query}
+CONTEXT: {context}
+
+1. GENERATE: Create initial solution
+2. CRITIQUE: What could be better? (readability, efficiency, edge cases)
+3. REFINE: Address each critique point
+4. REPEAT: Continue until no more improvements
+5. FINALIZE: Present polished solution"""
+    },
+    "least_to_most": {
+        "category": "strategy",
+        "description": "Bottom-up atomic function decomposition",
+        "best_for": ["complex systems", "monolith refactoring", "dependency management"],
+        "prompt": """Apply Least-to-Most Decomposition:
+
+TASK: {query}
+CONTEXT: {context}
+
+1. IDENTIFY: What are the atomic sub-problems?
+2. ORDER: Sort by dependency (least dependent first)
+3. SOLVE: Build solutions bottom-up
+4. COMPOSE: Combine into full solution
+5. VERIFY: Check all pieces integrate correctly"""
+    },
+    "comparative_arch": {
+        "category": "strategy",
+        "description": "Multi-approach comparison (readability/memory/speed)",
+        "best_for": ["optimization", "architecture decisions", "trade-off analysis"],
+        "prompt": """Apply Comparative Architecture:
+
+TASK: {query}
+CONTEXT: {context}
+
+Generate THREE approaches:
+1. READABLE: Prioritize clarity and maintainability
+2. EFFICIENT: Optimize for memory/space
+3. FAST: Optimize for speed/time
+
+For each: show code, pros, cons, big-O analysis.
+RECOMMEND: Which approach and why."""
+    },
+    "plan_and_solve": {
+        "category": "strategy",
+        "description": "Explicit planning before execution",
+        "best_for": ["complex features", "methodical development", "avoiding rushed code"],
+        "prompt": """Apply Plan-and-Solve:
+
+TASK: {query}
+CONTEXT: {context}
+
+PHASE 1 - PLAN:
+- What components are needed?
+- What's the order of implementation?
+- What are the risks/blockers?
+
+PHASE 2 - SOLVE:
+- Implement according to plan
+- Note any deviations and why
+- Verify against plan"""
+    },
+    "red_team": {
+        "category": "context",
+        "description": "Adversarial security analysis (STRIDE, OWASP)",
+        "best_for": ["security audits", "vulnerability scanning", "threat modeling"],
+        "prompt": """Apply Red-Team Security Analysis:
+
+TASK: {query}
+CONTEXT: {context}
+
+Analyze using STRIDE:
+- SPOOFING: Identity issues?
+- TAMPERING: Data integrity issues?
+- REPUDIATION: Audit issues?
+- INFO DISCLOSURE: Leakage issues?
+- DENIAL OF SERVICE: Availability issues?
+- ELEVATION OF PRIVILEGE: Access control issues?
+
+OWASP Top 10 check. Provide fixes for each finding."""
+    },
+    "state_machine": {
+        "category": "context",
+        "description": "Formal FSM design before coding",
+        "best_for": ["UI logic", "workflow systems", "game states"],
+        "prompt": """Apply State-Machine Reasoning:
+
+TASK: {query}
+CONTEXT: {context}
+
+1. STATES: Enumerate all possible states
+2. TRANSITIONS: What triggers state changes?
+3. GUARDS: What conditions must be met?
+4. ACTIONS: What happens on transition?
+5. IMPLEMENT: Code the state machine with clear structure"""
+    },
+    "chain_of_thought": {
+        "category": "context",
+        "description": "Step-by-step reasoning chain",
+        "best_for": ["complex reasoning", "logical deduction", "problem solving"],
+        "prompt": """Apply Chain-of-Thought:
+
+TASK: {query}
+CONTEXT: {context}
+
+Think step by step:
+STEP 1: [First logical step]
+STEP 2: [Building on step 1]
+STEP 3: [Continue reasoning]
+...
+CONCLUSION: [Final answer based on chain]
+
+Show your complete reasoning process."""
+    },
+    "alphacodium": {
+        "category": "code",
+        "description": "Test-based multi-stage iterative code generation",
+        "best_for": ["competitive programming", "complex algorithms", "interview problems"],
+        "prompt": """Apply AlphaCodium:
+
+TASK: {query}
+CONTEXT: {context}
+
+STAGE 1 - UNDERSTAND:
+- Parse problem constraints
+- Identify input/output format
+- Note edge cases
+
+STAGE 2 - GENERATE TESTS:
+- Public test cases
+- Edge cases
+- Large input cases
+
+STAGE 3 - ITERATIVE CODE:
+- Generate solution
+- Test against cases
+- Fix failures
+- Repeat until all pass"""
+    },
+    "codechain": {
+        "category": "code",
+        "description": "Chain of self-revisions guided by sub-modules",
+        "best_for": ["modular code generation", "incremental refinement", "component development"],
+        "prompt": """Apply CodeChain:
+
+TASK: {query}
+CONTEXT: {context}
+
+1. MODULES: Identify independent sub-modules needed
+2. GENERATE: Create each module with clear interface
+3. INTEGRATE: Connect modules together
+4. REVISE: Self-critique each module, improve
+5. VALIDATE: Test integrated solution"""
+    },
+    "evol_instruct": {
+        "category": "code",
+        "description": "Evolutionary instruction complexity for code",
+        "best_for": ["challenging code problems", "constraint-based coding", "extending solutions"],
+        "prompt": """Apply Evol-Instruct:
+
+TASK: {query}
+CONTEXT: {context}
+
+1. BASE: Solve the base problem
+2. EVOLVE: Add constraint/complexity:
+   - Additional requirements
+   - Performance constraints
+   - Edge case handling
+3. SOLVE EVOLVED: Handle new complexity
+4. REPEAT: Continue evolving until robust"""
+    },
+    "llmloop": {
+        "category": "code",
+        "description": "Automated iterative feedback loops for code+tests",
+        "best_for": ["code quality assurance", "production-ready code", "CI/CD preparation"],
+        "prompt": """Apply LLMLoop:
+
+TASK: {query}
+CONTEXT: {context}
+
+LOOP:
+1. GENERATE: Create code + tests
+2. RUN: Execute tests (mentally trace if needed)
+3. ANALYZE: What failed? Why?
+4. FIX: Apply corrections
+5. ITERATE: Until all quality checks pass
+
+Quality checks: correctness, edge cases, readability, efficiency."""
+    },
+    "procoder": {
+        "category": "code",
+        "description": "Compiler-feedback-guided iterative refinement",
+        "best_for": ["project-level code generation", "API usage", "type-safe code"],
+        "prompt": """Apply ProCoder:
+
+TASK: {query}
+CONTEXT: {context}
+
+1. ANALYZE: Understand project context, types, APIs
+2. GENERATE: Create type-safe code using project patterns
+3. COMPILE: Check for type errors, import issues
+4. FIX: Address any compiler/linter feedback
+5. INTEGRATE: Ensure clean integration with existing code"""
+    },
+    "recode": {
+        "category": "code",
+        "description": "Multi-candidate validation with CFG-based debugging",
+        "best_for": ["reliable code generation", "high-stakes code", "mission-critical systems"],
+        "prompt": """Apply RECODE:
+
+TASK: {query}
+CONTEXT: {context}
+
+1. GENERATE: Create 3 candidate solutions
+2. VALIDATE: Test each independently
+3. ANALYZE CFG: Check control flow for issues
+4. VOTE: Select best candidate based on:
+   - Correctness
+   - Robustness
+   - Clarity
+5. FINALIZE: Present winning candidate with confidence assessment"""
+    },
 }
 
 
@@ -335,7 +675,7 @@ def create_server() -> Server:
     async def list_tools() -> list[Tool]:
         tools = []
 
-        # 20 Framework tools (think_*) - LLM selects based on task
+        # 40 Framework tools (think_*) - LLM selects based on task
         for name, fw in FRAMEWORKS.items():
             # Build vibes from router for better LLM selection
             vibes = router.VIBE_DICTIONARY.get(name, [])[:4]
@@ -373,7 +713,7 @@ def create_server() -> Server:
         # Framework discovery tools
         tools.append(Tool(
             name="list_frameworks",
-            description="List all 20 thinking frameworks by category",
+            description="List all 40 thinking frameworks by category",
             inputSchema={"type": "object", "properties": {}}
         ))
 
@@ -606,7 +946,7 @@ def create_server() -> Server:
 
         # List frameworks
         if name == "list_frameworks":
-            output = "# Omni-Cortex: 20 Thinking Frameworks\n\n"
+            output = "# Omni-Cortex: 40 Thinking Frameworks\n\n"
             for cat in ["strategy", "search", "iterative", "code", "context", "fast"]:
                 output += f"## {cat.upper()}\n"
                 for n, fw in FRAMEWORKS.items():
@@ -761,7 +1101,7 @@ def create_server() -> Server:
             return [TextContent(type="text", text=json.dumps({
                 "status": "healthy",
                 "frameworks": len(FRAMEWORKS),
-                "tools": 20 + 14,  # 20 think_* + 14 utility tools
+                "tools": len(FRAMEWORKS) + 15,  # 40 think_* + 15 utility tools (reason, list_frameworks, recommend, get_context, save_context, 6 search tools, execute_code, health)
                 "collections": collections,
                 "memory_enabled": True,
                 "rag_enabled": True
@@ -780,7 +1120,7 @@ async def main():
     logger.info(f"Graph nodes: {len(FRAMEWORK_NODES)} LangGraph nodes")
     logger.info("Memory: LangChain ConversationBufferMemory")
     logger.info("RAG: ChromaDB with 6 collections")
-    logger.info("Tools: 20 think_* + 1 reason + 14 utility = 35 total")
+    logger.info(f"Tools: {len(FRAMEWORKS)} think_* + 1 reason + 14 utility = {len(FRAMEWORKS) + 15} total")
     logger.info("=" * 60)
 
     server = create_server()
