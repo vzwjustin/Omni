@@ -900,82 +900,81 @@ def create_server() -> Server:
     async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         manager = get_collection_manager()
 
-        # Smart routing with LangGraph (reason tool)
+        # Smart routing (reason tool) - Auto-select framework and return its prompt
         if name == "reason":
             query = arguments.get("query", "")
             context = arguments.get("context", "None provided")
-            thread_id = arguments.get("thread_id")
 
-            # Create initial state
-            state = create_initial_state(
-                query=query,
-                code_snippet=context if context != "None provided" else None
-            )
+            # Use HyperRouter to select best framework
+            from ..app.core.router import HyperRouter
+            router = HyperRouter()
 
-            # Add thread_id to working memory if provided
-            if thread_id:
-                state["working_memory"]["thread_id"] = thread_id
+            # Simple framework selection (no LangGraph needed)
+            selected_fw = router._check_vibe_dictionary(query)
+            if not selected_fw:
+                # Fallback to keyword-based heuristics
+                task_lower = query.lower()
+                if any(w in task_lower for w in ["debug", "bug", "fix", "error", "wtf", "broken"]):
+                    selected_fw = "active_inference"
+                elif any(w in task_lower for w in ["design", "architect", "plan", "system"]):
+                    selected_fw = "reason_flux"
+                elif any(w in task_lower for w in ["test", "verify", "check"]):
+                    selected_fw = "chain_of_verification"
+                elif any(w in task_lower for w in ["code", "implement", "write"]):
+                    selected_fw = "alphacodium"
+                else:
+                    selected_fw = "self_discover"  # Safe default
 
-            # Invoke LangGraph workflow
-            try:
-                result = await graph.ainvoke(state)
+            # Get the selected framework's prompt template
+            if selected_fw in FRAMEWORKS:
+                framework = FRAMEWORKS[selected_fw]
+                prompt_template = framework["prompt"]
 
-                # Extract results
-                selected = result.get("selected_framework", "unknown")
-                final_answer = result.get("final_answer", "")
-                confidence = result.get("confidence_score", 0.5)
-
-                # Format output
-                output = f"# LangGraph Execution Complete\n\n"
-                output += f"**Framework**: {selected}\n"
-                output += f"**Confidence**: {confidence:.2f}\n\n"
-                output += f"## Result:\n{final_answer}"
-
-                return [TextContent(type="text", text=output)]
-
-            except Exception as e:
-                logger.error(f"LangGraph execution failed: {e}", exc_info=True)
-                return [TextContent(type="text", text=f"Error executing framework: {str(e)}")]
-
-        # Framework tools (think_*) - Force through LangGraph workflow with pre-selection
-        if name.startswith("think_"):
-            fw_name = name[6:]
-            if fw_name in FRAMEWORK_NODES:
-                query = arguments.get("query", "")
-                context = arguments.get("context", "None provided")
-                thread_id = arguments.get("thread_id")
-
-                # Create initial state with preferred framework
-                state = create_initial_state(
+                # Fill in the template
+                prompt = prompt_template.format(
                     query=query,
-                    code_snippet=context if context != "None provided" else None,
-                    preferred_framework=fw_name
+                    context=context if context != "None provided" else "No additional context provided"
                 )
 
-                # Add thread_id to working memory if provided
-                if thread_id:
-                    state["working_memory"]["thread_id"] = thread_id
+                # Return with routing info
+                output = f"# Auto-Selected Framework: {framework['description']}\n"
+                output += f"**Framework**: `think_{selected_fw}`\n"
+                output += f"**Category**: {framework['category']}\n"
+                output += f"**Reason**: Best match for this type of task\n\n"
+                output += "---\n\n"
+                output += prompt
 
-                # PRE-SELECT framework to force routing to skip to execution
-                state["selected_framework"] = fw_name
+                return [TextContent(type="text", text=output)]
+            else:
+                return [TextContent(type="text", text=f"Error: Could not select framework")]
 
-                # FORCE through full LangGraph workflow (route will be skipped due to pre-selection)
-                try:
-                    result = await graph.ainvoke(state)
+        # Framework tools (think_*) - Return prompt template for local LLM to execute
+        if name.startswith("think_"):
+            fw_name = name[6:]
+            if fw_name in FRAMEWORKS:
+                query = arguments.get("query", "")
+                context = arguments.get("context", "None provided")
 
-                    selected = result.get("selected_framework", fw_name)
-                    final_answer = result.get("final_answer", "")
-                    confidence = result.get("confidence_score", 0.5)
+                # Get framework prompt template
+                framework = FRAMEWORKS[fw_name]
+                prompt_template = framework["prompt"]
 
-                    output = f"# Framework: {selected}\n"
-                    output += f"**Confidence**: {confidence:.2f}\n\n"
-                    output += f"## Result:\n{final_answer}"
+                # Fill in the template variables
+                prompt = prompt_template.format(
+                    query=query,
+                    context=context if context != "None provided" else "No additional context provided"
+                )
 
-                    return [TextContent(type="text", text=output)]
+                # Add framework metadata as header
+                output = f"# {framework['description']}\n"
+                output += f"**Category**: {framework['category']}\n"
+                output += f"**Best for**: {', '.join(framework['best_for'])}\n\n"
+                output += "---\n\n"
+                output += prompt
 
-                except Exception as e:
-                    logger.error(f"LangGraph execution for {fw_name} failed: {e}", exc_info=True)
-                    return [TextContent(type="text", text=f"Error executing {fw_name}: {str(e)}")]
+                return [TextContent(type="text", text=output)]
+            else:
+                return [TextContent(type="text", text=f"Unknown framework: {fw_name}")]
 
         # List frameworks
         if name == "list_frameworks":
