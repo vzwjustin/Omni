@@ -16,8 +16,8 @@ from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent
 
 # Import LangGraph for orchestration
-from app.graph import FRAMEWORK_NODES, router
-from app.state import GraphState
+from app.graph import FRAMEWORK_NODES, router, graph
+from app.state import GraphState, create_initial_state
 
 # Import LangChain integration for memory and RAG
 from app.langchain_integration import (
@@ -900,71 +900,82 @@ def create_server() -> Server:
     async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         manager = get_collection_manager()
 
-        # Smart routing with HyperRouter (reason tool)
+        # Smart routing with LangGraph (reason tool)
         if name == "reason":
             query = arguments.get("query", "")
             context = arguments.get("context", "None provided")
             thread_id = arguments.get("thread_id")
 
-            # Use HyperRouter for vibe-based selection
-            hyper_router = HyperRouter()
+            # Create initial state
+            state = create_initial_state(
+                query=query,
+                code_snippet=context if context != "None provided" else None
+            )
 
-            # First check vibe dictionary, then heuristics
-            selected = hyper_router._check_vibe_dictionary(query)
-            if not selected:
-                selected = hyper_router._heuristic_select(query, context if context != "None provided" else None)
-
-            # Get framework info from router
-            fw_info = hyper_router.get_framework_info(selected)
-            complexity = hyper_router.estimate_complexity(query, context if context != "None provided" else None)
-
-            # Get the framework prompt (fallback to self_discover if not found)
-            fw = FRAMEWORKS.get(selected, FRAMEWORKS.get("self_discover"))
-            if not fw:
-                selected = "self_discover"
-                fw = FRAMEWORKS["self_discover"]
-
-            prompt = fw["prompt"].format(query=query, context=context)
-
-            # Prepend memory context if thread_id provided
+            # Add thread_id to working memory if provided
             if thread_id:
-                memory = get_memory(thread_id)
-                mem_context = memory.get_context()
-                if mem_context.get("chat_history"):
-                    history_str = "\n".join(str(m) for m in mem_context["chat_history"][-5:])
-                    prompt = f"CONVERSATION HISTORY:\n{history_str}\n\n{prompt}"
-                if mem_context.get("framework_history"):
-                    prompt = f"PREVIOUSLY USED FRAMEWORKS: {mem_context['framework_history'][-5:]}\n\n{prompt}"
+                state["working_memory"]["thread_id"] = thread_id
 
-            # Return with routing metadata
-            output = f"# Auto-selected Framework: {selected}\n"
-            output += f"Category: {fw_info.get('category', fw['category'])} | Complexity: {complexity:.2f}\n"
-            output += f"Best for: {', '.join(fw_info.get('best_for', fw['best_for']))}\n\n"
-            output += prompt
+            # Invoke LangGraph workflow
+            try:
+                result = await graph.ainvoke(state)
 
-            return [TextContent(type="text", text=output)]
+                # Extract results
+                selected = result.get("selected_framework", "unknown")
+                final_answer = result.get("final_answer", "")
+                confidence = result.get("confidence_score", 0.5)
 
-        # Framework tools (think_*)
+                # Format output
+                output = f"# LangGraph Execution Complete\n\n"
+                output += f"**Framework**: {selected}\n"
+                output += f"**Confidence**: {confidence:.2f}\n\n"
+                output += f"## Result:\n{final_answer}"
+
+                return [TextContent(type="text", text=output)]
+
+            except Exception as e:
+                logger.error(f"LangGraph execution failed: {e}", exc_info=True)
+                return [TextContent(type="text", text=f"Error executing framework: {str(e)}")]
+
+        # Framework tools (think_*) - Direct framework invocation via LangGraph
         if name.startswith("think_"):
             fw_name = name[6:]
-            if fw_name in FRAMEWORKS:
+            if fw_name in FRAMEWORK_NODES:
                 query = arguments.get("query", "")
                 context = arguments.get("context", "None provided")
                 thread_id = arguments.get("thread_id")
 
-                prompt = FRAMEWORKS[fw_name]["prompt"].format(query=query, context=context)
+                # Create initial state with preferred framework
+                state = create_initial_state(
+                    query=query,
+                    code_snippet=context if context != "None provided" else None,
+                    preferred_framework=fw_name
+                )
 
-                # Include memory context if thread_id provided
+                # Add thread_id to working memory if provided
                 if thread_id:
-                    memory = get_memory(thread_id)
-                    mem_context = memory.get_context()
-                    if mem_context.get("chat_history"):
-                        history_str = "\n".join(str(m) for m in mem_context["chat_history"][-5:])
-                        prompt = f"CONVERSATION HISTORY:\n{history_str}\n\n{prompt}"
-                    if mem_context.get("framework_history"):
-                        prompt = f"PREVIOUSLY USED FRAMEWORKS: {mem_context['framework_history'][-5:]}\n\n{prompt}"
+                    state["working_memory"]["thread_id"] = thread_id
 
-                return [TextContent(type="text", text=prompt)]
+                # Force selection of the requested framework
+                state["selected_framework"] = fw_name
+
+                # Invoke the specific framework node directly
+                try:
+                    framework_fn = FRAMEWORK_NODES[fw_name]
+                    result = await framework_fn(state)
+
+                    final_answer = result.get("final_answer", "")
+                    confidence = result.get("confidence_score", 0.5)
+
+                    output = f"# Framework: {fw_name}\n"
+                    output += f"**Confidence**: {confidence:.2f}\n\n"
+                    output += f"## Result:\n{final_answer}"
+
+                    return [TextContent(type="text", text=output)]
+
+                except Exception as e:
+                    logger.error(f"Framework {fw_name} execution failed: {e}", exc_info=True)
+                    return [TextContent(type="text", text=f"Error executing {fw_name}: {str(e)}")]
 
         # List frameworks
         if name == "list_frameworks":
