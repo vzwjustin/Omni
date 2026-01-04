@@ -1,7 +1,7 @@
 # 🧠 Omni Cortex
 ### The Headless Strategy Engine for AI Coding Agents
 
-[![Docker Pulls](https://img.shields.io/docker/pulls/vzwjustin/omni-cortex?style=for-the-badge&logo=docker&color=2496ED)](https://hub.docker.com/r/vzwjustin/omni-cortex)
+[![Install](https://img.shields.io/badge/Install-curl%20-fsSL%20...%20%7C%20bash-blue?style=for-the-badge&logo=linux&logoColor=white)](https://raw.githubusercontent.com/vzwjustin/Omni/main/omni_cortex/install.sh)
 [![License](https://img.shields.io/github/license/vzwjustin/Omni?style=for-the-badge&color=blue)](LICENSE)
 [![MCP Compatible](https://img.shields.io/badge/MCP-Compatible-green?style=for-the-badge)](https://modelcontextprotocol.io)
 [![Vibe Check](https://img.shields.io/badge/Vibe-Optimized-purple?style=for-the-badge)](omni_cortex/app/core/router.py)
