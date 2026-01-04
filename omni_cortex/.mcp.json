@@ -3,9 +3,13 @@
     "omni-cortex": {
       "command": "docker",
       "args": [
-        "run", "--rm", "-i",
-        "--env-file", "${CLAUDE_PLUGIN_ROOT}/.env",
-        "-v", "${CLAUDE_PLUGIN_ROOT}/data:/app/data",
+        "run",
+        "--rm",
+        "-i",
+        "--env-file",
+        "/Users/justinadams/thinking-frameworks/omni_cortex/.env",
+        "-v",
+        "/Users/justinadams/thinking-frameworks/omni_cortex/data:/app/data",
         "vzwjustin/omni-cortex:latest"
       ]
     }
