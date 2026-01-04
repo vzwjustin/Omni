@@ -138,13 +138,14 @@ Make the code clean, commented, and correct."""
         match = re.search(code_pattern, generate_response, re.DOTALL)
     
     generated_code = match.group(1).strip() if match else ""
-    
+
+    code_lines = len(generated_code.split('\n'))
     add_reasoning_step(
         state=state,
         framework="program_of_thoughts",
         thought="Generated Python code for computation",
         action="code_generation",
-        observation=f"Generated {len(generated_code.split('\n'))} lines of code"
+        observation=f"Generated {code_lines} lines of code"
     )
     
     # =========================================================================

@@ -146,8 +146,9 @@ Rate this step on a scale from 0.0 to 1.0:
 Respond with ONLY a single decimal number between 0.0 and 1.0."""
 
     try:
-        response, _ = await model_config.call_fast_synthesizer(
+        response, _ = await call_fast_synthesizer(
             prompt=prompt,
+            state=state,
             max_tokens=DEFAULT_PRM_TOKENS,
             temperature=DEFAULT_PRM_TEMP
         )
@@ -226,8 +227,9 @@ OPTIMIZATION GUIDELINES:
 Return ONLY the optimized prompt, no explanations."""
 
     try:
-        optimized, _ = await model_config.call_fast_synthesizer(
+        optimized, _ = await call_fast_synthesizer(
             prompt=optimization_prompt,
+            state=None,
             max_tokens=DEFAULT_OPTIMIZATION_TOKENS,
             temperature=DEFAULT_OPTIMIZATION_TEMP
         )
@@ -263,8 +265,10 @@ async def call_deep_reasoner(
         else:
             system = quiet_instruction
     
-    # Provider-specific handling
-    if settings.llm_provider == "anthropic":
+    # Provider-specific handling using LangChain
+    provider = settings.llm_provider.lower()
+
+    if provider == "anthropic" or settings.anthropic_api_key:
         model_name = settings.deep_reasoning_model.split("/")[-1] if "/" in settings.deep_reasoning_model else settings.deep_reasoning_model
         from langchain_anthropic import ChatAnthropic
         client = ChatAnthropic(
@@ -278,14 +282,37 @@ async def call_deep_reasoner(
         )
         text = lc_response.content if hasattr(lc_response, "content") else str(lc_response)
         tokens = len(text) // 4  # rough estimate
-    else:
-        # Default to our internal client wrapper (OpenAI/OpenRouter/etc.)
-        text, tokens = await model_config.call_deep_reasoner(
-            prompt=prompt,
-            system=system,
-            max_tokens=max_tokens,
+    elif provider == "openai" or settings.openai_api_key:
+        from langchain_openai import ChatOpenAI
+        model_name = settings.deep_reasoning_model.split("/")[-1] if "/" in settings.deep_reasoning_model else settings.deep_reasoning_model
+        client = ChatOpenAI(
+            model=model_name,
+            api_key=settings.openai_api_key,
             temperature=temperature
         )
+        lc_response = await asyncio.to_thread(
+            client.invoke,
+            prompt if not system else f"{system}\n\n{prompt}"
+        )
+        text = lc_response.content if hasattr(lc_response, "content") else str(lc_response)
+        tokens = len(text) // 4  # rough estimate
+    elif provider == "openrouter" or settings.openrouter_api_key:
+        from langchain_openai import ChatOpenAI
+        model_name = settings.deep_reasoning_model
+        client = ChatOpenAI(
+            model=model_name,
+            api_key=settings.openrouter_api_key,
+            base_url=settings.openrouter_base_url,
+            temperature=temperature
+        )
+        lc_response = await asyncio.to_thread(
+            client.invoke,
+            prompt if not system else f"{system}\n\n{prompt}"
+        )
+        text = lc_response.content if hasattr(lc_response, "content") else str(lc_response)
+        tokens = len(text) // 4  # rough estimate
+    else:
+        raise ValueError(f"No LLM provider configured. Set ANTHROPIC_API_KEY, OPENAI_API_KEY, or OPENROUTER_API_KEY in .env")
     
     # Extract and store quiet thought if present
     if state:
@@ -309,8 +336,8 @@ async def call_fast_synthesizer(
     temperature: float = DEFAULT_FAST_SYNTHESIS_TEMP
 ) -> tuple[str, int]:
     """
-    Wrapper for fast synthesis model (GPT-5.2).
-    
+    Wrapper for fast synthesis model.
+
     Used for quick operations, thought generation, and synthesis.
     """
     callback = None
@@ -318,19 +345,62 @@ async def call_fast_synthesizer(
         callback = state.get("working_memory", {}).get("langchain_callback")
         if callback:
             callback.on_llm_start({"name": "call_fast_synthesizer"}, [prompt])
-    response, tokens = await model_config.call_fast_synthesizer(
-        prompt=prompt,
-        system=system,
-        max_tokens=max_tokens,
-        temperature=temperature
-    )
-    
+
+    # Provider-specific handling using LangChain
+    provider = settings.llm_provider.lower()
+
+    if provider == "anthropic" or settings.anthropic_api_key:
+        model_name = settings.fast_synthesis_model.split("/")[-1] if "/" in settings.fast_synthesis_model else settings.fast_synthesis_model
+        from langchain_anthropic import ChatAnthropic
+        client = ChatAnthropic(
+            model=model_name,
+            api_key=settings.anthropic_api_key,
+            temperature=temperature
+        )
+        lc_response = await asyncio.to_thread(
+            client.invoke,
+            prompt if not system else f"{system}\n\n{prompt}"
+        )
+        text = lc_response.content if hasattr(lc_response, "content") else str(lc_response)
+        tokens = len(text) // 4  # rough estimate
+    elif provider == "openai" or settings.openai_api_key:
+        from langchain_openai import ChatOpenAI
+        model_name = settings.fast_synthesis_model.split("/")[-1] if "/" in settings.fast_synthesis_model else settings.fast_synthesis_model
+        client = ChatOpenAI(
+            model=model_name,
+            api_key=settings.openai_api_key,
+            temperature=temperature
+        )
+        lc_response = await asyncio.to_thread(
+            client.invoke,
+            prompt if not system else f"{system}\n\n{prompt}"
+        )
+        text = lc_response.content if hasattr(lc_response, "content") else str(lc_response)
+        tokens = len(text) // 4  # rough estimate
+    elif provider == "openrouter" or settings.openrouter_api_key:
+        from langchain_openai import ChatOpenAI
+        model_name = settings.fast_synthesis_model
+        client = ChatOpenAI(
+            model=model_name,
+            api_key=settings.openrouter_api_key,
+            base_url=settings.openrouter_base_url,
+            temperature=temperature
+        )
+        lc_response = await asyncio.to_thread(
+            client.invoke,
+            prompt if not system else f"{system}\n\n{prompt}"
+        )
+        text = lc_response.content if hasattr(lc_response, "content") else str(lc_response)
+        tokens = len(text) // 4  # rough estimate
+    else:
+        raise ValueError(f"No LLM provider configured. Set ANTHROPIC_API_KEY, OPENAI_API_KEY, or OPENROUTER_API_KEY in .env")
+
     if state:
         state["tokens_used"] = state.get("tokens_used", 0) + tokens
     if callback:
         callback.on_llm_end({"llm_output": {"token_usage": {"total_tokens": tokens}}})
-    
-    return response, tokens
+
+    return text, tokens
 
 
 # =============================================================================

@@ -118,6 +118,7 @@ Make functions small, focused, and testable."""
     implementations: List[Dict] = []
 
     for level_num, level_content in levels_found:
+        dependencies_section = ("DEPENDENCIES ALREADY IMPLEMENTED:\n" + "\n".join([f"Level {impl['level']}: {impl['summary']}" for impl in implementations]) if implementations else "This is the base level with no dependencies.")
         implement_prompt = f"""Implement the functions for Level {level_num}.
 
 LEVEL {level_num} FUNCTIONS:
@@ -125,7 +126,7 @@ LEVEL {level_num} FUNCTIONS:
 
 TASK CONTEXT: {query}
 
-{"DEPENDENCIES ALREADY IMPLEMENTED:\n" + "\n".join([f"Level {impl['level']}: {impl['summary']}" for impl in implementations]) if implementations else "This is the base level with no dependencies."}
+{dependencies_section}
 
 Implement each function:
 - Write clean, documented code

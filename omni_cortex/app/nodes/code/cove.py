@@ -117,13 +117,14 @@ Include comments explaining key decisions."""
     code_pattern = r"```(?:\w+)?\n(.*?)```"
     match = re.search(code_pattern, draft_response, re.DOTALL)
     draft_code = match.group(1).strip() if match else draft_response
-    
+
+    draft_lines = len(draft_code.split('\n'))
     add_reasoning_step(
         state=state,
         framework="chain_of_verification",
         thought="Generated initial draft code",
         action="draft",
-        observation=f"Draft has {len(draft_code.split('\n'))} lines"
+        observation=f"Draft has {draft_lines} lines"
     )
     
     # =========================================================================
@@ -135,7 +136,8 @@ Include comments explaining key decisions."""
     for check_category in VERIFICATION_CHECKS:
         category = check_category["category"]
         checks = check_category["checks"]
-        
+
+        checks_formatted = "\n".join(f"- {check}" for check in checks)
         verify_prompt = f"""Verify this code for {category.upper()} issues.
 
 CODE TO VERIFY:
@@ -149,7 +151,7 @@ DOC CONTEXT:
 {doc_context}
 
 Check for these specific issues:
-{"\n".join(f"- {check}" for check in checks)}
+{checks_formatted}
 
 For EACH issue found:
 ```

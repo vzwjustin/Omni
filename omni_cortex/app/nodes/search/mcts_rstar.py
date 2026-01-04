@@ -246,6 +246,7 @@ Be creative but grounded. Explore different approaches."""
     best_path = tree.get_best_path()
     
     # Summarize the search result
+    best_path_formatted = "\n".join(f"{i+1}. {n.action_taken} (score: {n.average_value:.2f})" for i, n in enumerate(best_path))
     summary_prompt = f"""Summarize the MCTS search results.
 
 GOAL: {query}
@@ -256,7 +257,7 @@ ORIGINAL CODE:
 ```
 
 BEST PATH FOUND ({len(best_path)} steps):
-{"\n".join(f"{i+1}. {n.action_taken} (score: {n.average_value:.2f})" for i, n in enumerate(best_path))}
+{best_path_formatted}
 
 FINAL CODE STATE:
 ```
