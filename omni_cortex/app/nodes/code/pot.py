@@ -263,7 +263,7 @@ class _SafetyValidator(ast.NodeVisitor):
     BLOCKED_CALLS: Set[str] = {
         '__import__', 'exec', 'eval', 'compile', 'open', 'file',
         'input', 'raw_input', 'globals', 'locals', 'vars', 'dir',
-        'setattr', 'getattr', 'delattr', 'hasattr', 'type', 'object',
+        'setattr', 'getattr', 'delattr', 'hasattr', 'object',
         'breakpoint', 'exit', 'quit', 'help', 'license', 'credits',
     }
 

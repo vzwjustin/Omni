@@ -94,7 +94,8 @@ USAGE: [how it's being used]"""
             result = await call_langchain_tool("search_function_implementation", func, state)
             if result and "No function" not in result:
                 docs_found.append(f"## Function: {func}\n{result[:1000]}")
-        except Exception:
+        except Exception as e:
+            # Silently continue - function lookup is best-effort, not critical
             pass
     
     # Search for specific classes
@@ -103,7 +104,8 @@ USAGE: [how it's being used]"""
             result = await call_langchain_tool("search_class_implementation", cls, state)
             if result and "No class" not in result:
                 docs_found.append(f"## Class: {cls}\n{result[:1000]}")
-        except Exception:
+        except Exception as e:
+            # Silently continue - class lookup is best-effort, not critical
             pass
     
     # Fallback to documentation search for libraries
@@ -113,7 +115,8 @@ USAGE: [how it's being used]"""
                 result = await call_langchain_tool("search_documentation_only", f"{lib} API usage", state)
                 if result:
                     docs_found.append(f"## Library: {lib}\n{result[:800]}")
-            except Exception:
+            except Exception as e:
+                # Silently continue - doc lookup is best-effort, not critical
                 pass
     
     # Final fallback to legacy vector search

@@ -45,7 +45,10 @@ def read_files(root: Path, patterns: List[str]) -> List[tuple[str, str]]:
                 continue
             try:
                 text = file.read_text(encoding="utf-8")
-            except Exception:
+            except Exception as e:
+                # Skip unreadable files (binary, encoding issues, permissions)
+                # but log for debugging visibility
+                logger.debug("file_read_error", file=str(file), error=str(e))
                 continue
             rel = file.relative_to(root).as_posix()
             docs.append((rel, text))

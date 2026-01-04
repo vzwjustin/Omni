@@ -41,14 +41,18 @@ async def chain_of_note_node(state: GraphState) -> GraphState:
     # Pull prior chat/framework context via tool
     try:
         retrieved_context = await run_tool("retrieve_context", query, state)
-    except Exception:
+    except Exception as e:
+        # Silently continue - context retrieval is optional enhancement
+        # Debug: uncomment to log: print(f"retrieve_context failed: {e}")
         retrieved_context = ""
     
     # Use enhanced documentation search for research mode
     doc_research = ""
     try:
         doc_research = await run_tool("search_documentation_only", query, state)
-    except Exception:
+    except Exception as e:
+        # Silently continue - doc search is optional enhancement
+        # Debug: uncomment to log: print(f"search_documentation_only failed: {e}")
         pass
     
     # =========================================================================

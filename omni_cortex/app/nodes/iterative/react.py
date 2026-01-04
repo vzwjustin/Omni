@@ -160,7 +160,7 @@ Choose your action now."""
                 import json
                 try:
                     parsed_input = json.loads(action_input)
-                except:
+                except (json.JSONDecodeError, ValueError):
                     parsed_input = {"input": action_input}
 
                 result = await run_tool(action_name, parsed_input, state)

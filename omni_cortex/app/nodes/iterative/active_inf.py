@@ -49,7 +49,9 @@ async def active_inference_node(state: GraphState) -> GraphState:
         similar_patterns = await run_tool("search_with_framework_context",
                                          {"query": f"debugging {query[:80]}", "framework_category": "iterative", "k": 2},
                                          state)
-    except Exception:
+    except Exception as e:
+        # Silently continue - pattern search is optional enhancement
+        # Debug: uncomment to log: print(f"search_with_framework_context failed: {e}")
         pass
     
     # =========================================================================

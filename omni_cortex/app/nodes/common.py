@@ -156,7 +156,8 @@ Respond with ONLY a single decimal number between 0.0 and 1.0."""
         # Parse the score
         score = float(response.strip())
         return max(0.0, min(1.0, score))
-    except (ValueError, Exception):
+    except Exception:
+        # ValueError from float parsing or other LLM/network errors
         return 0.5  # Default on error
 
 
@@ -234,8 +235,9 @@ Return ONLY the optimized prompt, no explanations."""
             temperature=DEFAULT_OPTIMIZATION_TEMP
         )
         return optimized.strip()
-    except Exception:
-        return base_prompt  # Fall back to original on error
+    except Exception as e:
+        # LLM or network error during optimization; fall back to original
+        return base_prompt
 
 
 # =============================================================================

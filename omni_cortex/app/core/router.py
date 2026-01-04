@@ -411,7 +411,8 @@ class HyperRouter:
                 reasoning = parsed.reasoning
                 if selected:
                     return selected, reasoning
-            except Exception:
+            except Exception as e:
+                # Parser failed; fall through to regex extraction
                 pass
             
             # Fallback to regex extract
@@ -419,7 +420,8 @@ class HyperRouter:
             if selected:
                 return selected, response
             return "self_discover", "Fallback: could not parse framework, using self_discover."
-        except Exception:
+        except Exception as e:
+            # LLM or network error during framework selection
             return "self_discover", "Fallback: router LLM failed, using self_discover."
 
     def _extract_framework(self, response: str) -> Optional[str]:

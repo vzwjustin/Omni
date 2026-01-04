@@ -159,7 +159,10 @@ async def coala_node(state: GraphState) -> GraphState:
     # Retrieve prior conversation/context to enrich reasoning
     try:
         retrieved_context = await run_tool("retrieve_context", state.get("query", ""), state)
-    except Exception:
+    except Exception as e:
+        # Log context retrieval failure but continue with empty context
+        import logging
+        logging.debug(f"Context retrieval failed: {e}")
         retrieved_context = ""
     
     # Learn from similar framework implementations for complex tasks
@@ -167,11 +170,13 @@ async def coala_node(state: GraphState) -> GraphState:
     try:
         # If task mentions specific frameworks or patterns, search for them
         if any(keyword in query.lower() for keyword in ["pattern", "implement", "framework", "architecture"]):
-            framework_examples = await run_tool("search_with_framework_context", 
-                                               {"query": query[:100], "framework_category": "strategy", "k": 2}, 
+            framework_examples = await run_tool("search_with_framework_context",
+                                               {"query": query[:100], "framework_category": "strategy", "k": 2},
                                                state)
-    except Exception:
-        pass
+    except Exception as e:
+        # Log framework search failure but continue - this is optional context enrichment
+        import logging
+        logging.debug(f"Framework context search failed: {e}")
     
     # =========================================================================
     # Phase 1: PERCEIVE - Process input into working memory

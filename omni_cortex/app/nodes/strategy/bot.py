@@ -75,8 +75,10 @@ async def buffer_of_thoughts_node(state: GraphState) -> GraphState:
                     "success_rate": 0.7
                 }
                 matched_templates = [new_template]
-        except Exception:
-            pass
+        except Exception as e:
+            # Log template retrieval failure but continue - fallback to generating new template
+            import logging
+            logging.debug(f"Template retrieval from vectorstore failed: {e}")
     
     add_reasoning_step(
         state=state,

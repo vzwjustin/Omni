@@ -82,7 +82,8 @@ async def chain_of_verification_node(state: GraphState) -> GraphState:
     try:
         # Use enhanced search for security best practices
         doc_context = await run_tool("search_by_category", {"query": f"security best practices {query}", "category": "documentation", "k": 3}, state)
-    except Exception:
+    except Exception as e:
+        # Silently continue - doc context is optional enhancement, not critical
         doc_context = ""
     
     # =========================================================================
