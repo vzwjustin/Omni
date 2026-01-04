@@ -161,6 +161,12 @@ def main():
         "https://docs.stripe.com/llms.txt",                       # Stripe (Payment patterns)
         "https://docs.pinecone.io/llms.txt",                      # Vector Database patterns
         "https://daisyui.com/llms.txt",                           # UI/Tailwind Components
+        "https://vuejs.org/llms.txt",                             # Vue.js Framework
+        "https://svelte.dev/llms.txt",                            # Svelte Framework
+        "https://nuxt.com/llms.txt",                              # Nuxt Framework
+        "https://supabase.com/llms.txt",                          # Supabase (Backend/DB)
+        "https://developers.cloudflare.com/llms.txt",             # Cloudflare Workers/Edge
+        "https://modal.com/llms.txt",                             # Modal (Serverless Python)
     ]
 
     if args.auto:
