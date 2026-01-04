@@ -1,11 +1,11 @@
-# Omni-Cortex
+# Omni
 
 40 thinking frameworks for your IDE. Just describe what you want - the router picks the right framework.
 
 ## Install
 
 Tell your IDE:
-> "Install the omni-cortex MCP server"
+> "Install the Omni MCP server"
 
 Or run:
 ```bash
@@ -59,7 +59,7 @@ Or call directly: `think_active_inference`, `think_tree_of_thoughts`, etc.
 
 ## How it Works
 
-Your IDE calls Omni-Cortex → gets a structured prompt → IDE's LLM executes it.
+Your IDE calls Omni → gets a structured prompt → IDE's LLM executes it.
 
 Pass-through architecture. No API keys needed.
 

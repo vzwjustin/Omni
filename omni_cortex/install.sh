@@ -1,10 +1,10 @@
 #!/bin/bash
-# Omni-Cortex MCP Server Installer
+# Omni MCP Server Installer
 # Usage: curl -fsSL https://raw.githubusercontent.com/vzwjustin/Omni/initial-release/omni_cortex/install.sh | bash
 
 set -e
 
-echo "Installing Omni-Cortex MCP Server..."
+echo "Installing Omni MCP Server..."
 
 # Check for Docker
 if ! command -v docker &> /dev/null; then
