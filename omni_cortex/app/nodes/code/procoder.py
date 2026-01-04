@@ -2,27 +2,24 @@
 ProCoder: Compiler-Feedback-Guided Iterative Refinement
 
 Project-level code generation with compiler feedback and context alignment.
+(Headless Mode: Returns Reasoning Protocol for Client Execution)
 """
 
+import logging
 from ...state import GraphState
 from ..common import (
     quiet_star,
-    add_reasoning_step,
     format_code_context,
+    add_reasoning_step,
+    call_fast_synthesizer # Kept for import compatibility
 )
 
+logger = logging.getLogger(__name__)
 
 @quiet_star
 async def procoder_node(state: GraphState) -> GraphState:
     """
-    ProCoder: Compiler-guided refinement.
-
-    Process:
-    1. Initial code generation
-    2. Collect compiler feedback (errors/warnings)
-    3. Context alignment (search project for correct patterns)
-    4. Iterative fixing using project context
-    5. Integration verification
+    Procoder: Compiler-Feedback-Guided Iterative Refinement
     """
     query = state["query"]
     code_context = format_code_context(
@@ -32,28 +29,44 @@ async def procoder_node(state: GraphState) -> GraphState:
         state=state
     )
 
-    reasoning = f"""Apply ProCoder compiler-guided refinement:
+    # Construct the Protocol Prompt for the Client
+    prompt = f"""# Procoder Protocol
 
-TASK: {query}
-CONTEXT: {code_context}
+I have selected the **Procoder** framework for this task.
+Compiler-Feedback-Guided Iterative Refinement
 
-1. INITIAL_GENERATION: Generate code based on requirements
-2. COMPILER_FEEDBACK: Attempt compilation/execution
-   - Collect errors and warnings
-   - Extract context from error messages
-3. CONTEXT_ALIGNMENT:
-   - Identify mismatches (undefined variables, wrong APIs, import errors)
-   - Search project for correct patterns and APIs
-   - Extract relevant code snippets from codebase
-4. ITERATIVE_FIXING:
-   - Fix errors using extracted project context
-   - Re-compile and collect new feedback
-   - Repeat until code compiles and runs
-5. INTEGRATION_VERIFY: Ensure code fits project architecture"""
+## Use Case
+General reasoning
 
-    add_reasoning_step(state, "procoder_framework", reasoning)
+## Task
+{query}
 
-    state["final_answer"] = reasoning
-    state["confidence_score"] = 0.86
+## 🧠 Execution Protocol (Client-Side)
+
+Please execute the reasoning steps for **Procoder** using your internal context:
+
+### Framework Steps
+1. Initial code generation
+2. Collect compiler feedback (errors/warnings)
+3. Context alignment (search project for correct patterns)
+4. Iterative fixing using project context
+5. Integration verification
+
+## 📝 Code Context
+{code_context}
+
+**Please start by outlining your approach following the Procoder process.**
+"""
+
+    state["final_answer"] = prompt
+    state["confidence_score"] = 1.0
+
+    add_reasoning_step(
+        state=state,
+        framework="procoder",
+        thought="Generated Procoder protocol for client execution",
+        action="handoff",
+        observation="Prompt generated"
+    )
 
     return state

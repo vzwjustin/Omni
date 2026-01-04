@@ -3,27 +3,24 @@ System1: Fast Heuristic Mode
 
 Fast, intuitive responses for simple queries.
 Minimal deliberation, maximum speed.
+(Headless Mode: Returns Reasoning Protocol for Client Execution)
 """
 
-from typing import Optional
+import logging
 from ...state import GraphState
 from ..common import (
-    call_fast_synthesizer,
+    quiet_star,
+    format_code_context,
     add_reasoning_step,
-    format_code_context
+    call_fast_synthesizer # Kept for import compatibility
 )
 
+logger = logging.getLogger(__name__)
 
+@quiet_star
 async def system1_node(state: GraphState) -> GraphState:
     """
-    System1: Fast, Heuristic Responses.
-    
-    Single-pass generation for simple, straightforward queries.
-    No deliberation, no verification - pure speed.
-    
-    Best for: Simple queries, quick fixes, trivial tasks
-    
-    Note: Intentionally minimal - no @quiet_star, no multi-step.
+    System1: Fast Heuristic Mode
     """
     query = state["query"]
     code_context = format_code_context(
@@ -32,61 +29,43 @@ async def system1_node(state: GraphState) -> GraphState:
         state.get("ide_context"),
         state=state
     )
-    
-    # Single fast prompt
-    prompt = f"""Respond quickly and directly.
 
-TASK: {query}
+    # Construct the Protocol Prompt for the Client
+    prompt = f"""# System1 Protocol
 
-CONTEXT:
+I have selected the **System1** framework for this task.
+Fast Heuristic Mode
+
+## Use Case
+Simple queries, quick fixes, trivial tasks
+
+## Task
+{query}
+
+## 🧠 Execution Protocol (Client-Side)
+
+Please execute the reasoning steps for **System1** using your internal context:
+
+### Framework Steps
+1. Analyze the Problem
+2. Apply Framework Principles
+3. Generate Solution
+
+## 📝 Code Context
 {code_context}
 
-Provide a direct, concise response:
-- If code is needed, provide working code immediately
-- No lengthy explanations unless truly necessary
-- Focus on the most common/likely interpretation
+**Please start by outlining your approach following the System1 process.**
+"""
 
-RESPONSE:"""
+    state["final_answer"] = prompt
+    state["confidence_score"] = 1.0
 
-    response, _ = await call_fast_synthesizer(
-        prompt=prompt,
-        state=state,
-        max_tokens=1500,
-        temperature=0.5
-    )
-    
     add_reasoning_step(
         state=state,
         framework="system1",
-        thought="Fast heuristic response",
-        action="quick_answer",
-        observation="Single-pass generation"
+        thought="Generated System1 protocol for client execution",
+        action="handoff",
+        observation="Prompt generated"
     )
-    
-    # Extract any code blocks
-    import re
-    code_pattern = r"```(?:\w+)?\n(.*?)```"
-    matches = re.findall(code_pattern, response, re.DOTALL)
-    
-    # If no code blocks but looks like code, wrap it
-    if not matches and _looks_like_code(response):
-        matches = [response.strip()]
-    
-    # Update final state
-    state["final_answer"] = response
-    state["final_code"] = "\n\n".join([m.strip() for m in matches]) if matches else None
-    state["confidence_score"] = 0.7  # Lower confidence for fast responses
-    
+
     return state
-
-
-def _looks_like_code(text: str) -> bool:
-    """Heuristic check if text looks like code."""
-    code_indicators = [
-        "def ", "function ", "class ", "const ", "let ", "var ",
-        "import ", "from ", "require(", "export ",
-        "if (", "for (", "while (", "switch (",
-        "return ", "=>", "->", "::", "$$"
-    ]
-    
-    return any(ind in text for ind in code_indicators)

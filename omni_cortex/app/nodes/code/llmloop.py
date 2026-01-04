@@ -2,27 +2,24 @@
 LLMLOOP: Automated Iterative Feedback Loops for Code+Tests
 
 Five-loop automated refinement: compilation, static analysis, tests, mutation, final polish.
+(Headless Mode: Returns Reasoning Protocol for Client Execution)
 """
 
+import logging
 from ...state import GraphState
 from ..common import (
     quiet_star,
-    add_reasoning_step,
     format_code_context,
+    add_reasoning_step,
+    call_fast_synthesizer # Kept for import compatibility
 )
 
+logger = logging.getLogger(__name__)
 
 @quiet_star
 async def llmloop_node(state: GraphState) -> GraphState:
     """
-    LLMLOOP: Automated iterative refinement.
-
-    Five loops:
-    1. COMPILATION_ERRORS: Fix syntax and type errors
-    2. STATIC_ANALYSIS: Fix linter warnings and code smells
-    3. TEST_FAILURES: Generate and fix test failures
-    4. MUTATION_TESTING: Improve test coverage and quality
-    5. FINAL_REFINEMENT: Code review, docs, optimization
+    Llmloop: Automated Iterative Feedback Loops for Code+Tests
     """
     query = state["query"]
     code_context = format_code_context(
@@ -32,40 +29,42 @@ async def llmloop_node(state: GraphState) -> GraphState:
         state=state
     )
 
-    reasoning = f"""Apply LLMLOOP automated iterative refinement:
+    # Construct the Protocol Prompt for the Client
+    prompt = f"""# Llmloop Protocol
 
-TASK: {query}
-CONTEXT: {code_context}
+I have selected the **Llmloop** framework for this task.
+Automated Iterative Feedback Loops for Code+Tests
 
-LOOP 1 - COMPILATION_ERRORS:
-- Generate initial code
-- Attempt compilation
-- Fix syntax and type errors
-- Repeat until compiles cleanly
+## Use Case
+General reasoning
 
-LOOP 2 - STATIC_ANALYSIS:
-- Run linter/static analyzer
-- Fix warnings and code smells
-- Apply best practices
+## Task
+{query}
 
-LOOP 3 - TEST_FAILURES:
-- Generate comprehensive test cases
-- Run tests, identify failures
-- Fix failing tests iteratively
+## 🧠 Execution Protocol (Client-Side)
 
-LOOP 4 - MUTATION_TESTING:
-- Apply mutation analysis to tests
-- Improve test quality and coverage
-- Ensure robustness
+Please execute the reasoning steps for **Llmloop** using your internal context:
 
-LOOP 5 - FINAL_REFINEMENT:
-- Code review checklist
-- Documentation
-- Performance optimization"""
+### Framework Steps
+1. Analyze the Problem
+2. Apply Framework Principles
+3. Generate Solution
 
-    add_reasoning_step(state, "llmloop_framework", reasoning)
+## 📝 Code Context
+{code_context}
 
-    state["final_answer"] = reasoning
-    state["confidence_score"] = 0.88
+**Please start by outlining your approach following the Llmloop process.**
+"""
+
+    state["final_answer"] = prompt
+    state["confidence_score"] = 1.0
+
+    add_reasoning_step(
+        state=state,
+        framework="llmloop",
+        thought="Generated Llmloop protocol for client execution",
+        action="handoff",
+        observation="Prompt generated"
+    )
 
     return state

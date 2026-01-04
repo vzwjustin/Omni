@@ -2,27 +2,24 @@
 CodeChain: Chain of Self-Revisions Guided by Sub-Modules
 
 Modular decomposition with iterative refinement of each component.
+(Headless Mode: Returns Reasoning Protocol for Client Execution)
 """
 
+import logging
 from ...state import GraphState
 from ..common import (
     quiet_star,
-    add_reasoning_step,
     format_code_context,
+    add_reasoning_step,
+    call_fast_synthesizer # Kept for import compatibility
 )
 
+logger = logging.getLogger(__name__)
 
 @quiet_star
 async def codechain_node(state: GraphState) -> GraphState:
     """
-    CodeChain: Sub-module-based self-revision.
-
-    Process:
-    1. Decompose into sub-modules (3-5 components)
-    2. Generate each sub-module independently
-    3. Chain revisions using patterns from previous iterations
-    4. Integrate revised sub-modules
-    5. Global revision of integrated solution
+    Codechain: Chain of Self-Revisions Guided by Sub-Modules
     """
     query = state["query"]
     code_context = format_code_context(
@@ -32,23 +29,44 @@ async def codechain_node(state: GraphState) -> GraphState:
         state=state
     )
 
-    reasoning = f"""Apply CodeChain sub-module-based self-revision:
+    # Construct the Protocol Prompt for the Client
+    prompt = f"""# Codechain Protocol
 
-TASK: {query}
-CONTEXT: {code_context}
+I have selected the **Codechain** framework for this task.
+Chain of Self-Revisions Guided by Sub-Modules
 
-1. DECOMPOSE: Break into sub-modules/functions (identify 3-5 core components)
-2. GENERATE_SUB_MODULES: Implement each sub-module independently
-3. CHAIN_REVISIONS: For each module:
-   - Generate initial version
-   - Compare with representative examples from previous iterations
-   - Self-revise based on patterns learned
-4. INTEGRATE: Combine revised sub-modules
-5. GLOBAL_REVISION: Review and refine the integrated solution"""
+## Use Case
+General reasoning
 
-    add_reasoning_step(state, "codechain_framework", reasoning)
+## Task
+{query}
 
-    state["final_answer"] = reasoning
-    state["confidence_score"] = 0.82
+## 🧠 Execution Protocol (Client-Side)
+
+Please execute the reasoning steps for **Codechain** using your internal context:
+
+### Framework Steps
+1. Decompose into sub-modules (3-5 components)
+2. Generate each sub-module independently
+3. Chain revisions using patterns from previous iterations
+4. Integrate revised sub-modules
+5. Global revision of integrated solution
+
+## 📝 Code Context
+{code_context}
+
+**Please start by outlining your approach following the Codechain process.**
+"""
+
+    state["final_answer"] = prompt
+    state["confidence_score"] = 1.0
+
+    add_reasoning_step(
+        state=state,
+        framework="codechain",
+        thought="Generated Codechain protocol for client execution",
+        action="handoff",
+        observation="Prompt generated"
+    )
 
     return state

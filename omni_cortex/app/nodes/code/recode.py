@@ -2,29 +2,24 @@
 RECODE: Multi-Candidate Validation with CFG-Based Debugging
 
 Generate multiple candidates, cross-validate with tests, CFG debugging for failures.
+(Headless Mode: Returns Reasoning Protocol for Client Execution)
 """
 
+import logging
 from ...state import GraphState
 from ..common import (
     quiet_star,
-    add_reasoning_step,
     format_code_context,
+    add_reasoning_step,
+    call_fast_synthesizer # Kept for import compatibility
 )
 
+logger = logging.getLogger(__name__)
 
 @quiet_star
 async def recode_node(state: GraphState) -> GraphState:
     """
-    RECODE: Multi-candidate cross-validation.
-
-    Process:
-    1. Generate 3-5 candidate solutions
-    2. Generate test cases for each
-    3. Cross-validation with majority voting
-    4. Static pattern extraction
-    5. CFG debugging for failures
-    6. Iterative refinement
-    7. Return cross-validated solution
+    Recode: Multi-Candidate Validation with CFG-Based Debugging
     """
     query = state["query"]
     code_context = format_code_context(
@@ -34,31 +29,46 @@ async def recode_node(state: GraphState) -> GraphState:
         state=state
     )
 
-    reasoning = f"""Apply RECODE multi-candidate cross-validation:
+    # Construct the Protocol Prompt for the Client
+    prompt = f"""# Recode Protocol
 
-TASK: {query}
-CONTEXT: {code_context}
+I have selected the **Recode** framework for this task.
+Multi-Candidate Validation with CFG-Based Debugging
 
-1. MULTI_CANDIDATE_GENERATION: Generate 3-5 candidate solutions
-2. SELF_TEST_GENERATION: Create test cases for each candidate
-3. CROSS_VALIDATION:
-   - Run each candidate's tests on ALL candidates
-   - Use majority voting to select most reliable tests
-   - Identify most robust solution candidate
-4. STATIC_PATTERN_EXTRACTION:
-   - Analyze common patterns across passing candidates
-   - Extract best practices
-5. CFG_DEBUGGING (if tests fail):
-   - Build Control Flow Graph
-   - Trace execution path through failing test
-   - Identify exact branching/loop error
-   - Provide fine-grained feedback for fix
-6. ITERATIVE_REFINEMENT: Apply CFG insights, regenerate, re-test
-7. FINAL_SOLUTION: Return cross-validated, debugged code"""
+## Use Case
+General reasoning
 
-    add_reasoning_step(state, "recode_framework", reasoning)
+## Task
+{query}
 
-    state["final_answer"] = reasoning
-    state["confidence_score"] = 0.90
+## 🧠 Execution Protocol (Client-Side)
+
+Please execute the reasoning steps for **Recode** using your internal context:
+
+### Framework Steps
+1. Generate 3-5 candidate solutions
+2. Generate test cases for each
+3. Cross-validation with majority voting
+4. Static pattern extraction
+5. CFG debugging for failures
+6. Iterative refinement
+7. Return cross-validated solution
+
+## 📝 Code Context
+{code_context}
+
+**Please start by outlining your approach following the Recode process.**
+"""
+
+    state["final_answer"] = prompt
+    state["confidence_score"] = 1.0
+
+    add_reasoning_step(
+        state=state,
+        framework="recode",
+        thought="Generated Recode protocol for client execution",
+        action="handoff",
+        observation="Prompt generated"
+    )
 
     return state

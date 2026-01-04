@@ -2,27 +2,24 @@
 Evol-Instruct: Evolutionary Instruction Complexity for Code
 
 Evolve problem complexity through constraint addition and reasoning depth.
+(Headless Mode: Returns Reasoning Protocol for Client Execution)
 """
 
+import logging
 from ...state import GraphState
 from ..common import (
     quiet_star,
-    add_reasoning_step,
     format_code_context,
+    add_reasoning_step,
+    call_fast_synthesizer # Kept for import compatibility
 )
 
+logger = logging.getLogger(__name__)
 
 @quiet_star
 async def evol_instruct_node(state: GraphState) -> GraphState:
     """
-    Evol-Instruct: Evolutionary complexity.
-
-    Process:
-    1. Add time/space complexity constraints
-    2. Add debugging challenges
-    3. Increase reasoning depth with edge cases
-    4. Concretize with specific examples
-    5. Increase breadth with alternative approaches
+    Instruct: Evolutionary Instruction Complexity for Code
     """
     query = state["query"]
     code_context = format_code_context(
@@ -32,26 +29,44 @@ async def evol_instruct_node(state: GraphState) -> GraphState:
         state=state
     )
 
-    reasoning = f"""Apply Evol-Instruct evolutionary complexity:
+    # Construct the Protocol Prompt for the Client
+    prompt = f"""# Instruct Protocol
 
-TASK: {query}
-CONTEXT: {code_context}
+I have selected the **Instruct** framework for this task.
+Evolutionary Instruction Complexity for Code
 
-EVOLVE the instruction through:
-1. ADD_CONSTRAINTS: Introduce time/space complexity requirements
-2. ADD_DEBUGGING: Inject intentional bugs to identify and fix
-3. INCREASE_REASONING_DEPTH: Add layers of logic and edge cases
-4. CONCRETIZE: Add specific examples and detailed requirements
-5. INCREASE_BREADTH: Consider alternative approaches and trade-offs
+## Use Case
+General reasoning
 
-Now solve the EVOLVED problem:
-- Implement solution meeting all evolved constraints
-- Debug and verify correctness
-- Optimize for complexity requirements"""
+## Task
+{query}
 
-    add_reasoning_step(state, "evol_instruct_framework", reasoning)
+## 🧠 Execution Protocol (Client-Side)
 
-    state["final_answer"] = reasoning
-    state["confidence_score"] = 0.80
+Please execute the reasoning steps for **Instruct** using your internal context:
+
+### Framework Steps
+1. Add time/space complexity constraints
+2. Add debugging challenges
+3. Increase reasoning depth with edge cases
+4. Concretize with specific examples
+5. Increase breadth with alternative approaches
+
+## 📝 Code Context
+{code_context}
+
+**Please start by outlining your approach following the Instruct process.**
+"""
+
+    state["final_answer"] = prompt
+    state["confidence_score"] = 1.0
+
+    add_reasoning_step(
+        state=state,
+        framework="evol_instruct",
+        thought="Generated Instruct protocol for client execution",
+        action="handoff",
+        observation="Prompt generated"
+    )
 
     return state
