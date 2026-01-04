@@ -1,10 +1,10 @@
 # 🧠 Omni Cortex
 ### The Headless Strategy Engine for AI Coding Agents
 
-[![Docker Pulls](https://img.shields.io/docker/pulls/vzwjustin/omni-cortex?style=for-the-badge&logo=docker&color=2496ED)](https://hub.docker.com/r/vzwjustin/omni-cortex)
+[![Install](https://img.shields.io/badge/Install-curl%20-fsSL%20...%20%7C%20bash-blue?style=for-the-badge&logo=linux&logoColor=white)](https://raw.githubusercontent.com/vzwjustin/Omni/main/omni_cortex/install.sh)
 [![License](https://img.shields.io/github/license/vzwjustin/Omni?style=for-the-badge&color=blue)](LICENSE)
 [![MCP Compatible](https://img.shields.io/badge/MCP-Compatible-green?style=for-the-badge)](https://modelcontextprotocol.io)
-[![Vibe Check](https://img.shields.io/badge/Vibe-Optimized-purple?style=for-the-badge)](app/core/router.py)
+[![Vibe Check](https://img.shields.io/badge/Vibe-Optimized-purple?style=for-the-badge)](omni_cortex/app/core/router.py)
 
 **Omni Cortex** is an MCP server that gives your IDE's AI access to **40 advanced reasoning frameworks**. It doesn't write the code for you; it gives your AI the *strategy* to write better code.
 
@@ -42,13 +42,7 @@ Add this to your IDE's MCP settings file (e.g., `claude_desktop_config.json` or 
   "mcpServers": {
     "omni-cortex": {
       "command": "docker",
-      "args": [
-        "run",
-        "--rm",
-        "-i",
-        "-v", "/path/to/your/code:/code", 
-        "vzwjustin/omni-cortex:latest"
-      ]
+      "args": ["run", "--rm", "-i", "vzwjustin/omni-cortex:latest"]
     }
   }
 }

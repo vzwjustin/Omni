@@ -42,13 +42,7 @@ Add this to your IDE's MCP settings file (e.g., `claude_desktop_config.json` or 
   "mcpServers": {
     "omni-cortex": {
       "command": "docker",
-      "args": [
-        "run",
-        "--rm",
-        "-i",
-        "-v", "/path/to/your/code:/code", 
-        "vzwjustin/omni-cortex:latest"
-      ]
+      "args": ["run", "--rm", "-i", "vzwjustin/omni-cortex:latest"]
     }
   }
 }
