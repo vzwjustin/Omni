@@ -1,12 +1,12 @@
 # Omni-Cortex: AI Thinking Frameworks MCP Server
 
-An MCP (Model Context Protocol) server that provides 34 advanced reasoning frameworks for AI assistants. Built with LangGraph for orchestration and LangChain for memory/RAG capabilities.
+An MCP (Model Context Protocol) server that provides 40 advanced reasoning frameworks for AI assistants. Built with LangGraph for orchestration and LangChain for memory/RAG capabilities.
 
 ## Overview
 
 Omni-Cortex exposes specialized thinking frameworks as MCP tools, allowing AI assistants to apply structured reasoning strategies for different types of tasks. The server itself doesn't call LLMs - it provides prompts and orchestration while the calling AI (Claude, GPT, etc.) does the actual reasoning.
 
-## 🧠 Available Frameworks (34 Total)
+## 🧠 Available Frameworks (40 Total)
 
 ### Strategy (7 frameworks)
 - **ReasonFlux** - Hierarchical planning: Template → Expand → Refine
@@ -33,7 +33,7 @@ Omni-Cortex exposes specialized thinking frameworks as MCP tools, allowing AI as
 - **Reflexion** - Self-evaluation with memory-based learning
 - **Self-Refine** - Iterative self-critique and improvement
 
-### Code (7 frameworks)
+### Code (13 frameworks)
 - **Program of Thoughts** - Generate executable code to solve problems
 - **Chain of Verification** - Draft → Verify → Patch cycle
 - **CRITIC** - Generate then critique with external validation
@@ -41,6 +41,12 @@ Omni-Cortex exposes specialized thinking frameworks as MCP tools, allowing AI as
 - **Self-Debugging** - Mental execution trace before presenting code
 - **TDD Prompting** - Write tests first, then implementation
 - **Reverse Chain-of-Thought** - Work backward from buggy output to source
+- **AlphaCodium** - Test-based multi-stage iterative code generation (competitive programming)
+- **CodeChain** - Chain of self-revisions guided by sub-modules
+- **Evol-Instruct** - Evolutionary instruction complexity with constraints
+- **LLMLOOP** - Automated iterative feedback loops (compilation, tests, mutation)
+- **ProCoder** - Compiler-feedback-guided iterative refinement
+- **RECODE** - Multi-candidate validation with CFG-based debugging
 
 ### Context (6 frameworks)
 - **Chain of Note** - Research and note-taking approach
@@ -73,8 +79,8 @@ Omni-Cortex exposes specialized thinking frameworks as MCP tools, allowing AI as
 ┌───────────────────▼─────────────────────────────────┐
 │           Omni-Cortex MCP Server                     │
 │  ┌────────────────────────────────────────────┐     │
-│  │  49 MCP Tools                               │     │
-│  │  • 34 think_* framework tools               │     │
+│  │  55 MCP Tools                               │     │
+│  │  • 40 think_* framework tools               │     │
 │  │  • 1 reason (smart routing)                 │     │
 │  │  • 14 utility tools (search, memory, etc)   │     │
 │  └────────────────┬───────────────────────────┘     │
@@ -94,7 +100,7 @@ Omni-Cortex exposes specialized thinking frameworks as MCP tools, allowing AI as
 │  └────────────────┬───────────────────────────┘     │
 │                   │                                   │
 │  ┌────────────────▼───────────────────────────┐     │
-│  │  34 Framework Nodes                         │     │
+│  │  40 Framework Nodes                         │     │
 │  │  • Each implements specific strategy         │     │
 │  │  • PRM scoring for search algorithms        │     │
 │  │  • Tool integration where needed            │     │

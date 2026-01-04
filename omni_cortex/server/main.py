@@ -1,7 +1,7 @@
 """
 Omni-Cortex MCP Server
 
-Exposes 20 thinking framework tools + utility tools.
+Exposes 40 thinking framework tools + utility tools.
 The calling LLM uses these tools and does the reasoning.
 LangGraph orchestrates, LangChain handles memory/RAG.
 """
@@ -539,6 +539,154 @@ CONTEXT: {context}
 
 Show all your work step-by-step!"""
     },
+    # Additional coding frameworks (2026 expansion)
+    "alphacodium": {
+        "category": "code",
+        "description": "Test-based multi-stage iterative code generation",
+        "best_for": ["competitive programming", "complex algorithms", "code contests"],
+        "prompt": """Apply AlphaCodium test-based iterative flow:
+
+TASK: {query}
+CONTEXT: {context}
+
+PHASE 1 - PRE-PROCESSING (Natural Language):
+1. PROBLEM_REFLECTION: Understand problem in depth, identify edge cases
+2. PUBLIC_TEST_REASONING: Explain why each example works
+3. GENERATE_POSSIBLE_SOLUTIONS: Brainstorm 2-3 approaches
+4. RANK_SOLUTIONS: Pick best approach based on constraints
+5. GENERATE_AI_TESTS: Create additional test cases
+
+PHASE 2 - CODE_ITERATIONS:
+6. GENERATE_INITIAL_CODE: Modular code in YAML format
+7. ITERATE_ON_PUBLIC_TESTS: Run public tests, fix failures
+8. ITERATE_ON_AI_TESTS: Run AI-generated tests, fix failures
+9. RANK_SOLUTIONS: If multiple candidates, pick best
+
+Return refined, test-verified code."""
+    },
+    "codechain": {
+        "category": "code",
+        "description": "Chain of self-revisions guided by sub-modules",
+        "best_for": ["modular code generation", "incremental refinement", "complex implementations"],
+        "prompt": """Apply CodeChain sub-module-based self-revision:
+
+TASK: {query}
+CONTEXT: {context}
+
+1. DECOMPOSE: Break into sub-modules/functions (identify 3-5 core components)
+2. GENERATE_SUB_MODULES: Implement each sub-module independently
+3. CHAIN_REVISIONS: For each module:
+   - Generate initial version
+   - Compare with representative examples from previous iterations
+   - Self-revise based on patterns learned
+4. INTEGRATE: Combine revised sub-modules
+5. GLOBAL_REVISION: Review and refine the integrated solution"""
+    },
+    "evol_instruct": {
+        "category": "code",
+        "description": "Evolutionary instruction complexity for code",
+        "best_for": ["challenging code problems", "constraint-based coding", "code debugging challenges"],
+        "prompt": """Apply Evol-Instruct evolutionary complexity:
+
+TASK: {query}
+CONTEXT: {context}
+
+EVOLVE the instruction through:
+1. ADD_CONSTRAINTS: Introduce time/space complexity requirements
+2. ADD_DEBUGGING: Inject intentional bugs to identify and fix
+3. INCREASE_REASONING_DEPTH: Add layers of logic and edge cases
+4. CONCRETIZE: Add specific examples and detailed requirements
+5. INCREASE_BREADTH: Consider alternative approaches and trade-offs
+
+Now solve the EVOLVED problem:
+- Implement solution meeting all evolved constraints
+- Debug and verify correctness
+- Optimize for complexity requirements"""
+    },
+    "llmloop": {
+        "category": "code",
+        "description": "Automated iterative feedback loops for code+tests",
+        "best_for": ["code quality assurance", "test generation", "production-ready code"],
+        "prompt": """Apply LLMLOOP automated iterative refinement:
+
+TASK: {query}
+CONTEXT: {context}
+
+LOOP 1 - COMPILATION_ERRORS:
+- Generate initial code
+- Attempt compilation
+- Fix syntax and type errors
+- Repeat until compiles cleanly
+
+LOOP 2 - STATIC_ANALYSIS:
+- Run linter/static analyzer
+- Fix warnings and code smells
+- Apply best practices
+
+LOOP 3 - TEST_FAILURES:
+- Generate comprehensive test cases
+- Run tests, identify failures
+- Fix failing tests iteratively
+
+LOOP 4 - MUTATION_TESTING:
+- Apply mutation analysis to tests
+- Improve test quality and coverage
+- Ensure robustness
+
+LOOP 5 - FINAL_REFINEMENT:
+- Code review checklist
+- Documentation
+- Performance optimization"""
+    },
+    "procoder": {
+        "category": "code",
+        "description": "Compiler-feedback-guided iterative refinement",
+        "best_for": ["project-level code generation", "large codebase integration", "API usage"],
+        "prompt": """Apply ProCoder compiler-guided refinement:
+
+TASK: {query}
+CONTEXT: {context}
+
+1. INITIAL_GENERATION: Generate code based on requirements
+2. COMPILER_FEEDBACK: Attempt compilation/execution
+   - Collect errors and warnings
+   - Extract context from error messages
+3. CONTEXT_ALIGNMENT:
+   - Identify mismatches (undefined variables, wrong APIs, import errors)
+   - Search project for correct patterns and APIs
+   - Extract relevant code snippets from codebase
+4. ITERATIVE_FIXING:
+   - Fix errors using extracted project context
+   - Re-compile and collect new feedback
+   - Repeat until code compiles and runs
+5. INTEGRATION_VERIFY: Ensure code fits project architecture"""
+    },
+    "recode": {
+        "category": "code",
+        "description": "Multi-candidate validation with CFG-based debugging",
+        "best_for": ["reliable code generation", "execution debugging", "high-stakes code"],
+        "prompt": """Apply RECODE multi-candidate cross-validation:
+
+TASK: {query}
+CONTEXT: {context}
+
+1. MULTI_CANDIDATE_GENERATION: Generate 3-5 candidate solutions
+2. SELF_TEST_GENERATION: Create test cases for each candidate
+3. CROSS_VALIDATION:
+   - Run each candidate's tests on ALL candidates
+   - Use majority voting to select most reliable tests
+   - Identify most robust solution candidate
+4. STATIC_PATTERN_EXTRACTION:
+   - Analyze common patterns across passing candidates
+   - Extract best practices
+5. CFG_DEBUGGING (if tests fail):
+   - Build Control Flow Graph
+   - Trace execution path through failing test
+   - Identify exact branching/loop error
+   - Provide fine-grained feedback for fix
+6. ITERATIVE_REFINEMENT: Apply CFG insights, regenerate, re-test
+7. FINAL_SOLUTION: Return cross-validated, debugged code"""
+    },
 }
 
 
@@ -550,7 +698,7 @@ def create_server() -> Server:
     async def list_tools() -> list[Tool]:
         tools = []
 
-        # 20 Framework tools (think_*) - LLM selects based on task
+        # 40 Framework tools (think_*) - LLM selects based on task
         for name, fw in FRAMEWORKS.items():
             # Build vibes from router for better LLM selection
             vibes = router.VIBE_DICTIONARY.get(name, [])[:4]
@@ -588,7 +736,7 @@ def create_server() -> Server:
         # Framework discovery tools
         tools.append(Tool(
             name="list_frameworks",
-            description="List all 20 thinking frameworks by category",
+            description="List all 40 thinking frameworks by category",
             inputSchema={"type": "object", "properties": {}}
         ))
 
@@ -820,7 +968,7 @@ def create_server() -> Server:
 
         # List frameworks
         if name == "list_frameworks":
-            output = "# Omni-Cortex: 20 Thinking Frameworks\n\n"
+            output = "# Omni-Cortex: 40 Thinking Frameworks\n\n"
             for cat in ["strategy", "search", "iterative", "code", "context", "fast"]:
                 output += f"## {cat.upper()}\n"
                 for n, fw in FRAMEWORKS.items():
@@ -975,7 +1123,7 @@ def create_server() -> Server:
             return [TextContent(type="text", text=json.dumps({
                 "status": "healthy",
                 "frameworks": len(FRAMEWORKS),
-                "tools": 20 + 14,  # 20 think_* + 14 utility tools
+                "tools": 40 + 14,  # 40 think_* + 14 utility tools
                 "collections": collections,
                 "memory_enabled": True,
                 "rag_enabled": True
@@ -994,7 +1142,7 @@ async def main():
     logger.info(f"Graph nodes: {len(FRAMEWORK_NODES)} LangGraph nodes")
     logger.info("Memory: LangChain ConversationBufferMemory")
     logger.info("RAG: ChromaDB with 6 collections")
-    logger.info("Tools: 20 think_* + 1 reason + 14 utility = 35 total")
+    logger.info("Tools: 40 think_* + 1 reason + 14 utility = 55 total")
     logger.info("=" * 60)
 
     server = create_server()
