@@ -4,7 +4,16 @@ An MCP (Model Context Protocol) server that provides 40 advanced reasoning frame
 
 ## Overview
 
-Omni-Cortex exposes specialized thinking frameworks as MCP tools, allowing AI assistants to apply structured reasoning strategies for different types of tasks. The server itself doesn't call LLMs - it provides prompts and orchestration while the calling AI (Claude, GPT, etc.) does the actual reasoning.
+Omni-Cortex is a fully orchestrated MCP server that routes AI reasoning through 40 specialized frameworks using LangGraph workflows. Each framework is exposed as an MCP tool, with automatic routing via HyperRouter or explicit selection.
+
+**Key Architecture:**
+- **LangGraph Orchestration**: All execution flows through graph.ainvoke() with state management
+- **Smart Routing**: HyperRouter with vibe dictionary and LLM-based analysis
+- **Memory Persistence**: LangChain integration with conversation history
+- **RAG Integration**: ChromaDB vector store with 6 specialized collections
+- **Checkpointing**: SQLite-based workflow state persistence
+
+The server orchestrates reasoning workflows while the calling AI (Claude, GPT, etc.) performs the actual reasoning within each framework's structured approach.
 
 ## 🧠 Available Frameworks (40 Total)
 
@@ -188,16 +197,28 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
 
 ### Using in Claude/Cursor
 
-Once configured, the tools are available:
+Once configured, the tools are available through the MCP protocol:
 
 ```
-# Let the system auto-select the best framework
+# Auto-select framework via LangGraph routing
 Use the "reason" tool with your query
+→ Creates GraphState
+→ Invokes graph.ainvoke(state)
+→ HyperRouter selects optimal framework
+→ Executes through LangGraph workflow
+→ Returns structured result with confidence
 
 # Or explicitly select a framework
 Use "think_active_inference" for debugging
-Use "think_mcts_rstar" for complex optimization
+Use "think_alphacodium" for competitive programming
+Use "think_llmloop" for production-ready code
 Use "think_chain_of_verification" for security review
+
+# All tools execute through LangGraph orchestration
+→ Full state management
+→ Memory persistence (LangChain)
+→ Checkpointing (SQLite)
+→ Tool integration (code execution, RAG)
 ```
 
 ### Ingesting Documentation for RAG
@@ -221,31 +242,80 @@ omni_cortex/
 │   │   ├── config.py          # Settings and configuration
 │   │   └── router.py          # HyperRouter for framework selection
 │   ├── nodes/
-│   │   ├── strategy/          # Strategic planning frameworks
-│   │   ├── search/            # Tree/graph search frameworks
-│   │   ├── iterative/         # Iterative refinement frameworks
-│   │   ├── code/              # Code-focused frameworks
-│   │   ├── context/           # Context-building frameworks
-│   │   ├── fast/              # Quick response frameworks
-│   │   ├── common.py          # Shared utilities
+│   │   ├── strategy/          # Strategic planning frameworks (7)
+│   │   ├── search/            # Tree/graph search frameworks (4)
+│   │   ├── iterative/         # Iterative refinement frameworks (8)
+│   │   ├── code/              # Code-focused frameworks (13)
+│   │   │   ├── pot.py         # Program of Thoughts
+│   │   │   ├── alphacodium.py # Test-based multi-stage (NEW)
+│   │   │   ├── codechain.py   # Sub-module self-revision (NEW)
+│   │   │   ├── evol_instruct.py # Evolutionary complexity (NEW)
+│   │   │   ├── llmloop.py     # 5-loop refinement (NEW)
+│   │   │   ├── procoder.py    # Compiler-guided (NEW)
+│   │   │   └── recode.py      # Multi-candidate CFG (NEW)
+│   │   ├── context/           # Context-building frameworks (6)
+│   │   ├── fast/              # Quick response frameworks (2)
+│   │   ├── common.py          # Shared utilities (@quiet_star decorator)
 │   │   └── langchain_tools.py # Tool integration
-│   ├── graph.py               # LangGraph workflow definition
-│   ├── state.py               # State management
+│   ├── graph.py               # LangGraph workflow (route→execute nodes)
+│   ├── state.py               # GraphState management
 │   ├── langchain_integration.py  # Memory, RAG, callbacks
 │   ├── collection_manager.py  # Multi-collection vector store
 │   └── schemas.py             # Pydantic models
 ├── server/
-│   └── main.py                # MCP server entry point
+│   └── main.py                # MCP server (wired to graph.ainvoke)
 └── mcp-config-examples/       # Example configurations
 ```
 
 ### Adding a New Framework
 
-1. Create node file in appropriate category: `app/nodes/category/my_framework.py`
-2. Implement the node function with `@quiet_star` decorator
-3. Register in `app/graph.py` FRAMEWORK_NODES dict
-4. Add to FRAMEWORKS dict in `server/main.py`
-5. Update HyperRouter VIBE_DICTIONARY in `app/core/router.py`
+1. **Create node implementation**: `app/nodes/category/my_framework.py`
+   ```python
+   from ...state import GraphState
+   from ..common import quiet_star, add_reasoning_step, format_code_context
+
+   @quiet_star
+   async def my_framework_node(state: GraphState) -> GraphState:
+       # Your framework logic here
+       state["final_answer"] = "..."
+       state["confidence_score"] = 0.85
+       return state
+   ```
+
+2. **Export from category**: Add to `app/nodes/category/__init__.py`
+   ```python
+   from .my_framework import my_framework_node
+   __all__ = [..., "my_framework_node"]
+   ```
+
+3. **Register in graph**: Add to `app/graph.py` FRAMEWORK_NODES dict
+   ```python
+   from .nodes.category import my_framework_node
+   FRAMEWORK_NODES = {
+       "my_framework": my_framework_node,
+   }
+   ```
+
+4. **Add MCP tool definition**: Update `server/main.py` FRAMEWORKS dict
+   ```python
+   FRAMEWORKS = {
+       "my_framework": {
+           "category": "code",
+           "description": "Brief description",
+           "best_for": ["use case 1", "use case 2"],
+           "prompt": """Framework prompt template..."""
+       }
+   }
+   ```
+
+5. **Update router vibes** (optional): Add to `app/core/router.py` VIBE_DICTIONARY
+   ```python
+   VIBE_DICTIONARY = {
+       "my_framework": ["keyword1", "keyword2", "phrase"],
+   }
+   ```
+
+All execution automatically flows through LangGraph - no additional wiring needed!
 
 ## 📊 Collections (RAG)
 
@@ -285,10 +355,15 @@ pytest --cov=app tests/
 
 ## 📝 Example Use Cases
 
-- **Debugging**: "Why is this throwing a null pointer?" → Active Inference
-- **Architecture**: "Design a REST API for user management" → ReasonFlux
-- **Optimization**: "Make this algorithm faster" → Tree of Thoughts
-- **Security**: "Audit this code for vulnerabilities" → Chain of Verification
+All examples execute through full LangGraph orchestration:
+
+- **Debugging**: "Why is this throwing a null pointer?" → Active Inference (hypothesis testing loop)
+- **Architecture**: "Design a REST API for user management" → ReasonFlux (hierarchical planning)
+- **Competitive Programming**: "Solve this LeetCode hard problem" → AlphaCodium (test-based iterative)
+- **Production Code**: "Generate production-ready user auth" → LLMLOOP (5-loop refinement)
+- **Large Codebase Integration**: "Add this feature to existing system" → ProCoder (compiler-guided)
+- **High-Stakes Code**: "Generate critical payment processing logic" → RECODE (multi-candidate validation)
+- **Security**: "Audit this code for vulnerabilities" → Chain of Verification + Red-Teaming
 - **Math**: "Calculate the optimal portfolio allocation" → Program of Thoughts
 - **Research**: "Understand how this codebase works" → Chain of Note
 
