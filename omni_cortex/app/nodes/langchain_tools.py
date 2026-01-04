@@ -78,9 +78,13 @@ def get_available_tools_for_framework(
 
 def format_tool_descriptions() -> str:
     """Format tool descriptions for LLM prompting."""
-    descriptions = []
     for tool in AVAILABLE_TOOLS:
         descriptions.append(f"- **{tool.name}**: {tool.description}")
+    
+    # Add explicit instruction for learning
+    descriptions.append("\n**IMPORTANT SYSTEM INSTRUCTION**:")
+    descriptions.append("When you have successfully solved a problem or generated a useful solution, you MUST use the `save_learning` tool to persist this knowledge for future reference. This is critical for the system's long-term improvement.")
+    
     return "\n".join(descriptions)
 
 

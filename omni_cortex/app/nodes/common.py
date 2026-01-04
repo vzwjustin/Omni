@@ -495,6 +495,17 @@ def format_code_context(
         rag_formatted = state.get("working_memory", {}).get("rag_context_formatted", "")
         if rag_formatted:
             parts.append(rag_formatted)
+            
+        # Include Past Learnings (Episodic Memory)
+        episodic_memory = state.get("episodic_memory", [])
+        if episodic_memory:
+            learnings_text = "## 🧠 Past Learnings (Similar Issues Solved Before):\n"
+            for i, memory in enumerate(episodic_memory, 1):
+                # Ensure memory is a dict (robustness)
+                if isinstance(memory, dict):
+                    learnings_text += f"\n{i}. **{memory.get('framework', 'Unknown Framework')}**: {memory.get('problem', 'No problem description')}\n"
+                    learnings_text += f"   Solution: {memory.get('solution', 'No solution provided')[:300]}...\n"
+            parts.append(learnings_text)
 
     if code_snippet:
         parts.append(f"CODE:\n```\n{code_snippet}\n```")

@@ -150,6 +150,51 @@ async def execute_code(code: str, language: str = "python") -> dict:
 
 
 @tool
+async def save_learning(
+    query: str,
+    answer: str,
+    framework: str,
+    success_rating: float = 1.0,
+    problem_type: str = "general"
+) -> str:
+    """
+    Save a successful solution to the learnings database for future reference.
+    
+    Args:
+        query: The original problem/question that was solved
+        answer: The successful solution/answer
+        framework: Which reasoning framework was used (e.g., 'active_inference')
+        success_rating: Quality rating from 0.0 to 1.0 (default: 1.0)
+        problem_type: Category like 'debugging', 'optimization', 'refactoring', etc.
+    
+    Returns:
+        Confirmation message
+    """
+    from .collection_manager import get_collection_manager
+    
+    logger.info(
+        "tool_called",
+        tool="save_learning",
+        framework=framework,
+        problem_type=problem_type
+    )
+    
+    manager = get_collection_manager()
+    success = manager.add_learning(
+        query=query,
+        answer=answer,
+        framework_used=framework,
+        success_rating=success_rating,
+        problem_type=problem_type
+    )
+    
+    if success:
+        return f"✅ Learning saved! Future queries will benefit from this {framework} solution."
+    else:
+        return "⚠️ Failed to save learning. Check logs for details."
+
+
+@tool
 async def retrieve_context(query: str, thread_id: Optional[str] = None) -> str:
     """Retrieve recent chat and framework history as lightweight context.
 

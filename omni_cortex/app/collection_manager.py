@@ -26,7 +26,8 @@ class CollectionManager:
         "configs": "Configuration files and environment settings",
         "utilities": "Utility functions and helpers",
         "tests": "Test files and fixtures",
-        "integrations": "LangChain/LangGraph integration code"
+        "integrations": "LangChain/LangGraph integration code",
+        "learnings": "Successful solutions and past problem resolutions"
     }
     
     def __init__(self, persist_dir: Optional[str] = None):
@@ -200,6 +201,110 @@ class CollectionManager:
             return "integrations"
         else:
             return "utilities"
+    
+    def add_learning(
+        self,
+        query: str,
+        answer: str,
+        framework_used: str,
+        success_rating: float = 1.0,
+        problem_type: str = "general"
+    ) -> bool:
+        """
+        Store a successful solution in the learnings collection.
+        
+        Args:
+            query: The original problem/question
+            answer: The successful solution
+            framework_used: Which framework was used
+            success_rating: 0.0-1.0 quality rating
+            problem_type: Category like 'debugging', 'optimization', etc.
+        """
+        from datetime import datetime
+        
+        collection = self.get_collection("learnings")
+        if not collection:
+            return False
+        
+        try:
+            # Combine query and answer for better semantic search
+            combined_text = f"Problem: {query}\n\nSolution ({framework_used}): {answer}"
+            
+            metadata = {
+                "query": query,
+                "framework_used": framework_used,
+                "success_rating": success_rating,
+                "problem_type": problem_type,
+                "timestamp": datetime.utcnow().isoformat()
+            }
+            
+            collection.add_texts(
+                texts=[combined_text],
+                metadatas=[metadata]
+            )
+            
+            logger.info(
+                "learning_saved",
+                framework=framework_used,
+                problem_type=problem_type,
+                rating=success_rating
+            )
+            return True
+        except Exception as e:
+            logger.error("learning_save_failed", error=str(e))
+            return False
+    
+    def search_learnings(
+        self,
+        query: str,
+        k: int = 3,
+        min_rating: float = 0.5
+    ) -> List[Dict[str, Any]]:
+        """
+        Search for similar past solutions.
+        
+        Args:
+            query: Current problem to match against
+            k: Number of results to return
+            min_rating: Minimum success rating filter
+        
+        Returns:
+            List of learning dicts with 'problem', 'solution', 'framework', 'rating'
+        """
+        collection = self.get_collection("learnings")
+        if not collection:
+            return []
+        
+        try:
+            # Search for similar problems
+            results = collection.similarity_search(
+                query,
+                k=k * 2  # Get more, then filter by rating
+            )
+            
+            learnings = []
+            for doc in results:
+                metadata = doc.metadata or {}
+                rating = metadata.get("success_rating", 0.0)
+                
+                if rating >= min_rating:
+                    # Extract query and answer from metadata
+                    learnings.append({
+                        "problem": metadata.get("query", ""),
+                        "solution": doc.page_content.split("Solution")[-1].strip() if "Solution" in doc.page_content else "",
+                        "framework": metadata.get("framework_used", ""),
+                        "rating": rating,
+                        "problem_type": metadata.get("problem_type", "general")
+                    })
+                
+                if len(learnings) >= k:
+                    break
+            
+            logger.debug("learnings_retrieved", count=len(learnings))
+            return learnings
+        except Exception as e:
+            logger.error("learning_search_failed", error=str(e))
+            return []
     
     @staticmethod
     def _deduplicate_results(results: List[Document]) -> List[Document]:
