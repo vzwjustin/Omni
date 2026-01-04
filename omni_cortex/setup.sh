@@ -121,16 +121,20 @@ print(f'Frameworks loaded: {len(FRAMEWORK_NODES)}')
 print('Setup successful!')
 "
 
+# Start the server
+echo ""
+echo "Starting server..."
+docker-compose up -d
+
 echo ""
 echo "=============================================="
-echo "  Setup Complete!"
+echo "  Setup Complete! Server is running."
 echo "=============================================="
 echo ""
-echo "To start the server:"
-echo "  docker-compose up -d"
+echo "Omni-Cortex is now available in your IDE."
 echo ""
-echo "To view logs:"
-echo "  docker-compose logs -f"
-echo ""
-echo "The MCP server will be available to Claude Code automatically."
+echo "Commands:"
+echo "  docker-compose logs -f    # View logs"
+echo "  docker-compose down       # Stop server"
+echo "  docker-compose up -d      # Start server"
 echo ""
