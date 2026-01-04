@@ -108,7 +108,10 @@ class HyperRouter:
             "intermittent bug", "heisenbug", "works on my machine",
             "production bug", "regression", "stopped working",
             "used to work", "suddenly broke", "after update",
-            "null pointer", "undefined", "NaN", "empty result"
+            "null pointer", "undefined", "NaN", "empty result",
+            "segfault", "memory corruption", "race condition",
+            "deadlock", "timeout", "connection refused", "500 error",
+            "stack overflow", "infinite loop", "recursion error"
         ],
 
         # Refactoring vibes - structured cleanup
@@ -120,7 +123,9 @@ class HyperRouter:
             "readable", "DRY this up", "extract method", "decompose",
             "too complex", "cyclomatic complexity", "nested hell",
             "callback hell", "pyramid of doom", "deeply nested",
-            "hard to follow", "confusing code", "wtf per minute"
+            "hard to follow", "confusing code", "wtf per minute",
+            "kill it with fire", "rewrite this junk", "modernize",
+            "from class to functional", "hooks refactor", "migration"
         ],
 
         # Architecture vibes - system design
@@ -132,7 +137,9 @@ class HyperRouter:
             "design patterns", "SOLID", "clean architecture", "hexagonal",
             "domain driven", "DDD", "event driven", "CQRS", "event sourcing",
             "API design", "schema design", "data model", "ERD",
-            "infrastructure", "deployment", "CI/CD pipeline"
+            "infrastructure", "deployment", "CI/CD pipeline",
+            "aws architecture", "cloud native", "serverless", "kubernetes",
+            "folder structure", "project layout", "directory structure"
         ],
 
         # Algorithm/optimization vibes
@@ -144,7 +151,8 @@ class HyperRouter:
             "CPU intensive", "optimize query", "slow query", "N+1",
             "caching", "memoization", "lazy loading", "pagination",
             "batch processing", "async", "parallel", "concurrent",
-            "profiling", "benchmark", "perf issues", "latency"
+            "profiling", "benchmark", "perf issues", "latency",
+            "indexing", "database tuning", "load time", "render performance"
         ],
 
         # Fast generation vibes - scaffolding
@@ -154,7 +162,8 @@ class HyperRouter:
             "rough draft", "get me started", "wireframe", "prototype",
             "MVP", "proof of concept", "POC", "quick prototype",
             "bare bones", "minimal version", "starting point",
-            "init project", "create new", "bootstrap", "setup"
+            "init project", "create new", "bootstrap", "setup",
+            "hello world", "base plate", "cookie cutter"
         ],
 
         # API/library vibes - external integration
@@ -165,7 +174,8 @@ class HyperRouter:
             "pip install", "import", "dependency", "module",
             "REST API", "GraphQL", "webhook", "OAuth", "JWT",
             "external service", "integration", "connect to",
-            "API call", "fetch", "axios", "requests"
+            "API call", "fetch", "axios", "requests",
+            "read the docs", "documentation says", "api reference"
         ],
 
         # Security/verification vibes
@@ -176,7 +186,8 @@ class HyperRouter:
             "verify", "confirm", "make sure", "correct?",
             "looks right?", "review my code", "spot check",
             "find issues", "catch bugs", "QA", "quality check",
-            "before merging", "PR review", "pull request"
+            "before merging", "PR review", "pull request",
+            "lgtm", "nitpick", "blocker", "critical issue"
         ],
 
         # Math/compute vibes - calculations
@@ -186,7 +197,8 @@ class HyperRouter:
             "formula", "equation", "statistics", "aggregate",
             "sum", "average", "median", "percentile", "distribution",
             "pandas", "numpy", "dataframe", "CSV", "JSON transform",
-            "ETL", "data pipeline", "data munging", "wrangling"
+            "ETL", "data pipeline", "data munging", "wrangling",
+            "fibonacci", "factorial", "prime numbers", "matrix multiplication"
         ],
 
         # Creative/novel vibes - unique problems
@@ -197,7 +209,8 @@ class HyperRouter:
             "bizarre", "strange bug", "unusual", "one-off",
             "special case", "corner case", "rare scenario",
             "no documentation", "undocumented", "black box",
-            "reverse engineering", "figure it out", "puzzling"
+            "reverse engineering", "figure it out", "puzzling",
+            "magic", "voodoo", "haunted code", "ghost in the machine"
         ],
 
         # Deep search vibes - complex exploration
@@ -208,7 +221,8 @@ class HyperRouter:
             "exhaustive", "all possibilities", "brute force",
             "search space", "combinatorial", "permutations",
             "game tree", "decision tree", "branch and bound",
-            "stuck for days", "impossible bug", "nightmare"
+            "stuck for days", "impossible bug", "nightmare",
+            "burning out", "hitting a wall", "desperate"
         ],
 
         # Decision vibes - weighing options
@@ -219,7 +233,8 @@ class HyperRouter:
             "React or Vue", "SQL or NoSQL", "REST or GraphQL",
             "which framework", "which library", "which database",
             "monorepo or multirepo", "serverless or containers",
-            "build vs buy", "roll own or use existing", "opinions"
+            "build vs buy", "roll own or use existing", "opinions",
+            "debate", "argument", "settle this", "tie breaker"
         ],
 
         # Big change vibes - major overhaul
@@ -229,7 +244,8 @@ class HyperRouter:
             "modernize", "upgrade everything", "v2", "next version",
             "breaking changes", "deprecate", "sunset", "EOL",
             "migration path", "upgrade path", "replatform",
-            "technical transformation", "rebuild", "redo everything"
+            "technical transformation", "rebuild", "redo everything",
+            "strangler fig", "rip and replace", "lift and shift"
         ],
 
         # Pattern vibes - known solutions
@@ -239,7 +255,8 @@ class HyperRouter:
             "CRUD", "login flow", "auth", "pagination",
             "search filter", "form validation", "file upload",
             "email sending", "notifications", "logging",
-            "error handling", "retry logic", "rate limiting"
+            "error handling", "retry logic", "rate limiting",
+            "design pattern", "singleton", "factory", "observer"
         ],
 
         # Long context vibes - multi-file awareness
@@ -249,7 +266,8 @@ class HyperRouter:
             "monorepo", "large codebase", "enterprise", "legacy system",
             "multiple services", "cross-cutting", "shared code",
             "dependencies between", "imports from", "circular dependency",
-            "file structure", "project organization", "modules"
+            "file structure", "project organization", "modules",
+            "global search", "find usages", "where is this defined"
         ],
 
         # Research vibes - understanding code
@@ -259,7 +277,8 @@ class HyperRouter:
             "reverse engineer", "how does it work", "explain like",
             "ELI5", "walk through", "code walkthrough",
             "documentation", "comments", "README", "wiki",
-            "onboarding", "new to codebase", "ramping up"
+            "onboarding", "new to codebase", "ramping up",
+            "summary", "tldr", "synopsis", "notes"
         ],
 
         # Abstraction vibes - first principles
@@ -269,7 +288,8 @@ class HyperRouter:
             "CS fundamentals", "data structures", "algorithms",
             "design principles", "patterns", "anti-patterns",
             "why does this work", "how does this work", "under the hood",
-            "internals", "implementation details", "deep dive"
+            "internals", "implementation details", "deep dive",
+            "zoom out", "high level view", "conceptual"
         ],
 
         # Analogy vibes - similar solutions
@@ -278,7 +298,8 @@ class HyperRouter:
             "same as", "analogous", "comparable to", "like in",
             "inspired by", "borrowed from", "adapted from",
             "seen this before", "familiar pattern", "like that other",
-            "copy from", "based on", "reference implementation"
+            "copy from", "based on", "reference implementation",
+            "metaphor", "example", "instance"
         ],
 
         # Adaptive vibes - flexible approach
@@ -287,7 +308,8 @@ class HyperRouter:
             "adapt", "flex", "go with the flow", "surprise me",
             "your call", "you decide", "best judgment",
             "improvise", "wing it", "play it by ear",
-            "dynamic approach", "flexible solution"
+            "dynamic approach", "flexible solution",
+            "smart select", "auto mode", "magic mode"
         ],
 
         # Requirements vibes - spec driven
@@ -297,7 +319,8 @@ class HyperRouter:
             "user story", "ticket", "JIRA", "specification",
             "functional requirements", "non-functional", "NFR",
             "SLA", "compliance", "regulatory", "legal requirements",
-            "business rules", "validation rules", "invariants"
+            "business rules", "validation rules", "invariants",
+            "as a user", "given when then", "checklist"
         ],
 
         # Quick vibes - simple tasks
@@ -307,7 +330,8 @@ class HyperRouter:
             "fast answer", "real quick", "simple", "straightforward",
             "basic", "elementary", "beginner", "101",
             "quick fix", "hotfix", "patch", "typo",
-            "rename", "move", "delete", "add comment"
+            "rename", "move", "delete", "add comment",
+            "format code", "indentation", "whitespace"
         ],
 
         # Code decomposition vibes
@@ -317,7 +341,8 @@ class HyperRouter:
             "break into code", "code decomposition", "step through",
             "trace execution", "follow the code", "code flow",
             "control flow", "data flow", "call stack",
-            "breakpoints", "debugger", "line by line"
+            "breakpoints", "debugger", "line by line",
+            "inspect", "variable state", "heap", "stack"
         ],
 
         # Pre-validation vibes
@@ -327,7 +352,8 @@ class HyperRouter:
             "off by one", "edge case check", "dry run",
             "desk check", "code review myself", "self review",
             "before committing", "sanity test", "smoke test",
-            "manual testing", "walkthrough", "trace"
+            "manual testing", "walkthrough", "trace",
+            "pre-flight", "double check logic"
         ],
 
         # TDD vibes
@@ -337,7 +363,8 @@ class HyperRouter:
             "red green refactor", "tests then code", "jest",
             "pytest", "mocha", "junit", "testing framework",
             "mock", "stub", "spy", "fixture",
-            "assertion", "expect", "should", "test case"
+            "assertion", "expect", "should", "test case",
+            "integration test", "e2e test", "selenium", "cypress", "playwright"
         ],
 
         # Reverse debugging vibes
@@ -347,7 +374,8 @@ class HyperRouter:
             "backwards debugging", "work backward", "reverse engineer bug",
             "expected X got Y", "off by", "incorrect result",
             "wrong answer", "bad output", "unexpected result",
-            "diff", "mismatch", "discrepancy"
+            "diff", "mismatch", "discrepancy",
+            "log analysis", "traceback analysis"
         ],
 
         # Socratic vibes
@@ -356,7 +384,8 @@ class HyperRouter:
             "guide me", "help me think", "rubber duck",
             "Socratic method", "lead me to answer", "questioning approach",
             "talk it through", "think aloud", "verbalize",
-            "explain my thinking", "work through it", "reasoning"
+            "explain my thinking", "work through it", "reasoning",
+            "pair program", "code buddy", "sounding board"
         ],
 
         # Tool use vibes
@@ -365,7 +394,8 @@ class HyperRouter:
             "tool use", "step and observe", "interact with",
             "reasoning acting", "ReAct pattern", "observe results",
             "API calls", "external tools", "shell commands",
-            "file operations", "database queries", "web requests"
+            "file operations", "database queries", "web requests",
+            "scrape", "curl", "wget", "grep", "find"
         ],
 
         # Learning vibes
@@ -374,7 +404,8 @@ class HyperRouter:
             "try again", "reflect on", "what went wrong",
             "iterative learning", "self-evaluation", "memory-based",
             "previous attempt", "last time", "improve on",
-            "lessons learned", "retrospective", "post-mortem"
+            "lessons learned", "retrospective", "post-mortem",
+            "root cause analysis", "RCA", "incident report"
         ],
 
         # Quality vibes
@@ -383,7 +414,8 @@ class HyperRouter:
             "make it better", "iterative improvement", "critique and improve",
             "self-critique", "refinement loop", "quality pass",
             "clean up", "tighten up", "optimize",
-            "beautify", "format", "lint", "prettier"
+            "beautify", "format", "lint", "prettier",
+            "black", "isort", "ruff", "flake8", "pylint"
         ],
 
         # Bottom-up vibes
@@ -392,7 +424,8 @@ class HyperRouter:
             "layered", "base functions first", "decompose completely",
             "building blocks", "hierarchical build", "least dependent first",
             "utils first", "helpers", "primitives",
-            "foundation", "core functions", "base layer"
+            "foundation", "core functions", "base layer",
+            "component library", "atoms", "molecules", "organisms"
         ],
 
         # Comparison vibes
@@ -401,7 +434,8 @@ class HyperRouter:
             "multiple solutions", "which is faster", "optimize for",
             "different versions", "performance vs memory", "three approaches",
             "show me options", "alternatives", "variations",
-            "different ways", "multiple implementations", "compare"
+            "different ways", "multiple implementations", "compare",
+            "benchmark results", "A/B test", "matrix"
         ],
 
         # Planning vibes
@@ -410,7 +444,8 @@ class HyperRouter:
             "strategy", "outline approach", "plan then execute",
             "methodical", "step by step plan", "planning phase",
             "roadmap", "game plan", "action plan",
-            "checklist", "todo list", "phases", "milestones"
+            "checklist", "todo list", "phases", "milestones",
+            "technical spec", "design document", "RFC"
         ],
 
         # Security audit vibes
@@ -420,7 +455,8 @@ class HyperRouter:
             "OWASP", "SQLi", "XSS", "security threats", "hack this",
             "injection", "CSRF", "SSRF", "RCE",
             "privilege escalation", "authentication bypass",
-            "broken access control", "sensitive data exposure"
+            "broken access control", "sensitive data exposure",
+            "data breach", "leak", "encryption", "hashing", "salt"
         ],
 
         # State management vibes
@@ -430,7 +466,8 @@ class HyperRouter:
             "game states", "state management", "transitions",
             "Redux", "Zustand", "MobX", "Vuex",
             "finite automata", "statechart", "xstate",
-            "loading states", "error states", "success states"
+            "loading states", "error states", "success states",
+            "hydration", "client state", "server state"
         ],
 
         # Basic reasoning vibes
@@ -439,7 +476,8 @@ class HyperRouter:
             "logical steps", "step by step", "reasoning chain",
             "think carefully", "show your work", "explicit reasoning",
             "break it down", "one step at a time", "systematically",
-            "logically", "methodically", "carefully"
+            "logically", "methodically", "carefully",
+            "first", "then", "finally", "consequently"
         ],
 
         # Competitive programming vibes
@@ -449,7 +487,8 @@ class HyperRouter:
             "code generation", "contest problem", "leetcode",
             "hackerrank", "codeforces", "topcoder", "advent of code",
             "interview question", "coding interview", "whiteboard",
-            "DSA", "data structures and algorithms"
+            "DSA", "data structures and algorithms",
+            "dynamic programming", "graph theory", "greedy algorithm"
         ],
 
         # Modular vibes
@@ -458,7 +497,8 @@ class HyperRouter:
             "incremental", "chain revisions", "module by module",
             "component based", "build incrementally", "refine modules",
             "microservices", "packages", "libraries",
-            "separation of concerns", "single responsibility"
+            "separation of concerns", "single responsibility",
+            "interface segregation", "dependency injection"
         ],
 
         # Evolutionary vibes
@@ -467,7 +507,8 @@ class HyperRouter:
             "challenging problem", "constraint-based", "evolutionary",
             "harder version", "more constraints", "complex requirements",
             "additional requirements", "scope creep", "feature creep",
-            "extend", "enhance", "augment", "expand"
+            "extend", "enhance", "augment", "expand",
+            "version 2", "next iteration", "advanced features"
         ],
 
         # Iteration vibes
@@ -476,7 +517,8 @@ class HyperRouter:
             "test loop", "automated testing", "quality assurance",
             "production ready", "lint and fix", "keep iterating",
             "CI/CD", "build pipeline", "automated checks",
-            "pre-commit hooks", "continuous improvement"
+            "pre-commit hooks", "continuous improvement",
+            "nightly build", "regression testing"
         ],
 
         # Project integration vibes
@@ -485,7 +527,8 @@ class HyperRouter:
             "API usage", "large project", "integrate with",
             "project context", "compiler errors", "fix imports",
             "type errors", "typescript", "mypy", "pylint",
-            "ESLint errors", "build errors", "dependency issues"
+            "ESLint errors", "build errors", "dependency issues",
+            "linker error", "module not found", "circular import"
         ],
 
         # High-stakes vibes
@@ -495,7 +538,8 @@ class HyperRouter:
             "validate candidates", "majority voting", "robust solution",
             "mission critical", "production critical", "can't fail",
             "financial", "healthcare", "safety critical",
-            "consensus", "redundancy", "fault tolerant"
+            "consensus", "redundancy", "fault tolerant",
+            "zero downtime", "utility class", "nuclear"
         ]
     }
     
