@@ -11,25 +11,51 @@ mkdir -p /app/data/checkpoints
 
 # Function to detect if there's a codebase to index
 detect_codebase() {
-    # Check for Python files in common locations
+    echo "  Scanning for codebases..."
+    
+    # Check for different language files
     local py_count=$(find /app -name "*.py" -type f 2>/dev/null | wc -l | tr -d ' ')
+    local js_count=$(find /app -name "*.js" -o -name "*.jsx" -type f 2>/dev/null | wc -l | tr -d ' ')
+    local ts_count=$(find /app -name "*.ts" -o -name "*.tsx" -type f 2>/dev/null | wc -l | tr -d ' ')
+    local go_count=$(find /app -name "*.go" -type f 2>/dev/null | wc -l | tr -d ' ')
+    local rust_count=$(find /app -name "*.rs" -type f 2>/dev/null | wc -l | tr -d ' ')
+    local java_count=$(find /app -name "*.java" -type f 2>/dev/null | wc -l | tr -d ' ')
+    local cpp_count=$(find /app -name "*.cpp" -o -name "*.cc" -o -name "*.cxx" -type f 2>/dev/null | wc -l | tr -d ' ')
+    local c_count=$(find /app -name "*.c" -o -name "*.h" -type f 2>/dev/null | wc -l | tr -d ' ')
+    local ruby_count=$(find /app -name "*.rb" -type f 2>/dev/null | wc -l | tr -d ' ')
+    local php_count=$(find /app -name "*.php" -type f 2>/dev/null | wc -l | tr -d ' ')
     
-    # Check for framework indicators
-    local has_requirements=$([ -f "/app/requirements.txt" ] && echo "yes" || echo "no")
-    local has_setup=$([ -f "/app/setup.py" ] || [ -f "/app/pyproject.toml" ] && echo "yes" || echo "no")
+    # Check for framework/project indicators
+    local has_python=$([ -f "/app/requirements.txt" ] || [ -f "/app/setup.py" ] || [ -f "/app/pyproject.toml" ] && echo "✓" || echo "✗")
+    local has_node=$([ -f "/app/package.json" ] && echo "✓" || echo "✗")
+    local has_go=$([ -f "/app/go.mod" ] && echo "✓" || echo "✗")
+    local has_rust=$([ -f "/app/Cargo.toml" ] && echo "✓" || echo "✗")
+    local has_java=$([ -f "/app/pom.xml" ] || [ -f "/app/build.gradle" ] && echo "✓" || echo "✗")
+    local has_ruby=$([ -f "/app/Gemfile" ] && echo "✓" || echo "✗")
+    local has_php=$([ -f "/app/composer.json" ] && echo "✓" || echo "✗")
     
-    # Check for external mounted code (common patterns)
-    local has_app_dir=$([ -d "/app/app" ] && echo "yes" || echo "no")
-    local has_src_dir=$([ -d "/app/src" ] && echo "yes" || echo "no")
-    local has_lib_dir=$([ -d "/app/lib" ] && echo "yes" || echo "no")
+    # Display findings
+    echo ""
+    echo "  Language Files Detected:"
+    [ "$py_count" -gt 0 ] && echo "    Python:     $py_count files $has_python"
+    [ "$js_count" -gt 0 ] && echo "    JavaScript: $js_count files"
+    [ "$ts_count" -gt 0 ] && echo "    TypeScript: $ts_count files $has_node"
+    [ "$go_count" -gt 0 ] && echo "    Go:         $go_count files $has_go"
+    [ "$rust_count" -gt 0 ] && echo "    Rust:       $rust_count files $has_rust"
+    [ "$java_count" -gt 0 ] && echo "    Java:       $java_count files $has_java"
+    [ "$cpp_count" -gt 0 ] && echo "    C++:        $cpp_count files"
+    [ "$c_count" -gt 0 ] && echo "    C:          $c_count files"
+    [ "$ruby_count" -gt 0 ] && echo "    Ruby:       $ruby_count files $has_ruby"
+    [ "$php_count" -gt 0 ] && echo "    PHP:        $php_count files $has_php"
     
-    echo "  Python files: $py_count"
-    echo "  requirements.txt: $has_requirements"
-    echo "  Project config: $has_setup"
-    echo "  Code directories: app=$has_app_dir, src=$has_src_dir, lib=$has_lib_dir"
+    # Calculate total significant files
+    local total_files=$((py_count + js_count + ts_count + go_count + rust_count + java_count + cpp_count + c_count + ruby_count + php_count))
     
-    # Consider it a codebase if we have Python files
-    if [ "$py_count" -gt 10 ]; then
+    echo ""
+    echo "  Total code files: $total_files"
+    
+    # Consider it a codebase if we have 10+ files in any supported language
+    if [ "$total_files" -gt 10 ]; then
         return 0  # true - codebase detected
     else
         return 1  # false - no significant codebase
@@ -62,7 +88,8 @@ if detect_codebase; then
     fi
 else
     echo "✗ No significant codebase detected"
-    echo "  (Need 10+ Python files for auto-ingestion)"
+    echo "  (Need 10+ code files for auto-ingestion)"
+    echo "  Supported: Python, JavaScript/TypeScript, Go, Rust, Java, C/C++, Ruby, PHP"
     if [ "$EMBEDDING_COUNT" -gt 0 ]; then
         echo "  Using existing $EMBEDDING_COUNT embeddings"
     fi
