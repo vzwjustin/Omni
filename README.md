@@ -1,12 +1,12 @@
 # Omni-Cortex: AI Thinking Frameworks MCP Server
 
-An MCP (Model Context Protocol) server that provides 35 advanced reasoning frameworks for AI assistants. Built with LangGraph for orchestration and LangChain for memory/RAG capabilities.
+An MCP (Model Context Protocol) server that provides 34 advanced reasoning frameworks for AI assistants. Built with LangGraph for orchestration and LangChain for memory/RAG capabilities.
 
 ## Overview
 
 Omni-Cortex exposes specialized thinking frameworks as MCP tools, allowing AI assistants to apply structured reasoning strategies for different types of tasks. The server itself doesn't call LLMs - it provides prompts and orchestration while the calling AI (Claude, GPT, etc.) does the actual reasoning.
 
-## 🧠 Available Frameworks (35 Total)
+## 🧠 Available Frameworks (34 Total)
 
 ### Strategy (7 frameworks)
 - **ReasonFlux** - Hierarchical planning: Template → Expand → Refine
@@ -73,8 +73,8 @@ Omni-Cortex exposes specialized thinking frameworks as MCP tools, allowing AI as
 ┌───────────────────▼─────────────────────────────────┐
 │           Omni-Cortex MCP Server                     │
 │  ┌────────────────────────────────────────────┐     │
-│  │  50 MCP Tools                               │     │
-│  │  • 35 think_* framework tools               │     │
+│  │  49 MCP Tools                               │     │
+│  │  • 34 think_* framework tools               │     │
 │  │  • 1 reason (smart routing)                 │     │
 │  │  • 14 utility tools (search, memory, etc)   │     │
 │  └────────────────┬───────────────────────────┘     │
@@ -94,7 +94,7 @@ Omni-Cortex exposes specialized thinking frameworks as MCP tools, allowing AI as
 │  └────────────────┬───────────────────────────┘     │
 │                   │                                   │
 │  ┌────────────────▼───────────────────────────┐     │
-│  │  35 Framework Nodes                         │     │
+│  │  34 Framework Nodes                         │     │
 │  │  • Each implements specific strategy         │     │
 │  │  • PRM scoring for search algorithms        │     │
 │  │  • Tool integration where needed            │     │
