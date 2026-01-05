@@ -97,9 +97,16 @@ class HyperRouter:
         "algorithm": [r"algorithm", r"optimize", r"complexity", r"performance", r"efficient", r"sort", r"search"],
         "docs": [r"document", r"boilerplate", r"template", r"scaffold", r"generate"],
         "api": [r"api", r"endpoint", r"rest", r"integration", r"library"],
-        "security": [r"security", r"vulnerab", r"injection", r"xss", r"auth"],
-        "test": [r"test", r"unit", r"coverage", r"mock"],
-        "math": [r"calculate", r"compute", r"math", r"formula"]
+        "security": [r"security", r"vulnerab", r"injection", r"xss", r"auth", r"owasp", r"pen.?test"],
+        "test": [r"test", r"unit", r"coverage", r"mock", r"tdd", r"pytest", r"jest"],
+        "math": [r"calculate", r"compute", r"math", r"formula"],
+        # New categories for 60 framework support
+        "verification": [r"verify", r"validate", r"check", r"confirm", r"prove", r"evidence", r"hallucin"],
+        "agent": [r"agent", r"multi.?step", r"tool.?use", r"automat", r"workflow", r"ci.?cd", r"pipeline"],
+        "rag": [r"retriev", r"rag", r"search.*doc", r"vector", r"embed", r"knowledge.?base", r"corpus"],
+        "competitive": [r"leetcode", r"hackerrank", r"codeforce", r"contest", r"competitive", r"interview"],
+        "research": [r"understand", r"explain", r"learn", r"research", r"onboard", r"document"],
+        "planning": [r"plan", r"roadmap", r"strategy", r"methodic", r"step.?by.?step"]
     }
     
     HEURISTIC_MAP = {
@@ -110,8 +117,15 @@ class HyperRouter:
         "docs": "skeleton_of_thought",
         "api": "critic",
         "security": "chain_of_verification",
-        "test": "program_of_thoughts",
+        "test": "tdd_prompting",
         "math": "program_of_thoughts",
+        # New categories for 60 framework support
+        "verification": "verify_and_edit",
+        "agent": "swe_agent",
+        "rag": "self_rag",
+        "competitive": "alphacodium",
+        "research": "chain_of_note",
+        "planning": "plan_and_solve",
         "unknown": "self_discover"
     }
     
@@ -833,24 +847,50 @@ class HyperRouter:
 
     def _check_vibe_dictionary(self, query: str) -> Optional[str]:
         """
-        Quick check against vibe dictionary.
+        Quick check against vibe dictionary with weighted scoring.
+
+        Scoring rules:
+        - Longer phrase matches score higher (phrase length * 2)
+        - Multiple matches accumulate
+        - Multi-word phrases get bonus weight
+
         Returns framework name if strong match found.
         """
         query_lower = query.lower()
-        
-        # Score each framework by vibe matches
+
+        # Score each framework by vibe matches with weighted scoring
         scores = {}
         for framework, vibes in self.VIBE_DICTIONARY.items():
-            score = sum(1 for vibe in vibes if vibe in query_lower)
-            if score > 0:
-                scores[framework] = score
-        
-        # Return if we have a clear winner (score >= 2 or single match)
+            total_score = 0.0
+            matched_vibes = []
+
+            for vibe in vibes:
+                if vibe in query_lower:
+                    # Weight by phrase length - longer phrases are more specific
+                    word_count = len(vibe.split())
+                    # Multi-word phrases get bonus (2x for 2 words, 3x for 3+ words)
+                    weight = word_count if word_count >= 2 else 0.5
+                    total_score += weight
+                    matched_vibes.append(vibe)
+
+            if total_score > 0:
+                scores[framework] = total_score
+
+        # Return if we have a clear winner
         if scores:
             best = max(scores, key=scores.get)
-            if scores[best] >= 2 or (len(scores) == 1 and scores[best] >= 1):
+            second_best_score = 0
+            if len(scores) > 1:
+                second_best_score = sorted(scores.values(), reverse=True)[1]
+
+            # Require:
+            # - Score >= 2 (at least one 2-word match or two 1-word matches), OR
+            # - Clear leader (50% more than second place), OR
+            # - Single match with score >= 1
+            score_margin = scores[best] / (second_best_score + 0.001)
+            if scores[best] >= 2 or score_margin >= 1.5 or (len(scores) == 1 and scores[best] >= 0.5):
                 return best
-        
+
         return None
     
     def _heuristic_select(self, query: str, code_snippet: Optional[str] = None) -> str:
@@ -959,6 +999,7 @@ class HyperRouter:
     def _infer_task_type(self, framework: str) -> str:
         """Infer task type from chosen framework."""
         type_map = {
+            # Original 20 frameworks
             "active_inference": "debug",
             "mcts_rstar": "debug",
             "graph_of_thoughts": "refactor",
@@ -978,7 +1019,52 @@ class HyperRouter:
             "analogical": "creative",
             "adaptive_injection": "adaptive",
             "re2": "requirements",
-            "system1": "quick"
+            "system1": "quick",
+            # 2026 Edition frameworks
+            "chain_of_code": "debug",
+            "self_debugging": "debug",
+            "reverse_cot": "debug",
+            "tdd_prompting": "test",
+            "rubber_duck": "debug",
+            "react": "agent",
+            "reflexion": "iterative",
+            "self_refine": "quality",
+            "least_to_most": "architecture",
+            "comparative_arch": "architecture",
+            "plan_and_solve": "planning",
+            "red_team": "security",
+            "state_machine": "architecture",
+            "chain_of_thought": "reasoning",
+            # Additional coding frameworks
+            "alphacodium": "competitive",
+            "codechain": "code_gen",
+            "evol_instruct": "code_gen",
+            "llmloop": "ci_cd",
+            "procoder": "code_gen",
+            "recode": "code_gen",
+            "pal": "compute",
+            "scratchpads": "reasoning",
+            # Verification frameworks
+            "self_consistency": "verification",
+            "self_ask": "verification",
+            "rar": "verification",
+            "verify_and_edit": "verification",
+            "rarr": "verification",
+            "selfcheckgpt": "verification",
+            "metaqa": "verification",
+            "ragas": "rag",
+            # Agent frameworks
+            "rewoo": "agent",
+            "lats": "agent",
+            "mrkl": "agent",
+            "swe_agent": "agent",
+            "toolformer": "agent",
+            # RAG frameworks
+            "self_rag": "rag",
+            "hyde": "rag",
+            "rag_fusion": "rag",
+            "raptor": "rag",
+            "graphrag": "rag",
         }
         return type_map.get(framework, "unknown")
     
