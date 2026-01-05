@@ -26,7 +26,8 @@ class CollectionManager:
         "utilities": "Utility functions and helpers",
         "tests": "Test files and fixtures",
         "integrations": "LangChain/LangGraph integration code",
-        "learnings": "Successful solutions and past problem resolutions"
+        "learnings": "Successful solutions and past problem resolutions",
+        "debugging_knowledge": "Bug-fix pairs and debugging patterns from curated datasets"
     }
     
     def __init__(self, persist_dir: Optional[str] = None):
@@ -195,7 +196,7 @@ class CollectionManager:
         """Determine which collection a document belongs to based on metadata."""
         category = metadata.get("category", "")
         file_type = metadata.get("file_type", "")
-        
+
         if category == "framework":
             return "frameworks"
         elif category == "documentation":
@@ -206,6 +207,8 @@ class CollectionManager:
             return "tests"
         elif category in ["integration", "server"]:
             return "integrations"
+        elif category == "debugging":
+            return "debugging_knowledge"
         else:
             return "utilities"
     
@@ -312,7 +315,47 @@ class CollectionManager:
         except Exception as e:
             logger.error("learning_search_failed", error=str(e))
             return []
-    
+
+    def search_debugging_knowledge(
+        self,
+        query: str,
+        k: int = 5,
+        bug_type: Optional[str] = None,
+        language: str = "python"
+    ) -> List[Document]:
+        """
+        Search for similar bug-fix patterns from curated datasets.
+
+        Args:
+            query: Description of the bug or error
+            k: Number of results to return
+            bug_type: Filter by bug type (e.g., "TypeError", "AttributeError")
+            language: Programming language filter (default: "python")
+
+        Returns:
+            List of bug-fix pair documents
+        """
+        collection = self.get_collection("debugging_knowledge")
+        if not collection:
+            return []
+
+        try:
+            filter_dict = {"language": language}
+            if bug_type:
+                filter_dict["bug_type"] = bug_type
+
+            results = collection.similarity_search(
+                query,
+                k=k,
+                filter=filter_dict if filter_dict else None
+            )
+
+            logger.debug("debugging_knowledge_retrieved", count=len(results), bug_type=bug_type)
+            return results
+        except Exception as e:
+            logger.error("debugging_knowledge_search_failed", error=str(e))
+            return []
+
     @staticmethod
     def _deduplicate_results(results: List[Document]) -> List[Document]:
         """Remove duplicate results based on content."""
