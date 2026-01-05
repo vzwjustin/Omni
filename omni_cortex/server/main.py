@@ -61,6 +61,10 @@ from app.langchain_integration import (
 from app.collection_manager import get_collection_manager
 from app.core.router import HyperRouter
 
+# Import MCP sampling and orchestrators
+from app.core.sampling import ClientSampler
+from app.orchestrators import FRAMEWORK_ORCHESTRATORS
+
 logger = logging.getLogger("omni-cortex")
 
 # Framework definitions - what the LLM gets when it calls the tool
@@ -1046,6 +1050,9 @@ def create_server() -> Server:
     """Create the MCP server with all tools."""
     server = Server("omni-cortex")
 
+    # Initialize client sampler for multi-turn orchestration
+    sampler = ClientSampler(server)
+
     @server.list_tools()
     async def list_tools() -> list[Tool]:
         tools = []
@@ -1252,10 +1259,10 @@ def create_server() -> Server:
     async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         manager = get_collection_manager()
 
-        # Smart routing with HyperRouter (reason tool)
+        # Smart routing with HyperRouter (reason tool) - Execute orchestrator
         if name == "reason":
             query = arguments.get("query", "")
-            context = arguments.get("context")  # None if not provided
+            context = arguments.get("context", "")
             thread_id = arguments.get("thread_id")
 
             # Use singleton router imported from app.graph (not new instance each time)
@@ -1265,59 +1272,98 @@ def create_server() -> Server:
             selected = hyper_router._check_vibe_dictionary(query)
             if not selected:
                 selected = hyper_router._heuristic_select(query, context)
-            
+
             # Guaranteed fallback to self_discover if both methods fail
-            if not selected or selected not in FRAMEWORKS:
+            if not selected or selected not in FRAMEWORK_ORCHESTRATORS:
                 selected = "self_discover"
 
             # Get framework info from router
             fw_info = hyper_router.get_framework_info(selected)
             complexity = hyper_router.estimate_complexity(query, context if context != "None provided" else None)
 
-            # Get the framework prompt (guaranteed to exist after fallback)
-            fw = FRAMEWORKS[selected]
-
-            prompt = fw["prompt"].format(query=query, context=context or "None provided")
-
-            # Prepend memory context if thread_id provided
+            # Enhance context with memory if thread_id provided
             if thread_id:
                 memory = await get_memory(thread_id)
                 mem_context = memory.get_context()
                 if mem_context.get("chat_history"):
                     history_str = "\n".join(str(m) for m in mem_context["chat_history"][-5:])
-                    prompt = f"CONVERSATION HISTORY:\n{history_str}\n\n{prompt}"
+                    context = f"CONVERSATION HISTORY:\n{history_str}\n\n{context}"
                 if mem_context.get("framework_history"):
-                    prompt = f"PREVIOUSLY USED FRAMEWORKS: {mem_context['framework_history'][-5:]}\n\n{prompt}"
+                    context = f"PREVIOUSLY USED FRAMEWORKS: {mem_context['framework_history'][-5:]}\n\n{context}"
+
+            # Execute orchestrator
+            orchestrator = FRAMEWORK_ORCHESTRATORS[selected]
+            result = await orchestrator(sampler, query, context or "None provided")
+
+            # Save to memory if thread_id provided
+            if thread_id:
+                await save_to_langchain_memory(
+                    thread_id,
+                    query,
+                    result["final_answer"],
+                    selected
+                )
 
             # Return with routing metadata
+            fw = FRAMEWORKS.get(selected, {"category": fw_info.get("category", "unknown"), "best_for": []})
             output = f"# Auto-selected Framework: {selected}\n"
             output += f"Category: {fw_info.get('category', fw['category'])} | Complexity: {complexity:.2f}\n"
-            output += f"Best for: {', '.join(fw_info.get('best_for', fw['best_for']))}\n\n"
-            output += prompt
+            output += f"Best for: {', '.join(fw_info.get('best_for', fw.get('best_for', [])))}\n\n"
+            if "metadata" in result:
+                output += f"**Execution Metadata:** {result['metadata']}\n\n"
+            output += "---\n\n"
+            output += result["final_answer"]
 
             return [TextContent(type="text", text=output)]
 
-        # Framework tools (think_*)
+        # Framework tools (think_*) - Execute real orchestrators
         if name.startswith("think_"):
             fw_name = name[6:]
-            if fw_name in FRAMEWORKS:
+            if fw_name in FRAMEWORK_ORCHESTRATORS:
                 query = arguments.get("query", "")
-                context = arguments.get("context")  # None if not provided
+                context = arguments.get("context", "")
                 thread_id = arguments.get("thread_id")
 
-                prompt = FRAMEWORKS[fw_name]["prompt"].format(query=query, context=context or "None provided")
-
-                # Include memory context if thread_id provided
+                # Enhance context with memory if thread_id provided
                 if thread_id:
                     memory = await get_memory(thread_id)
                     mem_context = memory.get_context()
                     if mem_context.get("chat_history"):
                         history_str = "\n".join(str(m) for m in mem_context["chat_history"][-5:])
-                        prompt = f"CONVERSATION HISTORY:\n{history_str}\n\n{prompt}"
+                        context = f"CONVERSATION HISTORY:\n{history_str}\n\n{context}"
                     if mem_context.get("framework_history"):
-                        prompt = f"PREVIOUSLY USED FRAMEWORKS: {mem_context['framework_history'][-5:]}\n\n{prompt}"
+                        context = f"PREVIOUSLY USED FRAMEWORKS: {mem_context['framework_history'][-5:]}\n\n{context}"
 
-                return [TextContent(type="text", text=prompt)]
+                # Execute orchestrator
+                orchestrator = FRAMEWORK_ORCHESTRATORS[fw_name]
+                result = await orchestrator(sampler, query, context or "None provided")
+
+                # Save to memory if thread_id provided
+                if thread_id:
+                    await save_to_langchain_memory(
+                        thread_id,
+                        query,
+                        result["final_answer"],
+                        fw_name
+                    )
+
+                # Return result with metadata
+                output = f"# Framework: {fw_name}\n"
+                if "metadata" in result:
+                    metadata = result["metadata"]
+                    output += f"**Metadata:** {metadata}\n\n"
+                output += "---\n\n"
+                output += result["final_answer"]
+
+                return [TextContent(type="text", text=output)]
+
+            # Fallback if framework not found in orchestrators
+            elif fw_name in FRAMEWORKS:
+                # Return prompt template as fallback
+                query = arguments.get("query", "")
+                context = arguments.get("context", "")
+                prompt = FRAMEWORKS[fw_name]["prompt"].format(query=query, context=context or "None provided")
+                return [TextContent(type="text", text=f"[Template Mode]\n\n{prompt}")]
 
         # List frameworks
         if name == "list_frameworks":
