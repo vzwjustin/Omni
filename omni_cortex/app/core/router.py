@@ -1,23 +1,177 @@
 """
 Hyper-Router: Intelligent LLM-Powered Framework Selection
 
-Uses AI to analyze tasks and select the optimal reasoning framework.
+Uses hierarchical category routing with specialist agents.
+Supports framework chaining for complex multi-step tasks.
 Designed for vibe coders and senior engineers who just want it to work.
 """
 
 import re
-from typing import Optional
+from typing import Optional, List, Tuple
 from ..state import GraphState
 
 
 class HyperRouter:
     """
-    The Hyper-Dispatcher: AI-powered framework selection.
-    
-    Two modes:
-    - AUTO (default): Uses LLM to intelligently pick the best framework
-    - HEURISTIC: Uses fast pattern matching (fallback)
+    The Hyper-Dispatcher: Hierarchical AI-powered framework selection.
+
+    Three-stage routing:
+    1. CATEGORY: Fast pattern match to one of 9 categories
+    2. SPECIALIST: Category agent picks 1+ frameworks (supports chaining)
+    3. EXECUTE: Run framework(s) in sequence, passing state
+
+    Modes:
+    - AUTO (default): Hierarchical routing with specialist agents
+    - HEURISTIC: Fast pattern matching only (fallback)
     """
+
+    # ==========================================================================
+    # CATEGORY DEFINITIONS - First stage routing
+    # ==========================================================================
+
+    CATEGORIES = {
+        "debug": {
+            "description": "Bug hunting, error analysis, root cause investigation",
+            "specialist": "Debug Detective",
+            "frameworks": ["active_inference", "self_debugging", "reverse_cot",
+                          "mcts_rstar", "chain_of_code", "rubber_duck"],
+            "chain_patterns": {
+                "complex_bug": ["self_ask", "active_inference", "verify_and_edit"],
+                "silent_bug": ["reverse_cot", "self_debugging", "selfcheckgpt"],
+                "flaky_test": ["active_inference", "tdd_prompting", "self_consistency"],
+            }
+        },
+        "code_gen": {
+            "description": "Writing new code, algorithms, implementations",
+            "specialist": "Code Architect",
+            "frameworks": ["alphacodium", "codechain", "parsel", "docprompting",
+                          "procoder", "recode", "pal", "program_of_thoughts",
+                          "evol_instruct", "llmloop", "tdd_prompting"],
+            "chain_patterns": {
+                "complex_feature": ["plan_and_solve", "parsel", "tdd_prompting", "self_refine"],
+                "api_integration": ["docprompting", "critic", "verify_and_edit"],
+                "algorithm": ["step_back", "alphacodium", "self_debugging"],
+            }
+        },
+        "refactor": {
+            "description": "Code cleanup, restructuring, modernization",
+            "specialist": "Refactor Surgeon",
+            "frameworks": ["graph_of_thoughts", "everything_of_thought",
+                          "least_to_most", "codechain", "self_refine"],
+            "chain_patterns": {
+                "major_rewrite": ["plan_and_solve", "graph_of_thoughts", "verify_and_edit"],
+                "modular_extract": ["least_to_most", "parsel", "self_refine"],
+                "legacy_cleanup": ["chain_of_note", "graph_of_thoughts", "tdd_prompting"],
+            }
+        },
+        "architecture": {
+            "description": "System design, planning, high-level decisions",
+            "specialist": "System Architect",
+            "frameworks": ["reason_flux", "plan_and_solve", "comparative_arch",
+                          "multi_agent_debate", "state_machine", "coala"],
+            "chain_patterns": {
+                "new_system": ["reason_flux", "multi_agent_debate", "plan_and_solve"],
+                "scale_decision": ["step_back", "comparative_arch", "verify_and_edit"],
+                "workflow_design": ["state_machine", "plan_and_solve", "critic"],
+            }
+        },
+        "verification": {
+            "description": "Checking, validating, proving correctness",
+            "specialist": "Verification Expert",
+            "frameworks": ["chain_of_verification", "verify_and_edit", "self_consistency",
+                          "selfcheckgpt", "metaqa", "rarr", "red_team"],
+            "chain_patterns": {
+                "security_audit": ["red_team", "chain_of_verification", "verify_and_edit"],
+                "claim_check": ["self_ask", "rarr", "selfcheckgpt"],
+                "code_review": ["chain_of_verification", "self_consistency", "verify_and_edit"],
+            }
+        },
+        "agent": {
+            "description": "Multi-step tasks, tool use, autonomous execution",
+            "specialist": "Agent Orchestrator",
+            "frameworks": ["swe_agent", "react", "rewoo", "lats",
+                          "mrkl", "toolformer", "reflexion"],
+            "chain_patterns": {
+                "ci_fix": ["swe_agent", "tdd_prompting", "verify_and_edit"],
+                "multi_file": ["coala", "swe_agent", "self_refine"],
+                "tool_heavy": ["rewoo", "react", "reflexion"],
+            }
+        },
+        "rag": {
+            "description": "Retrieval, documentation, knowledge grounding",
+            "specialist": "Knowledge Navigator",
+            "frameworks": ["self_rag", "hyde", "rag_fusion", "raptor",
+                          "graphrag", "chain_of_note", "ragas"],
+            "chain_patterns": {
+                "large_codebase": ["raptor", "graphrag", "chain_of_note"],
+                "fuzzy_search": ["hyde", "rag_fusion", "rarr"],
+                "dependency_map": ["graphrag", "least_to_most", "chain_of_note"],
+            }
+        },
+        "exploration": {
+            "description": "Novel problems, learning, creative solutions",
+            "specialist": "Explorer",
+            "frameworks": ["self_discover", "analogical", "buffer_of_thoughts",
+                          "adaptive_injection", "chain_of_thought", "step_back"],
+            "chain_patterns": {
+                "novel_problem": ["self_ask", "self_discover", "verify_and_edit"],
+                "learn_codebase": ["chain_of_note", "graphrag", "analogical"],
+                "creative_solution": ["analogical", "multi_agent_debate", "self_refine"],
+            }
+        },
+        "fast": {
+            "description": "Quick fixes, simple tasks, scaffolding",
+            "specialist": "Speed Demon",
+            "frameworks": ["system1", "skeleton_of_thought", "rar", "scratchpads"],
+            "chain_patterns": {}  # Fast category doesn't chain
+        },
+    }
+
+    # Quick category vibes for first-stage routing
+    CATEGORY_VIBES = {
+        "debug": [
+            "bug", "error", "broken", "crash", "fix", "debug", "failing", "wrong",
+            "doesn't work", "not working", "exception", "null", "undefined",
+            "wtf", "what the", "why is this", "investigate", "root cause",
+            "stack trace", "segfault", "memory", "race condition", "deadlock"
+        ],
+        "code_gen": [
+            "write", "create", "implement", "generate", "build", "code",
+            "function", "class", "algorithm", "feature", "add", "new",
+            "from scratch", "scaffold", "boilerplate", "template"
+        ],
+        "refactor": [
+            "refactor", "clean", "restructure", "reorganize", "simplify",
+            "modernize", "legacy", "spaghetti", "tech debt", "extract",
+            "modular", "split", "combine", "rename", "move"
+        ],
+        "architecture": [
+            "design", "architect", "system", "structure", "plan", "scale",
+            "microservice", "monolith", "pattern", "decision", "trade-off",
+            "how should", "best approach", "high level"
+        ],
+        "verification": [
+            "verify", "check", "validate", "secure", "review", "audit",
+            "correct", "prove", "test", "confirm", "safe", "vulnerability",
+            "owasp", "injection", "xss"
+        ],
+        "agent": [
+            "multi-step", "automate", "ci", "cd", "pipeline", "workflow",
+            "tool", "execute", "run", "iterate", "loop", "until"
+        ],
+        "rag": [
+            "find", "search", "retrieve", "documentation", "docs", "where",
+            "which file", "codebase", "understand", "learn", "explore"
+        ],
+        "exploration": [
+            "novel", "creative", "new approach", "different", "alternative",
+            "no idea", "stuck", "help me think", "weird", "unusual"
+        ],
+        "fast": [
+            "quick", "simple", "easy", "trivial", "just", "only",
+            "one line", "minor", "small", "typo", "rename"
+        ],
+    }
     
     # All available frameworks with descriptions for the AI
     FRAMEWORKS = {
@@ -792,7 +946,183 @@ class HyperRouter:
             task_type: [re.compile(p, re.IGNORECASE) for p in patterns]
             for task_type, patterns in self.PATTERNS.items()
         }
-    
+
+    # ==========================================================================
+    # HIERARCHICAL ROUTING - Stage 1: Category Selection
+    # ==========================================================================
+
+    def _route_to_category(self, query: str) -> Tuple[str, float]:
+        """
+        Fast first-stage routing to a category.
+        Returns (category_name, confidence_score).
+        """
+        query_lower = query.lower()
+        scores = {}
+
+        for category, vibes in self.CATEGORY_VIBES.items():
+            score = 0.0
+            for vibe in vibes:
+                if vibe in query_lower:
+                    # Weight by phrase length
+                    word_count = len(vibe.split())
+                    score += word_count if word_count >= 2 else 0.5
+            if score > 0:
+                scores[category] = score
+
+        if not scores:
+            return "exploration", 0.3  # Default fallback
+
+        best = max(scores, key=scores.get)
+        confidence = min(scores[best] / 5.0, 1.0)  # Normalize to 0-1
+        return best, confidence
+
+    # ==========================================================================
+    # HIERARCHICAL ROUTING - Stage 2: Specialist Agent Selection
+    # ==========================================================================
+
+    def _get_specialist_prompt(self, category: str, query: str, context: str = "") -> str:
+        """
+        Generate a specialist agent prompt for framework selection within a category.
+        The specialist can recommend single frameworks or chains.
+        """
+        cat_info = self.CATEGORIES.get(category, self.CATEGORIES["exploration"])
+        frameworks = cat_info["frameworks"]
+        chain_patterns = cat_info.get("chain_patterns", {})
+        specialist = cat_info["specialist"]
+
+        # Build framework descriptions for this category
+        fw_descriptions = []
+        for fw in frameworks:
+            desc = self.FRAMEWORKS.get(fw, "Unknown framework")
+            vibes = self.VIBE_DICTIONARY.get(fw, [])[:3]
+            fw_descriptions.append(f"  - {fw}: {desc} (vibes: {', '.join(vibes)})")
+
+        # Build chain pattern descriptions
+        chain_descriptions = []
+        for pattern_name, chain in chain_patterns.items():
+            chain_descriptions.append(f"  - {pattern_name}: {' → '.join(chain)}")
+
+        return f"""You are the **{specialist}** - a specialist agent for {cat_info['description']}.
+
+TASK: {query}
+{f'CONTEXT: {context}' if context else ''}
+
+## Available Frameworks (pick 1 or chain multiple):
+{chr(10).join(fw_descriptions)}
+
+## Pre-defined Chains (for complex tasks):
+{chr(10).join(chain_descriptions) if chain_descriptions else '  (none - single framework recommended)'}
+
+## Instructions:
+1. Analyze the task complexity
+2. For SIMPLE tasks: recommend a single framework
+3. For COMPLEX tasks: recommend a chain of 2-4 frameworks
+
+Respond in this format:
+COMPLEXITY: simple|complex
+FRAMEWORKS: framework1 [→ framework2 → framework3]
+REASONING: Brief explanation of your choice
+"""
+
+    async def _select_with_specialist(
+        self,
+        category: str,
+        query: str,
+        code_snippet: Optional[str] = None,
+        ide_context: Optional[str] = None
+    ) -> Tuple[List[str], str]:
+        """
+        Use category specialist agent to select framework(s).
+        Returns (list_of_frameworks, reasoning).
+        """
+        cat_info = self.CATEGORIES.get(category, self.CATEGORIES["exploration"])
+        frameworks = cat_info["frameworks"]
+        chain_patterns = cat_info.get("chain_patterns", {})
+
+        # Build context
+        context = ""
+        if code_snippet:
+            context += f"Code:\n{code_snippet[:500]}..."
+        if ide_context:
+            context += f"\nIDE Context: {ide_context}"
+
+        # Check for chain pattern match first (fast path)
+        query_lower = query.lower()
+        for pattern_name, chain in chain_patterns.items():
+            pattern_words = pattern_name.replace("_", " ").split()
+            if all(word in query_lower for word in pattern_words):
+                return chain, f"Matched chain pattern: {pattern_name}"
+
+        # Try specialist agent for nuanced selection
+        try:
+            from ..langchain_integration import get_chat_model
+
+            prompt = self._get_specialist_prompt(category, query, context)
+            llm = get_chat_model("fast")
+            response = await llm.ainvoke(prompt)
+            response_text = response.content if hasattr(response, "content") else str(response)
+
+            # Parse response
+            frameworks_line = ""
+            reasoning = ""
+            for line in response_text.split("\n"):
+                if line.startswith("FRAMEWORKS:"):
+                    frameworks_line = line.replace("FRAMEWORKS:", "").strip()
+                elif line.startswith("REASONING:"):
+                    reasoning = line.replace("REASONING:", "").strip()
+
+            if frameworks_line:
+                # Parse chain: "fw1 → fw2 → fw3" or "fw1"
+                selected = [fw.strip() for fw in frameworks_line.replace("→", ",").replace("->", ",").split(",")]
+                selected = [fw for fw in selected if fw in self.FRAMEWORKS]
+                if selected:
+                    return selected, reasoning or f"Specialist selected: {frameworks_line}"
+
+        except Exception as e:
+            pass  # Fall through to default
+
+        # Default: pick first framework in category
+        return [frameworks[0]], f"Default selection for {category}"
+
+    async def select_framework_chain(
+        self,
+        query: str,
+        code_snippet: Optional[str] = None,
+        ide_context: Optional[str] = None
+    ) -> Tuple[List[str], str, str]:
+        """
+        Hierarchical routing with chain support.
+
+        Returns: (framework_chain, reasoning, category)
+        - framework_chain: List of 1+ frameworks to execute in sequence
+        - reasoning: Explanation of selection
+        - category: The matched category
+        """
+        # Stage 1: Route to category
+        category, confidence = self._route_to_category(query)
+
+        # Stage 2: Specialist agent selection
+        if confidence < 0.5:
+            # Low confidence - let specialist decide more carefully
+            chain, reasoning = await self._select_with_specialist(
+                category, query, code_snippet, ide_context
+            )
+        else:
+            # High confidence - check for quick vibe match within category
+            cat_frameworks = self.CATEGORIES[category]["frameworks"]
+            vibe_match = self._check_vibe_dictionary(query)
+
+            if vibe_match and vibe_match in cat_frameworks:
+                chain = [vibe_match]
+                reasoning = f"Vibe match in {category}: {query[:30]}..."
+            else:
+                # Use specialist for nuanced selection
+                chain, reasoning = await self._select_with_specialist(
+                    category, query, code_snippet, ide_context
+                )
+
+        return chain, reasoning, category
+
     async def auto_select_framework(
         self,
         query: str,
@@ -800,62 +1130,34 @@ class HyperRouter:
         ide_context: Optional[str] = None
     ) -> tuple[str, str]:
         """
-        AI-powered framework selection.
-        
-        First checks the vibe dictionary for quick matches,
-        then falls back to LLM for complex/ambiguous cases.
-        Returns: (framework_name, reasoning)
+        AI-powered framework selection using hierarchical routing.
+
+        Uses two-stage approach:
+        1. Route to category (fast pattern matching)
+        2. Specialist agent picks framework(s) within category
+
+        Returns: (first_framework, reasoning)
+        For chain access, use select_framework_chain() instead.
         """
-        # First, check vibe dictionary for quick match
+        try:
+            chain, reasoning, category = await self.select_framework_chain(
+                query, code_snippet, ide_context
+            )
+            # Return first framework for backwards compatibility
+            # Full chain is available via select_framework_chain()
+            if chain:
+                if len(chain) > 1:
+                    reasoning = f"[Chain: {' → '.join(chain)}] {reasoning}"
+                return chain[0], reasoning
+        except Exception as e:
+            pass  # Fall through to legacy method
+
+        # Legacy fallback: direct vibe matching
         vibe_match = self._check_vibe_dictionary(query)
         if vibe_match:
             return vibe_match, f"Matched vibe: {query[:50]}..."
-        
-        # Build framework list with vibes for the AI using prompt template
-        framework_list = []
-        for name, desc in self.FRAMEWORKS.items():
-            vibes = ", ".join(self.VIBE_DICTIONARY.get(name, [])[:3])
-            framework_list.append(f"{name}: {desc}. Vibes: {vibes}")
-        
-        try:
-            from ..langchain_integration import (
-                FRAMEWORK_SELECTION_TEMPLATE,
-                framework_parser,
-                get_chat_model,
-            )
-            messages = FRAMEWORK_SELECTION_TEMPLATE.format_messages(
-                frameworks="\n".join(framework_list),
-                task_type="auto",
-                complexity="auto",
-                has_code=bool(code_snippet),
-                framework_history="",
-                query=query,
-            )
-            # Append code/IDE context in the human message
-            extra_context = f"\n\nCode:\n{code_snippet or 'N/A'}\n\nIDE:\n{ide_context or 'N/A'}"
-            messages[-1].content = messages[-1].content + extra_context
-            
-            llm = get_chat_model("fast")
-            lc_response = await llm.ainvoke(messages)
-            response = lc_response.content if hasattr(lc_response, "content") else str(lc_response)
-            try:
-                parsed = framework_parser.parse(response)
-                selected = parsed.selected_framework
-                reasoning = parsed.reasoning
-                if selected:
-                    return selected, reasoning
-            except Exception as e:
-                # Parser failed; fall through to regex extraction
-                pass
-            
-            # Fallback to regex extract
-            selected = self._extract_framework(response)
-            if selected:
-                return selected, response
-            return "self_discover", "Fallback: could not parse framework, using self_discover."
-        except Exception as e:
-            # LLM or network error during framework selection
-            return "self_discover", "Fallback: router LLM failed, using self_discover."
+
+        return "self_discover", "Fallback: routing failed, using self_discover."
 
     def _extract_framework(self, response: str) -> Optional[str]:
         """
@@ -967,39 +1269,58 @@ class HyperRouter:
     
     async def route(self, state: GraphState, use_ai: bool = True) -> GraphState:
         """
-        Route the task to the best framework.
-        
+        Route the task to the best framework(s).
+
+        Supports framework chaining for complex tasks.
+
         Args:
             state: Current graph state
-            use_ai: If True, use LLM to select (default). If False, use heuristics.
+            use_ai: If True, use hierarchical AI routing (default). If False, use heuristics.
         """
+        framework_chain = []
+        category = "unknown"
+        reason = ""
+
         # Check for explicit preference first
         if state.get("preferred_framework") and state["preferred_framework"] in self.FRAMEWORKS:
-            framework = state["preferred_framework"]
+            framework_chain = [state["preferred_framework"]]
             reason = "User specified"
         elif use_ai:
-            # AI-powered selection
-            framework, reason = await self.auto_select_framework(
-                state["query"],
-                state.get("code_snippet"),
-                state.get("ide_context")
-            )
+            # Hierarchical AI-powered selection with chain support
+            try:
+                chain, reason, category = await self.select_framework_chain(
+                    state["query"],
+                    state.get("code_snippet"),
+                    state.get("ide_context")
+                )
+                framework_chain = chain
+            except Exception as e:
+                # Fallback to single framework
+                framework, reason = await self.auto_select_framework(
+                    state["query"],
+                    state.get("code_snippet"),
+                    state.get("ide_context")
+                )
+                framework_chain = [framework]
         else:
-            # Heuristic fallback
+            # Heuristic fallback (single framework only)
             framework = self._heuristic_select(state["query"], state.get("code_snippet"))
+            framework_chain = [framework]
             reason = "Heuristic selection"
-        
+
         complexity = self.estimate_complexity(
             state["query"],
             state.get("code_snippet"),
             state.get("file_list")
         )
-        
-        # Update state
-        state["selected_framework"] = framework
+
+        # Update state with chain support
+        state["selected_framework"] = framework_chain[0] if framework_chain else "self_discover"
+        state["framework_chain"] = framework_chain  # Full chain for pipeline execution
         state["complexity_estimate"] = complexity
-        state["task_type"] = self._infer_task_type(framework)
-        
+        state["task_type"] = self._infer_task_type(framework_chain[0] if framework_chain else "self_discover")
+        state["routing_category"] = category
+
         # Inject Past Learnings (Episodic Memory)
         try:
             from ..collection_manager import get_collection_manager
@@ -1008,19 +1329,20 @@ class HyperRouter:
             if learnings:
                 state["episodic_memory"] = learnings
         except Exception as e:
-            # Log but don't fail routing if memory search fails
             import structlog
             logger = structlog.get_logger("router")
             logger.warning("episodic_memory_search_failed", error=str(e), query=state["query"][:100])
-            
+
         state["reasoning_steps"].append({
             "step": "routing",
-            "framework": framework,
+            "framework": framework_chain[0] if framework_chain else "self_discover",
+            "framework_chain": framework_chain,
+            "category": category,
             "reason": reason,
             "complexity": complexity,
-            "method": "ai" if use_ai else "heuristic"
+            "method": "hierarchical_ai" if use_ai else "heuristic"
         })
-        
+
         return state
     
     def _infer_task_type(self, framework: str) -> str:

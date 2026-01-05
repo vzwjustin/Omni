@@ -26,6 +26,8 @@ class GraphState(TypedDict, total=False):
     
     # Routing & Framework Selection
     selected_framework: str
+    framework_chain: list[str]  # Chain of frameworks for pipeline execution
+    routing_category: str  # Category from hierarchical routing
     task_type: str  # "debug", "architecture", "algorithm", "refactor", "docs", "unknown"
     complexity_estimate: float
     
@@ -163,6 +165,8 @@ def create_initial_state(
         
         # Routing
         selected_framework="",
+        framework_chain=[],
+        routing_category="unknown",
         task_type="unknown",
         complexity_estimate=0.5,
         
