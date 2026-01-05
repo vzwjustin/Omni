@@ -481,6 +481,11 @@ class OmniCortexCallback(BaseCallbackHandler):
     
     def on_llm_end(self, response, **kwargs) -> None:
         """Track LLM call completion and token usage."""
+        # Guard against None response
+        if response is None:
+            logger.warning("on_llm_end_null_response", thread_id=self.thread_id)
+            return
+
         # Handle both object and dict response types (LangChain 1.0+ compatibility)
         llm_output = None
         if isinstance(response, dict):
@@ -605,6 +610,85 @@ framework_parser = PydanticOutputParser(pydantic_object=FrameworkSelection)
 # =============================================================================
 # LangChain Chat Models
 # =============================================================================
+
+def get_routing_model() -> Any:
+    """
+    Get Gemini model specifically for routing/task analysis.
+
+    This always uses Gemini regardless of LLM_PROVIDER setting.
+    Used by HyperRouter._gemini_analyze_task() to offload thinking from Claude Code.
+
+    Features:
+    - Google Search grounding for fresh docs/APIs
+    - Native SDK for full feature access
+    """
+    if not settings.google_api_key:
+        raise ValueError("GOOGLE_API_KEY required for routing. Gemini does task analysis so Claude Code can focus on execution.")
+
+    import google.generativeai as genai
+
+    # Configure the API
+    genai.configure(api_key=settings.google_api_key)
+
+    # Use fast model for routing - Gemini 3 Flash is ideal
+    model_name = os.getenv("ROUTING_MODEL", "gemini-2.0-flash")
+    if "/" in model_name:
+        model_name = model_name.split("/")[-1]
+
+    # Create model with Google Search grounding enabled
+    model = genai.GenerativeModel(
+        model_name=model_name,
+        generation_config=genai.GenerationConfig(
+            temperature=0.7,
+            max_output_tokens=4096,
+        ),
+        tools=[genai.Tool(google_search=genai.GoogleSearch())]
+    )
+
+    return GeminiRoutingWrapper(model)
+
+
+class GeminiRoutingWrapper:
+    """
+    Wrapper to make native Gemini SDK compatible with LangChain-style ainvoke().
+    Enables Google Search grounding for fresh context.
+    """
+
+    def __init__(self, model):
+        self.model = model
+
+    async def ainvoke(self, prompt: str) -> Any:
+        """Async invoke with search grounding."""
+        import asyncio
+
+        # Run sync generate_content in thread pool
+        response = await asyncio.to_thread(
+            self.model.generate_content,
+            prompt
+        )
+
+        # Return wrapper with .content attribute for compatibility
+        return GeminiResponse(response)
+
+
+class GeminiResponse:
+    """Response wrapper for compatibility with existing code."""
+
+    def __init__(self, response):
+        self._response = response
+
+    @property
+    def content(self) -> str:
+        """Extract text content from Gemini response."""
+        try:
+            return self._response.text
+        except Exception:
+            # Fallback for different response formats
+            if hasattr(self._response, 'candidates') and self._response.candidates:
+                parts = self._response.candidates[0].content.parts
+                return "".join(p.text for p in parts if hasattr(p, 'text'))
+            return str(self._response)
+
 
 def get_chat_model(model_type: str = "deep", enable_thinking: bool = False) -> Any:
     """
