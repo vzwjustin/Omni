@@ -244,7 +244,7 @@ User Query → Category Router → Specialist Agent → Framework Chain → Mult
 4.  **Multi-Turn Executor**: Each framework makes multiple calls to client for its algorithm
 5.  **MCP Sampling**: Server requests completions from client (no external APIs)
 6.  **Memory**: Episodic memory + RAG for cross-session learning
-7.  **Debug Knowledge Base**: 6K+ real-world bug-fix pairs with embeddings for intelligent debugging
+7.  **Training Data Knowledge Base**: 16K+ examples (debugging, reasoning, instructions) with embeddings
 
 ### Example: Tree of Thoughts
 
@@ -288,33 +288,39 @@ See [FRAMEWORKS.md](omni_cortex/FRAMEWORKS.md) for complete documentation.
 - ✅ Server-side coordination, client-side inference
 - ✅ LangChain/LangGraph utilities preserved for memory and RAG
 
-**🐛 NEW: Debugging Knowledge Base with LLM Training Data**
-- 🎯 Integrated **10,000+ real-world bug-fix pairs** from curated datasets
-- 📊 Six specialized datasets:
+**🐛 NEW: LLM Training Data Knowledge Base**
+- 🎯 Integrated **16,000+ curated training examples** across three categories
+- 📊 **Debugging** (10K examples) - Six specialized datasets:
   - **PyResBugs** (5K pairs) - Production bugs from real Python projects
   - **HaPy-Bug** (793 pairs) - Expert-annotated bug-fix commits
   - **Learning-Fixes** - Line-aligned bug-fix patterns
   - **Muennighoff/python-bugs** (1-10K) - Curated Python bug collection
   - **alexjercan/bugnet** - CodeNet competition bugs with error messages
   - **HuggingFaceH4/Code-Feedback** - Code review and feedback patterns
-- 🧠 **6,000+ reasoning examples** with chain-of-thought steps
+- 🧠 **Reasoning** (6K examples) - Chain-of-thought datasets:
   - **moremilk/General_Inquiry_Thinking-Chain-Of-Thought** (6K) - Step-by-step logic
   - **AlekseyKorshuk/chain-of-thoughts-chatml** - Structured reasoning patterns
-- 📝 **Instruction-following datasets** for coding tasks
-  - **nampdn-ai/tiny-codes** (1.6M snippets) - High-quality commented code
+- 📝 **Instructions** (12K examples, sampled) - Coding task datasets:
+  - **nampdn-ai/tiny-codes** (1.6M snippets, sampled to 10K) - High-quality commented code
   - **HuggingFaceH4/helpful_instructions** - Instruction-completion pairs
-- 🔧 Pre-computed vector embeddings stored in ChromaDB for instant semantic search
+- 🔧 Vector embeddings stored in ChromaDB for instant semantic search
 - 🔍 Intelligent filtering by bug type, reasoning pattern, or instruction type
-- 💡 Auto-suggests fixes based on similar bugs from production codebases
-- 🚀 One-command ingestion: `python3 scripts/ingest_bug_fixes.py --all`
+- 💡 Auto-suggests fixes, reasoning patterns, and code examples
+- 🚀 **Quick start**: `python3 scripts/ingest_training_data.py --all`
+- 📦 Category-based ingestion: `--category debugging|reasoning|instruction`
 - ⚙️ **Requires API key**: Set `OPENAI_API_KEY` or `OPENROUTER_API_KEY` for embeddings
-- 📖 See [BUG_FIX_DATASETS.md](omni_cortex/scripts/BUG_FIX_DATASETS.md) for usage
+- 📖 See [TRAINING_DATASETS.md](omni_cortex/scripts/TRAINING_DATASETS.md) for complete guide
 
 **Architecture Highlights**:
 - 🎯 Sophisticated 3-stage hierarchical routing (category → specialist → framework chain)
 - 🧠 2,000+ vibe patterns for natural language matching
 - 🔗 24 pre-defined framework chains for complex tasks
-- 💾 Multi-collection RAG with AST-based Python chunking + debugging knowledge base
+- 💾 Multi-collection RAG with 10 ChromaDB collections:
+  - Frameworks, documentation, configs, utilities, tests, integrations (codebase)
+  - Learnings (runtime solutions)
+  - **Debugging knowledge** (10K bug-fix pairs)
+  - **Reasoning knowledge** (6K chain-of-thought examples)
+  - **Instruction knowledge** (12K code examples)
 - 🏗️ Clean separation: 9 categories, 9 specialist agents, 62 frameworks
 - 🚀 Real algorithmic execution for every framework
 
