@@ -1262,50 +1262,85 @@ def create_server() -> Server:
 
     @server.call_tool()
     async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
+        # Debug immediately at entry
+        with open("/tmp/omni-debug.log", "a") as f:
+            f.write(f"call_tool called: name={name}, args={list(arguments.keys())}\n")
+
         manager = get_collection_manager()
 
-        # Smart routing with HyperRouter (reason tool) - Returns structured prompt
+        # Smart routing with HyperRouter (reason tool) - Returns structured brief
         if name == "reason":
             query = arguments.get("query", "")
             context = arguments.get("context", "")
             thread_id = arguments.get("thread_id")
 
-            # Use singleton router imported from app.graph (not new instance each time)
+            # Use singleton router imported from app.graph
             hyper_router = router
 
-            # First check vibe dictionary, then heuristics, ensure fallback
-            selected = hyper_router._check_vibe_dictionary(query)
-            if not selected:
-                selected = hyper_router._heuristic_select(query, context)
+            # Generate structured brief using the new protocol
+            try:
+                router_output = await hyper_router.generate_structured_brief(
+                    query=query,
+                    context=context,
+                    code_snippet=None,
+                    ide_context=None,
+                    file_list=None
+                )
 
-            # Guaranteed fallback to self_discover if both methods fail
-            if not selected or selected not in FRAMEWORKS:
-                selected = "self_discover"
+                # Build output with pipeline metadata + Claude brief
+                brief = router_output.claude_code_brief
+                pipeline = router_output.pipeline
+                gate = router_output.integrity_gate
+                telemetry = router_output.telemetry
 
-            # Get framework info from router
-            fw_info = hyper_router.get_framework_info(selected)
-            complexity = hyper_router.estimate_complexity(query, context if context != "None provided" else None)
+                # Header with routing info
+                stages = " → ".join([s.framework_id for s in pipeline.stages])
+                output = f"# {router_output.task_profile.task_type.value}: {brief.objective[:80]}\n"
+                output += f"Pipeline: {stages}\n"
+                output += f"Confidence: {gate.confidence.band.value} ({gate.confidence.score:.2f}) | "
+                output += f"Risk: {router_output.task_profile.risk_level.value}\n"
+                output += f"Routing: {telemetry.routing_latency_ms}ms | ~{telemetry.brief_token_estimate} tokens\n"
+                output += "\n---\n\n"
 
-            # Enhance context with memory if thread_id provided
-            if thread_id:
-                memory = await get_memory(thread_id)
-                mem_context = memory.get_context()
-                if mem_context.get("chat_history"):
-                    history_str = "\n".join(str(m) for m in mem_context["chat_history"][-5:])
-                    context = f"CONVERSATION HISTORY:\n{history_str}\n\n{context}"
-                if mem_context.get("framework_history"):
-                    context = f"PREVIOUSLY USED FRAMEWORKS: {mem_context['framework_history'][-5:]}\n\n{context}"
+                # The actual brief for Claude to execute
+                output += brief.to_prompt()
 
-            # Return structured prompt for client to execute (template mode)
-            # This preserves MCP's purpose: server routes, client does inference
-            fw = FRAMEWORKS.get(selected, {"category": "unknown", "best_for": [], "prompt": "Apply your best reasoning to: {query}\n\nContext: {context}"})
-            prompt = fw["prompt"].format(query=query, context=context or "None provided")
+                # Add detected signals if any
+                if router_output.detected_signals:
+                    output += "\n\n## Detected Signals\n"
+                    for sig in router_output.detected_signals[:3]:
+                        output += f"- {sig.type.value}: {sig.notes}\n"
 
-            output = f"# Framework: {selected}\n"
-            output += f"Category: {fw_info.get('category', fw.get('category', 'unknown'))} | Complexity: {complexity:.2f}\n"
-            output += f"Best for: {', '.join(fw_info.get('best_for', fw.get('best_for', [])))}\n\n"
-            output += "---\n\n"
-            output += prompt
+                # Add integrity gate summary
+                if gate.recommendation.action.value != "PROCEED":
+                    output += f"\n⚠️ Gate: {gate.recommendation.action.value} - {gate.recommendation.notes}\n"
+
+            except Exception as e:
+                # Fallback to simple template mode if structured brief fails
+                import traceback
+                import sys
+                err_detail = traceback.format_exc()
+                logger.warning(f"Structured brief generation failed: {e}\n{err_detail}")
+                # Write to stderr for visibility
+                print(f"BRIEF FAILED: {e}\n{err_detail}", file=sys.stderr)
+
+                selected = hyper_router._check_vibe_dictionary(query)
+                if not selected:
+                    selected = hyper_router._heuristic_select(query, context)
+                if not selected or selected not in FRAMEWORKS:
+                    selected = "self_discover"
+
+                fw_info = hyper_router.get_framework_info(selected)
+                complexity = hyper_router.estimate_complexity(query, context if context != "None provided" else None)
+
+                fw = FRAMEWORKS.get(selected, {"category": "unknown", "best_for": [], "prompt": "Apply your best reasoning to: {query}\n\nContext: {context}"})
+                prompt = fw["prompt"].format(query=query, context=context or "None provided")
+
+                output = f"# Framework: {selected}\n"
+                output += f"Category: {fw_info.get('category', fw.get('category', 'unknown'))} | Complexity: {complexity:.2f}\n"
+                output += f"Best for: {', '.join(fw_info.get('best_for', fw.get('best_for', [])))}\n"
+                output += "\n---\n\n"
+                output += prompt
 
             return [TextContent(type="text", text=output)]
 
