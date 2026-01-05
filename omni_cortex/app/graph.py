@@ -213,44 +213,150 @@ async def route_node(state: GraphState) -> GraphState:
 
 async def execute_framework_node(state: GraphState) -> GraphState:
     """
-    Execution node: Run the selected framework with LangChain monitoring.
-    
-    Dynamically calls the appropriate framework based on routing decision,
-    with callback tracking and memory persistence.
+    Execution node: Run frameworks with LangChain monitoring.
+
+    Supports both single framework execution and pipeline execution
+    when framework_chain contains multiple frameworks.
+
+    Pipeline Execution Flow:
+    1. Each framework in chain receives output of previous
+    2. Intermediate results stored in reasoning_steps
+    3. Final framework's output becomes final_answer
+    4. Token usage aggregated across all frameworks
     """
-    selected_framework = state.get("selected_framework")
     thread_id = state.get("working_memory", {}).get("thread_id")
-    
+    framework_chain = state.get("framework_chain", [])
+    selected_framework = state.get("selected_framework")
+
     # Create callback handler for this execution
     if thread_id:
         callback = OmniCortexCallback(thread_id)
         state["working_memory"]["langchain_callback"] = callback
-    
-    # Surface recommended tools for this framework (for prompt/context usage)
-    from .nodes.common import list_tools_for_framework  # local import to avoid cycle at module load
-    state["working_memory"]["recommended_tools"] = list_tools_for_framework(
-        selected_framework or "unknown", state
-    )
-    
-    # Execute the framework
-    if selected_framework and selected_framework in FRAMEWORK_NODES:
-        framework_fn = FRAMEWORK_NODES[selected_framework]
-        state = await framework_fn(state)
+
+    # Local import to avoid cycle at module load
+    from .nodes.common import list_tools_for_framework
+
+    # Determine execution mode: pipeline (chain) vs single framework
+    if framework_chain and len(framework_chain) > 1:
+        # Pipeline execution: run multiple frameworks in sequence
+        logger.info(
+            "pipeline_execution_start",
+            chain=framework_chain,
+            chain_length=len(framework_chain)
+        )
+
+        total_tokens = state.get("tokens_used", 0)
+        executed_frameworks = []
+
+        for i, framework_name in enumerate(framework_chain):
+            if framework_name not in FRAMEWORK_NODES:
+                logger.warning("unknown_framework_in_chain", framework=framework_name)
+                continue
+
+            # Update current framework context
+            state["selected_framework"] = framework_name
+            state["working_memory"]["recommended_tools"] = list_tools_for_framework(
+                framework_name, state
+            )
+            state["working_memory"]["pipeline_position"] = {
+                "index": i,
+                "total": len(framework_chain),
+                "is_first": i == 0,
+                "is_last": i == len(framework_chain) - 1,
+                "previous_frameworks": executed_frameworks.copy()
+            }
+
+            logger.info(
+                "pipeline_step_start",
+                step=i + 1,
+                framework=framework_name,
+                total_steps=len(framework_chain)
+            )
+
+            # Execute framework
+            framework_fn = FRAMEWORK_NODES[framework_name]
+            pre_tokens = state.get("tokens_used", 0)
+            state = await framework_fn(state)
+            post_tokens = state.get("tokens_used", 0)
+
+            # Track execution
+            executed_frameworks.append(framework_name)
+            step_tokens = post_tokens - pre_tokens
+
+            # Store intermediate result if not last in chain
+            if i < len(framework_chain) - 1:
+                intermediate_result = {
+                    "framework": framework_name,
+                    "step": i + 1,
+                    "answer": state.get("final_answer", ""),
+                    "code": state.get("final_code"),
+                    "confidence": state.get("confidence_score", 0.5),
+                    "tokens": step_tokens
+                }
+
+                # Add to reasoning steps for context
+                if "reasoning_steps" not in state:
+                    state["reasoning_steps"] = []
+                state["reasoning_steps"].append({
+                    "thought": f"Pipeline step {i + 1}: {framework_name}",
+                    "action": "framework_execution",
+                    "observation": state.get("final_answer", "")[:500]
+                })
+
+                # For next framework, the previous answer becomes context
+                state["working_memory"]["pipeline_context"] = intermediate_result
+
+                logger.info(
+                    "pipeline_step_complete",
+                    step=i + 1,
+                    framework=framework_name,
+                    tokens=step_tokens
+                )
+
+        # Record all executed frameworks
+        state["working_memory"]["executed_chain"] = executed_frameworks
+        logger.info(
+            "pipeline_execution_complete",
+            executed=executed_frameworks,
+            total_tokens=state.get("tokens_used", 0)
+        )
+
     else:
-        # Fallback to self_discover
-        state = await self_discover_node(state)
-        state["selected_framework"] = "self_discover (fallback)"
-    
+        # Single framework execution (original behavior)
+        state["working_memory"]["recommended_tools"] = list_tools_for_framework(
+            selected_framework or "unknown", state
+        )
+
+        if selected_framework and selected_framework in FRAMEWORK_NODES:
+            framework_fn = FRAMEWORK_NODES[selected_framework]
+            state = await framework_fn(state)
+        else:
+            # Fallback to self_discover
+            state = await self_discover_node(state)
+            state["selected_framework"] = "self_discover (fallback)"
+
     # Save to LangChain memory after execution
     if thread_id and state.get("final_answer"):
+        # For pipelines, record all frameworks used
+        frameworks_used = state.get("working_memory", {}).get(
+            "executed_chain",
+            [state.get("selected_framework", "unknown")]
+        )
+        framework_str = " -> ".join(frameworks_used) if isinstance(frameworks_used, list) else frameworks_used
+
         await save_to_langchain_memory(
             thread_id=thread_id,
             query=state["query"],
             answer=state["final_answer"],
-            framework=selected_framework or "unknown"
+            framework=framework_str
         )
-        logger.info("saved_to_langchain_memory", thread_id=thread_id, framework=selected_framework)
-    
+        logger.info(
+            "saved_to_langchain_memory",
+            thread_id=thread_id,
+            framework=framework_str,
+            is_pipeline=len(frameworks_used) > 1 if isinstance(frameworks_used, list) else False
+        )
+
     return state
 
 
