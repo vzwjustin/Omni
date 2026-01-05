@@ -8,7 +8,6 @@ enabling precise retrieval based on context.
 import os
 from typing import List, Dict, Any, Optional
 from langchain_chroma import Chroma
-from langchain_openai import OpenAIEmbeddings
 from langchain_core.documents import Document
 import structlog
 
@@ -38,18 +37,18 @@ class CollectionManager:
         self._collections: Dict[str, Chroma] = {}
     
     def get_embedding_function(self):
-        """Lazy initialization of embedding function. Raises exception on failure."""
+        """
+        Lazy initialization of embedding function using shared implementation.
+
+        Uses the same provider logic as langchain_integration._get_embeddings()
+        to ensure consistency across the codebase.
+        """
         if self._embedding_function is None:
-            api_key = settings.openai_api_key or settings.openrouter_api_key
-            if not api_key:
-                error_msg = "No API key configured (OPENAI_API_KEY or OPENROUTER_API_KEY required)"
-                logger.error("embedding_init_failed", error=error_msg)
-                raise ValueError(error_msg)
+            # Import shared embedding function to avoid duplication
+            from .langchain_integration import _get_embeddings
             try:
-                self._embedding_function = OpenAIEmbeddings(
-                    model="text-embedding-3-large",
-                    api_key=api_key
-                )
+                self._embedding_function = _get_embeddings()
+                logger.info("embedding_init_success", provider=settings.llm_provider)
             except Exception as e:
                 logger.error("embedding_init_failed", error=str(e))
                 raise RuntimeError(f"Failed to initialize embeddings: {e}") from e
@@ -82,7 +81,8 @@ class CollectionManager:
         query: str,
         collection_names: Optional[List[str]] = None,
         k: int = 5,
-        filter_dict: Optional[Dict[str, Any]] = None
+        filter_dict: Optional[Dict[str, Any]] = None,
+        raise_on_error: bool = False
     ) -> List[Document]:
         """
         Search across one or more collections.
@@ -97,10 +97,13 @@ class CollectionManager:
             collection_names = list(self.COLLECTIONS.keys())
         
         all_results = []
+        searched_collections = 0
+        errors: list[str] = []
         
         for coll_name in collection_names:
             collection = self.get_collection(coll_name)
             if not collection:
+                errors.append(f"{coll_name}: unavailable")
                 continue
             
             try:
@@ -112,11 +115,15 @@ class CollectionManager:
                     )
                 else:
                     results = collection.similarity_search(query, k=k)
-                
+                searched_collections += 1
                 all_results.extend(results)
                 logger.debug("search_complete", collection=coll_name, results=len(results))
             except Exception as e:
                 logger.error("search_failed", collection=coll_name, error=str(e))
+                errors.append(f"{coll_name}: {e}")
+        
+        if raise_on_error and searched_collections == 0 and errors:
+            raise RuntimeError(f"No collections available for search: {', '.join(errors)}")
         
         # Sort by relevance (if scores available) and deduplicate
         return self._deduplicate_results(all_results)

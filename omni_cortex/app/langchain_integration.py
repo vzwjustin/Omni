@@ -116,11 +116,18 @@ async def get_memory(thread_id: str) -> OmniCortexMemory:
 # Tools for LLM Use
 # =============================================================================
 
+class VectorstoreSearchError(RuntimeError):
+    """Raised when a vectorstore search fails (not a no-results case)."""
+
 @tool
 async def search_documentation(query: str) -> str:
     """Search the indexed documentation/code via vector store."""
     logger.info("tool_called", tool="search_documentation", query=query)
-    docs = search_vectorstore(query, k=5)
+    try:
+        docs = search_vectorstore(query, k=5)
+    except VectorstoreSearchError as exc:
+        logger.error("search_documentation_failed", error=str(exc))
+        return f"Search failed: {exc}"
     if not docs:
         return "No results found in the indexed corpus. Try re-ingesting or refining the query."
     formatted = []
@@ -204,26 +211,28 @@ async def retrieve_context(query: str, thread_id: Optional[str] = None) -> str:
     """
     logger.info("tool_called", tool="retrieve_context", query=query, thread_id=thread_id)
 
-    # If thread_id is provided, only get context from that specific thread
-    if thread_id and thread_id in _memory_store:
-        mem = _memory_store[thread_id]
-        if mem.messages:
-            # Take last 6 messages (3 exchanges)
-            recent = mem.messages[-6:]
-            history = "\n".join(str(m.content) for m in recent)
-            return f"Recent context (thread {thread_id}):\n\n{history}"
-        return "No prior context available for this thread."
+    # Use lock for thread-safe access to _memory_store
+    async with _memory_store_lock:
+        # If thread_id is provided, only get context from that specific thread
+        if thread_id and thread_id in _memory_store:
+            mem = _memory_store[thread_id]
+            if mem.messages:
+                # Take last 6 messages (3 exchanges)
+                recent = mem.messages[-6:]
+                history = "\n".join(str(m.content) for m in recent)
+                return f"Recent context (thread {thread_id}):\n\n{history}"
+            return "No prior context available for this thread."
 
-    # If no thread_id provided, only return context from the most recently accessed thread
-    # to avoid leaking context between sessions
-    if _memory_store:
-        # OrderedDict keeps insertion/access order - get the most recent
-        most_recent_thread_id = next(reversed(_memory_store))
-        mem = _memory_store[most_recent_thread_id]
-        if mem.messages:
-            recent = mem.messages[-6:]
-            history = "\n".join(str(m.content) for m in recent)
-            return f"Recent context:\n\n{history}"
+        # If no thread_id provided, only return context from the most recently accessed thread
+        # to avoid leaking context between sessions
+        if _memory_store:
+            # OrderedDict keeps insertion/access order - get the most recent
+            most_recent_thread_id = next(reversed(_memory_store))
+            mem = _memory_store[most_recent_thread_id]
+            if mem.messages:
+                recent = mem.messages[-6:]
+                history = "\n".join(str(m.content) for m in recent)
+                return f"Recent context:\n\n{history}"
 
     return "No prior context available."
 
@@ -236,7 +245,7 @@ except ImportError:
     _enhanced_tools = []
 
 # Export available tools for MCP
-AVAILABLE_TOOLS = [search_documentation, execute_code, retrieve_context] + _enhanced_tools
+AVAILABLE_TOOLS = [search_documentation, execute_code, retrieve_context, save_learning] + _enhanced_tools
 
 
 # =============================================================================
@@ -381,13 +390,14 @@ def search_vectorstore(query: str, k: int = 5) -> List[Document]:
         manager = get_collection_manager()
         # Search across all core collections to maintain legacy behavior of searching "everything"
         return manager.search(
-            query, 
-            collection_names=['frameworks', 'documentation', 'utilities'], 
-            k=k
+            query,
+            collection_names=["frameworks", "documentation", "utilities"],
+            k=k,
+            raise_on_error=True
         )
     except Exception as e:
         logger.error("vectorstore_search_failed", error=str(e))
-        return []
+        raise VectorstoreSearchError(f"Vectorstore search failed: {e}") from e
 
 
 # =============================================================================
@@ -416,8 +426,15 @@ class OmniCortexCallback(BaseCallbackHandler):
     
     def on_llm_end(self, response, **kwargs) -> None:
         """Track LLM call completion and token usage."""
-        if hasattr(response, 'llm_output') and response.llm_output:
-            tokens = response.llm_output.get('token_usage', {})
+        # Handle both object and dict response types (LangChain 1.0+ compatibility)
+        llm_output = None
+        if isinstance(response, dict):
+            llm_output = response.get('llm_output')
+        elif hasattr(response, 'llm_output'):
+            llm_output = response.llm_output
+
+        if llm_output:
+            tokens = llm_output.get('token_usage', {}) if isinstance(llm_output, dict) else {}
             total = tokens.get('total_tokens', 0)
             self.total_tokens += total
             logger.info(
@@ -690,8 +707,12 @@ def _format_rag_context(rag_context: list) -> str:
 
     parts = ["## Relevant Context from Codebase\n"]
     for item in rag_context:
-        parts.append(f"### {item['source']} ({item['type']})")
-        parts.append(f"```\n{item['content']}\n```\n")
+        # Use .get() for safe dictionary access to prevent KeyError
+        source = item.get('source', 'unknown')
+        item_type = item.get('type', 'unknown')
+        content = item.get('content', '')
+        parts.append(f"### {source} ({item_type})")
+        parts.append(f"```\n{content}\n```\n")
 
     return "\n".join(parts)
 
