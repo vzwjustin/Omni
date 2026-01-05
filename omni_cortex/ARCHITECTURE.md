@@ -19,7 +19,7 @@ This means:
 
 | Component | Purpose |
 |-----------|---------|
-| **LangGraph** | Workflow orchestration, 40 framework nodes |
+| **LangGraph** | Workflow orchestration, 62 framework nodes |
 | **LangChain Memory** | Conversation history per thread |
 | **ChromaDB** | Vector store for RAG search (6 collections) |
 | **HyperRouter** | Vibe-based framework selection |
@@ -28,12 +28,12 @@ This means:
 
 | Configuration | Tools |
 |---------------|-------|
-| With API key (RAG enabled) | 48 tools |
-| Without API key | 41 tools |
+| With API key (RAG enabled) | 70 tools |
+| Without API key | 63 tools |
 
 ### Breakdown
 
-- 40 `think_*` framework tools (always available)
+- 62 `think_*` framework tools (always available)
 - 1 `reason` smart router (always available)
 - 7 RAG/search tools (require API key)
 
@@ -41,12 +41,15 @@ This means:
 
 ```
 app/nodes/
-├── strategy/    # 7 frameworks - Architecture, planning
-├── search/      # 4 frameworks - Exploration, optimization
-├── iterative/   # 8 frameworks - Debugging, refinement
-├── code/        # 13 frameworks - Code-specific patterns
-├── context/     # 6 frameworks - Research, analogies
-└── fast/        # 2 frameworks - Quick responses
+├── strategy/      # 7 frameworks - Architecture, planning
+├── search/        # 4 frameworks - Exploration, optimization
+├── iterative/     # 8 frameworks - Debugging, refinement
+├── code/          # 17 frameworks - Code-specific patterns
+├── context/       # 6 frameworks - Research, analogies
+├── fast/          # 2 frameworks - Quick responses
+├── verification/  # 8 frameworks - Testing, validation
+├── agent/         # 5 frameworks - Multi-agent patterns
+└── rag/           # 5 frameworks - Retrieval-augmented generation
 ```
 
 ## Project Structure
@@ -61,7 +64,7 @@ omni_cortex/
 │   ├── core/
 │   │   ├── config.py         # Settings (Pydantic)
 │   │   └── router.py         # HyperRouter
-│   └── nodes/                # 40 framework implementations
+│   └── nodes/                # 62 framework implementations
 ├── server/
 │   └── main.py               # MCP server entry point
 ├── setup.sh                  # Automated setup

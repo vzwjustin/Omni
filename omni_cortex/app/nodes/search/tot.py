@@ -33,7 +33,7 @@ async def tree_of_thoughts_node(state: GraphState) -> GraphState:
     # Construct the Protocol Prompt for the Client
     prompt = f"""# Framework Protocol
 
-I have selected the **Framework** framework for this task.
+I have selected the **Tree of Thoughts (ToT)** framework for this task.
 Tree of Thoughts (ToT): BFS/DFS Exploration
 
 ## Use Case
@@ -44,7 +44,7 @@ Algorithms, optimization, problem solving
 
 ## 🧠 Execution Protocol (Client-Side)
 
-Please execute the reasoning steps for **Framework** using your internal context:
+Please execute the reasoning steps for **Tree of Thoughts (ToT)** using your internal context:
 
 ### Framework Steps
 1. Generate initial thought branches

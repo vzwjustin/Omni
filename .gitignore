@@ -43,6 +43,14 @@ Thumbs.db
 # Logs
 *.log
 
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Data
+/data/
+
 # ChromaDB
 chroma/
 *.db

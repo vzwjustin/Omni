@@ -33,7 +33,7 @@ async def graph_of_thoughts_node(state: GraphState) -> GraphState:
     # Construct the Protocol Prompt for the Client
     prompt = f"""# Framework Protocol
 
-I have selected the **Framework** framework for this task.
+I have selected the **Graph of Thoughts (GoT)** framework for this task.
 Graph of Thoughts (GoT): Non-Linear Thought Processing
 
 ## Use Case
@@ -44,7 +44,7 @@ Refactoring, code restructuring, complex dependencies
 
 ## 🧠 Execution Protocol (Client-Side)
 
-Please execute the reasoning steps for **Framework** using your internal context:
+Please execute the reasoning steps for **Graph of Thoughts (GoT)** using your internal context:
 
 ### Framework Steps
 1. Generate parallel initial thoughts

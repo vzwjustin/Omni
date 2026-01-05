@@ -33,7 +33,7 @@ async def buffer_of_thoughts_node(state: GraphState) -> GraphState:
     # Construct the Protocol Prompt for the Client
     prompt = f"""# Framework Protocol
 
-I have selected the **Framework** framework for this task.
+I have selected the **Buffer-of-Thoughts (BoT)** framework for this task.
 Buffer-of-Thoughts (BoT): Template Retrieval System
 
 ## Use Case
@@ -44,7 +44,7 @@ Repetitive tasks, known patterns, boilerplate
 
 ## 🧠 Execution Protocol (Client-Side)
 
-Please execute the reasoning steps for **Framework** using your internal context:
+Please execute the reasoning steps for **Buffer-of-Thoughts (BoT)** using your internal context:
 
 ### Framework Steps
 1. Analyze the Problem

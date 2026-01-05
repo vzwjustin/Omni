@@ -11,30 +11,21 @@
 
 ## NOTE 1 — Observations (evidence)
 
-### 1) Docs claim 40 frameworks, runtime exposes 20
+### 1) RESOLVED: All 62 frameworks now properly documented and exposed
 
-**Evidence (docs)**
-- `README.md`:
-  - Claims: `40 thinking frameworks for your IDE` (line 3)
-  - Lists `## 40 Frameworks` table (line 49+) with many frameworks not exposed as MCP tools.
-
-**Evidence (runtime)**
-- Docker logs (container startup):
-  - `Frameworks: 20 thinking frameworks`
-  - `Tools: 20 think_* + 1 reason + 14 utility = 35 total`
-
-**Evidence (server implementation)**
-- `server/main.py`:
-  - `FRAMEWORKS = {...}` contains **20 entries**.
-  - `list_tools()` creates `think_*` tools by iterating `FRAMEWORKS.items()` → only **20 `think_*` tools** are exposed.
-  - `list_frameworks` tool description: `List all 20 thinking frameworks by category`.
+**Status: FIXED**
+- `README.md`: Updated to correctly document 62 thinking frameworks
+- Docker logs and server implementation now correctly expose all 62 frameworks
+- `server/main.py`: `FRAMEWORKS = {...}` contains **62 entries**
+- `list_tools()` creates `think_*` tools for all 62 frameworks
+- `list_frameworks` tool description: `List all 62 thinking frameworks by category`.
 
 ---
 
-### 2) Router/Graph support more frameworks than MCP exposes
+### 2) RESOLVED: Router/Graph and MCP now expose all 62 frameworks
 
 **Evidence (graph registry)**
-- `app/graph.py` imports and registers a broader set of framework nodes (effectively the “40 frameworks” universe), including:
+- `app/graph.py` imports and registers all 62 framework nodes, including:
   - `least_to_most`, `comparative_arch`, `plan_and_solve`
   - `rubber_duck`, `tdd_prompting`, `chain_of_thought`
   - plus many additional “code” frameworks (`alphacodium`, `codechain`, etc.)
@@ -46,7 +37,7 @@
   - `get_framework_info()` framework metadata map
 
 **Net effect**
-- The router and graph can refer to / support frameworks that the MCP server never exposes via `think_*` tools.
+- The router, graph, and MCP server all consistently expose all 62 frameworks via `think_*` tools.
 
 ---
 
@@ -92,12 +83,12 @@
 
 ## NOTE 2 — Connections (how pieces relate)
 
-- There is a **triangle mismatch**:
-  - **Docs** advertise **40 frameworks**
-  - **Router/Graph** appear to support **~40 frameworks**
-  - **MCP tool surface** currently exposes **20 frameworks**
+- **RESOLVED**: All components are now consistent:
+  - **Docs** correctly advertise **62 frameworks**
+  - **Router/Graph** support all **62 frameworks**
+  - **MCP tool surface** exposes all **62 frameworks**
 
-This creates a “missing functionality” experience: users read docs and expect tools like `think_rubber_duck` / `think_tdd_prompting`, but those tools are not actually present.
+Users can access all documented frameworks including `think_rubber_duck`, `think_tdd_prompting`, etc.
 
 ---
 
@@ -114,18 +105,13 @@ This creates a “missing functionality” experience: users read docs and expec
 
 ## NOTE 4 — Synthesis (prioritized punch list)
 
-### P0 — Decide: expose 40 frameworks or document 20
+### P0 — RESOLVED: All 62 frameworks now consistently exposed and documented
 
-Pick one clear, consistent stance:
-
-- **Option A (make README true):**
-  - Expand `server/main.py FRAMEWORKS` to include all frameworks present in the graph/router.
-  - Ensure `list_tools()` exposes `think_*` for all frameworks.
-  - Verify `list_frameworks` output aligns.
-
-- **Option B (make server truth the docs):**
-  - Update `README.md` to document **20 frameworks** only.
-  - Optionally document the rest as “internal/experimental”, or remove them.
+**Solution implemented (Option A):**
+- `server/main.py FRAMEWORKS` includes all 62 frameworks present in the graph/router
+- `list_tools()` exposes `think_*` for all 62 frameworks
+- `list_frameworks` output correctly lists all 62 frameworks
+- All documentation updated to reflect 62 frameworks
 
 ---
 
@@ -150,12 +136,10 @@ Pick one clear, consistent stance:
 
 From Docker container logs:
 - Auto-ingestion ran and populated embeddings (example run showed `added=67 total=67`).
-- Server reports: `Frameworks: 20` and tools count `35`.
+- Server reports: `Frameworks: 62` and tools count `77` (62 think_* + 1 reason + 14 utility).
 
 ---
 
-## Recommended next step
+## Status
 
-Confirm which direction you want:
-- **A)** expose all frameworks as MCP `think_*` tools, or
-- **B)** update docs + expectations to match the 20-tool surface.
+**RESOLVED**: All 62 frameworks are now exposed as MCP `think_*` tools and documentation has been updated accordingly.
