@@ -5,8 +5,8 @@ FROM python:3.13-slim
 
 # Metadata
 LABEL maintainer="Omni-Cortex Team"
-LABEL description="MCP Server exposing 20 thinking frameworks for vibe coders. No API keys required."
-LABEL version="2.2.0"
+LABEL description="MCP Server with 62 AI reasoning frameworks - multi-turn orchestration via client sampling. No API keys required."
+LABEL version="3.0.0"
 
 # Environment
 ENV PYTHONUNBUFFERED=1 \
