@@ -15,6 +15,7 @@ from contextlib import redirect_stdout, redirect_stderr
 from typing import Dict, Any
 
 from ...state import GraphState
+from ...collection_manager import get_collection_manager
 from ..common import (
     quiet_star,
     format_code_context,
@@ -23,6 +24,26 @@ from ..common import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _search_code_examples(query: str, task_type: str = "code_generation") -> str:
+    """Search instruction knowledge base for similar code examples."""
+    try:
+        manager = get_collection_manager()
+        results = manager.search_instruction_knowledge(query, k=3, task_type=task_type, language="python")
+
+        if not results:
+            return ""
+
+        examples = []
+        for i, doc in enumerate(results, 1):
+            examples.append(f"Code Example {i}:\n{doc.page_content[:500]}")
+
+        return "\n\n".join(examples)
+    except Exception as e:
+        # Gracefully degrade if no API key or collection empty
+        logger.debug("instruction_knowledge_search_skipped", error=str(e))
+        return ""
 
 
 # =============================================================================
@@ -188,6 +209,11 @@ async def program_of_thoughts_node(state: GraphState) -> GraphState:
         state=state
     )
 
+    # Search for similar code examples
+    code_examples = _search_code_examples(query, task_type="code_generation")
+    if code_examples:
+        logger.info("instruction_knowledge_examples_found", query_preview=query[:50])
+
     # Construct the Protocol Prompt for the Client
     prompt = f"""# Program of Thoughts Protocol
 
@@ -212,7 +238,10 @@ Please execute the reasoning steps for **Program of Thoughts** using your intern
 
 ## 📝 Code Context
 {code_context}
-
+{f'''
+## 💡 Similar Code Examples from 12K+ Knowledge Base
+{code_examples}
+''' if code_examples else ''}
 **Please start by outlining your approach following the Program of Thoughts process.**
 """
 
