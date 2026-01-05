@@ -197,14 +197,15 @@ async def route_node(state: GraphState) -> GraphState:
     Uses HyperRouter with LangChain memory context to analyze the task
     and select the optimal framework.
     """
-    # Ensure working_memory exists
-    if "working_memory" not in state or state["working_memory"] is None:
-        state["working_memory"] = {}
+    # Ensure working_memory exists (defensive - use .get() for safety)
+    state["working_memory"] = state.get("working_memory") or {}
 
     # Enhance state with LangChain memory if thread_id available
     thread_id = state.get("working_memory", {}).get("thread_id")
     if thread_id:
         state = await enhance_state_with_langchain(state, thread_id)
+        # Re-ensure working_memory after enhancement (state may be replaced)
+        state["working_memory"] = state.get("working_memory") or {}
         logger.info("state_enhanced_with_memory", thread_id=thread_id)
 
     # Make LangChain tools available to router if needed
@@ -228,9 +229,8 @@ async def execute_framework_node(state: GraphState) -> GraphState:
     3. Final framework's output becomes final_answer
     4. Token usage aggregated across all frameworks
     """
-    # Ensure working_memory exists
-    if "working_memory" not in state or state["working_memory"] is None:
-        state["working_memory"] = {}
+    # Ensure working_memory exists (defensive - use .get() for safety)
+    state["working_memory"] = state.get("working_memory") or {}
 
     thread_id = state.get("working_memory", {}).get("thread_id")
     framework_chain = state.get("framework_chain", [])

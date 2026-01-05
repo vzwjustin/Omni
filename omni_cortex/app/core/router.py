@@ -7,8 +7,11 @@ Designed for vibe coders and senior engineers who just want it to work.
 """
 
 import re
+import structlog
 from typing import Optional, List, Tuple
 from ..state import GraphState
+
+logger = structlog.get_logger("router")
 
 
 class HyperRouter:
@@ -1961,8 +1964,9 @@ QUESTIONS_FOR_USER:
 PRIOR_KNOWLEDGE: [relevant insights from similar problems, or "none"]
 """
 
-            # Use Gemini with thinking mode for rich analysis
-            llm = get_chat_model("fast", enable_thinking=True)
+            # Use dedicated Gemini routing model (always Gemini, regardless of LLM_PROVIDER)
+            from ..langchain_integration import get_routing_model
+            llm = get_routing_model()
             response = await llm.ainvoke(prompt)
             content = response.content if hasattr(response, "content") else str(response)
             if isinstance(content, list):
@@ -2031,8 +2035,8 @@ PRIOR_KNOWLEDGE: [relevant insights from similar problems, or "none"]
                 learnings = manager.search_learnings(query, k=2)
                 for l in learnings:
                     all_context.append(f"[PRIOR_SOLUTION|{l.get('framework', 'unknown')}] {l.get('solution', '')[:200]}")
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("learnings_search_failed", error=str(e)[:100])
 
             # 2. Search debugging knowledge (for debug tasks)
             if category in ("debug", "verification") or any(w in query.lower() for w in ["bug", "error", "fix", "debug"]):
@@ -2040,8 +2044,8 @@ PRIOR_KNOWLEDGE: [relevant insights from similar problems, or "none"]
                     docs = manager.search(query, collection_names=["debugging_knowledge"], k=2)
                     for doc in docs:
                         all_context.append(f"[DEBUG_PATTERN] {doc.page_content[:200]}")
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("debug_knowledge_search_failed", error=str(e)[:100])
 
             # 3. Search reasoning knowledge (for complex tasks)
             if category in ("architecture", "exploration", "refactor"):
@@ -2049,8 +2053,8 @@ PRIOR_KNOWLEDGE: [relevant insights from similar problems, or "none"]
                     docs = manager.search(query, collection_names=["reasoning_knowledge"], k=2)
                     for doc in docs:
                         all_context.append(f"[REASONING_EXAMPLE] {doc.page_content[:200]}")
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("reasoning_knowledge_search_failed", error=str(e)[:100])
 
             # 4. Search instruction knowledge (for implementation tasks)
             if category in ("code_gen", "agent"):
@@ -2058,12 +2062,113 @@ PRIOR_KNOWLEDGE: [relevant insights from similar problems, or "none"]
                     docs = manager.search(query, collection_names=["instruction_knowledge"], k=2)
                     for doc in docs:
                         all_context.append(f"[INSTRUCTION_EXAMPLE] {doc.page_content[:200]}")
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("instruction_knowledge_search_failed", error=str(e)[:100])
 
             return "\n".join(all_context[:5]) if all_context else ""
-        except Exception:
+        except Exception as e:
+            logger.debug("get_relevant_learnings_failed", error=str(e)[:100])
             return ""
+
+    async def _enrich_evidence_from_chroma(
+        self,
+        query: str,
+        category: str,
+        framework_chain: List[str],
+        task_type: str
+    ) -> List:
+        """
+        Pull rich, actionable context from Chroma to give Claude more to work with.
+
+        Gemini does this work upfront so Claude can execute immediately.
+        Returns list of EvidenceExcerpt objects.
+        """
+        from .schemas import EvidenceExcerpt, SourceType
+        evidence = []
+
+        try:
+            from ..collection_manager import get_collection_manager
+            manager = get_collection_manager()
+
+            # 1. Get relevant code documentation/examples
+            try:
+                docs = manager.search(query, collection_names=["documentation"], k=2)
+                for doc in docs:
+                    if doc.page_content and len(doc.page_content) > 50:
+                        evidence.append(EvidenceExcerpt(
+                            source_type=SourceType.FILE,
+                            ref=doc.metadata.get("source", "documentation")[:80],
+                            content=doc.page_content[:1500],
+                            relevance="Relevant code/documentation from codebase"
+                        ))
+            except Exception as e:
+                logger.debug("enrich_evidence_docs_failed", error=str(e)[:100])
+
+            # 2. Get prior successful solutions for similar tasks
+            try:
+                learnings = manager.search_learnings(query, k=2)
+                for learn in learnings:
+                    solution = learn.get("solution", "")
+                    if solution and len(solution) > 30:
+                        evidence.append(EvidenceExcerpt(
+                            source_type=SourceType.USER_TEXT,
+                            ref=f"prior_solution_{learn.get('framework', 'unknown')}",
+                            content=solution[:1200],
+                            relevance=f"Prior successful solution using {learn.get('framework', 'unknown')}"
+                        ))
+            except Exception as e:
+                logger.debug("enrich_evidence_learnings_failed", error=str(e)[:100])
+
+            # 3. Debug-specific: Get debugging patterns and known fixes
+            if task_type in ("debug", "fix") or category == "debug":
+                try:
+                    debug_docs = manager.search_debugging_knowledge(query, k=2)
+                    for doc in debug_docs:
+                        if doc.page_content:
+                            evidence.append(EvidenceExcerpt(
+                                source_type=SourceType.USER_TEXT,
+                                ref="debug_pattern",
+                                content=doc.page_content[:1200],
+                                relevance="Known debugging pattern or fix approach"
+                            ))
+                except Exception as e:
+                    logger.debug("enrich_evidence_debug_failed", error=str(e)[:100])
+
+            # 4. Architecture/design: Get reasoning examples
+            if category in ("architecture", "exploration", "refactor"):
+                try:
+                    reasoning_docs = manager.search_reasoning_knowledge(query, k=1)
+                    for doc in reasoning_docs:
+                        if doc.page_content:
+                            evidence.append(EvidenceExcerpt(
+                                source_type=SourceType.USER_TEXT,
+                                ref="reasoning_example",
+                                content=doc.page_content[:1200],
+                                relevance="Example reasoning approach for similar problem"
+                            ))
+                except Exception as e:
+                    logger.debug("enrich_evidence_reasoning_failed", error=str(e)[:100])
+
+            # 5. Get framework-specific examples if using known framework
+            if framework_chain:
+                primary_fw = framework_chain[0]
+                try:
+                    fw_docs = manager.search_frameworks(f"{primary_fw} example usage", k=1)
+                    for doc in fw_docs:
+                        if doc.page_content and len(doc.page_content) > 50:
+                            evidence.append(EvidenceExcerpt(
+                                source_type=SourceType.FILE,
+                                ref=f"framework_{primary_fw}",
+                                content=doc.page_content[:800],
+                                relevance=f"Example of {primary_fw} framework usage"
+                            ))
+                except Exception as e:
+                    logger.debug("enrich_evidence_framework_failed", error=str(e)[:100])
+
+        except Exception as e:
+            logger.debug("enrich_evidence_failed", error=str(e)[:100])
+
+        return evidence[:4]  # Max 4 enriched evidence items
 
     async def _save_task_analysis(
         self,
@@ -2092,8 +2197,8 @@ PRIOR_KNOWLEDGE: [relevant insights from similar problems, or "none"]
             }
 
             manager.add_documents([content], [metadata], "learnings")
-        except Exception:
-            pass  # Silent fail - not critical
+        except Exception as e:
+            logger.debug("save_task_analysis_failed", error=str(e)[:100])
 
     # ==========================================================================
     # STRUCTURED BRIEF GENERATION
@@ -2134,7 +2239,8 @@ PRIOR_KNOWLEDGE: [relevant insights from similar problems, or "none"]
             framework_chain, reasoning, category = await self.select_framework_chain(
                 query, code_snippet, ide_context
             )
-        except Exception:
+        except Exception as e:
+            logger.warning("framework_selection_failed", error=str(e)[:100], fallback="self_discover→chain_of_thought")
             framework_chain = ["self_discover", "chain_of_thought"]
             reasoning = "Safe baseline fallback"
             category = "exploration"
@@ -2258,6 +2364,15 @@ PRIOR_KNOWLEDGE: [relevant insights from similar problems, or "none"]
                 content=gemini_analysis["prior_knowledge"][:500],
                 relevance="Relevant insight from similar past problems"
             ))
+
+        # Enrich with Chroma RAG context - Gemini pulls this so Claude has more to work with
+        chroma_evidence = await self._enrich_evidence_from_chroma(
+            query=query,
+            category=category,
+            framework_chain=framework_chain,
+            task_type=task_type.value if hasattr(task_type, 'value') else str(task_type)
+        )
+        evidence.extend(chroma_evidence)
 
         claude_brief = ClaudeCodeBrief(
             objective=self._generate_objective(query, task_type),

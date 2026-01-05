@@ -1426,7 +1426,7 @@ def create_server() -> Server:
 
         # List frameworks
         if name == "list_frameworks":
-            output = "# Omni-Cortex: 60 Thinking Frameworks\n\n"
+            output = f"# Omni-Cortex: {len(FRAMEWORKS)} Thinking Frameworks\n\n"
             for cat in ["strategy", "search", "iterative", "code", "context", "fast", "verification", "agent", "rag"]:
                 output += f"## {cat.upper()}\n"
                 for n, fw in FRAMEWORKS.items():
@@ -1560,7 +1560,7 @@ def create_server() -> Server:
         # RAG: search framework category
         if name == "search_framework_category":
             category = arguments.get("framework_category", "")
-            valid = ["strategy", "search", "iterative", "code", "context", "fast"]
+            valid = ["strategy", "search", "iterative", "code", "context", "fast", "verification", "agent", "rag"]
             if category not in valid:
                 return [TextContent(type="text", text=f"Invalid category. Use: {', '.join(valid)}")]
             docs = manager.search_frameworks(
@@ -1590,10 +1590,14 @@ def create_server() -> Server:
         # Health check
         if name == "health":
             collections = list(manager.COLLECTIONS.keys())
+            utility_tools = 14  # reason, list_frameworks, recommend, get_context, save_context,
+                               # search_documentation, search_frameworks_by_name, search_by_category,
+                               # search_function, search_class, search_docs_only, search_framework_category,
+                               # execute_code, health
             return [TextContent(type="text", text=json.dumps({
                 "status": "healthy",
                 "frameworks": len(FRAMEWORKS),
-                "tools": len(FRAMEWORKS) + 14,  # 60 think_* + 14 utility tools
+                "tools": len(FRAMEWORKS) + utility_tools,
                 "collections": collections,
                 "memory_enabled": True,
                 "rag_enabled": True
@@ -1612,7 +1616,8 @@ async def main():
     logger.info(f"Graph nodes: {len(FRAMEWORK_NODES)} LangGraph nodes")
     logger.info("Memory: LangChain ConversationBufferMemory")
     logger.info("RAG: ChromaDB with 6 collections")
-    logger.info(f"Tools: {len(FRAMEWORKS)} think_* + 14 utility = {len(FRAMEWORKS) + 14} total")
+    utility_tools = 14
+    logger.info(f"Tools: {len(FRAMEWORKS)} think_* + {utility_tools} utility = {len(FRAMEWORKS) + utility_tools} total")
     logger.info("=" * 60)
 
     server = create_server()
