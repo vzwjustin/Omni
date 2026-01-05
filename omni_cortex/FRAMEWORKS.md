@@ -1,4 +1,4 @@
-# Omni-Cortex: 60 Thinking Frameworks
+# Omni-Cortex: 62 Thinking Frameworks
 
 A comprehensive library of AI reasoning frameworks for code-focused tasks. Each framework is accessible via MCP tools (`think_*`) or auto-selected by the `reason` tool.
 
@@ -44,7 +44,7 @@ A comprehensive library of AI reasoning frameworks for code-focused tasks. Each 
 
 ---
 
-## Code Frameworks (15)
+## Code Frameworks (17)
 
 | Framework | Tool | Description | Best For |
 |-----------|------|-------------|----------|
@@ -63,6 +63,8 @@ A comprehensive library of AI reasoning frameworks for code-focused tasks. Each 
 | **RECODE** | `think_recode` | Multi-candidate validation with CFG-based debugging | Reliable code generation, high-stakes code |
 | **PAL** | `think_pal` | Program-Aided Language - code as reasoning substrate | Algorithms, parsing, numeric logic, validation |
 | **Scratchpads** | `think_scratchpads` | Structured intermediate reasoning workspace | Multi-step fixes, multi-constraint reasoning |
+| **Parsel** | `think_parsel` | Compositional code from natural language specs | Complex functions, dependency graphs, spec-to-code |
+| **DocPrompting** | `think_docprompting` | Documentation-driven code generation | API usage, library integration, following docs |
 
 ---
 
@@ -165,7 +167,7 @@ Just describe your problem naturally:
 | **Documentation** | chain_of_note, skeleton_of_thought |
 | **Quick Fixes** | system1, skeleton_of_thought |
 | **Complex Problems** | everything_of_thought, mcts_rstar, coala |
-| **Code Generation** | alphacodium, codechain, procoder, recode, pal |
+| **Code Generation** | alphacodium, codechain, procoder, recode, pal, parsel, docprompting |
 | **Verification** | self_consistency, verify_and_edit, selfcheckgpt, ragas |
 | **Agent Tasks** | rewoo, lats, mrkl, swe_agent, toolformer |
 | **Retrieval/RAG** | self_rag, hyde, rag_fusion, raptor, graphrag |

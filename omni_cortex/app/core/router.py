@@ -86,7 +86,10 @@ class HyperRouter:
         "graphrag": "Entity-relation grounding for dependencies. Best for architecture questions.",
         # Additional code frameworks (2026 Expansion)
         "pal": "Program-Aided Language - code as reasoning substrate. Best for algorithms and numeric logic.",
-        "scratchpads": "Structured intermediate reasoning workspace. Best for multi-step fixes."
+        "scratchpads": "Structured intermediate reasoning workspace. Best for multi-step fixes.",
+        # Additional code frameworks (2026 Expansion - Part 2)
+        "parsel": "Compositional code generation from natural language specs. Builds dependency graph of functions.",
+        "docprompting": "Documentation-driven code generation. Retrieves docs and examples to guide code generation."
     }
     
     # Heuristic patterns (fallback)
@@ -757,6 +760,30 @@ class HyperRouter:
             "track state", "multi-step notes", "organized thinking",
             "structured notes", "work area", "keep track",
             "progressive notes", "step tracker"
+        ],
+
+        # =========================================================================
+        # CODE FRAMEWORKS (2026 Expansion - Part 2)
+        # =========================================================================
+
+        # Compositional code vibes
+        "parsel": [
+            "compositional", "dependency graph", "function specs",
+            "decompose into functions", "build from specs", "spec to code",
+            "natural language specs", "function dependencies", "bottom up build",
+            "break into functions", "modular from spec", "compose functions",
+            "spec driven", "from requirements", "hierarchical functions",
+            "dependency order", "build order", "layered implementation"
+        ],
+
+        # Documentation-driven vibes
+        "docprompting": [
+            "from documentation", "follow the docs", "docs say",
+            "according to documentation", "api docs", "official docs",
+            "documentation example", "doc-driven", "read the docs",
+            "rtfm", "manual says", "reference docs", "usage example",
+            "as documented", "per documentation", "library docs",
+            "sdk documentation", "api reference", "doc examples"
         ]
     }
     
@@ -1044,6 +1071,8 @@ class HyperRouter:
             "recode": "code_gen",
             "pal": "compute",
             "scratchpads": "reasoning",
+            "parsel": "code_gen",
+            "docprompting": "code_gen",
             # Verification frameworks
             "self_consistency": "verification",
             "self_ask": "verification",
@@ -1496,6 +1525,21 @@ class HyperRouter:
                 "description": "Structured intermediate reasoning",
                 "best_for": ["multi-step fixes", "multi-constraint reasoning", "state tracking"],
                 "complexity": "low"
+            },
+            # Additional code frameworks (2026 Expansion - Part 2)
+            "parsel": {
+                "name": "Parsel",
+                "category": "code",
+                "description": "Compositional code generation from natural language specs",
+                "best_for": ["complex functions", "dependency graphs", "spec-to-code", "modular systems"],
+                "complexity": "high"
+            },
+            "docprompting": {
+                "name": "DocPrompting",
+                "category": "code",
+                "description": "Documentation-driven code generation",
+                "best_for": ["API usage", "library integration", "following docs", "correct usage"],
+                "complexity": "medium"
             }
         }
         return INFO.get(framework, {
