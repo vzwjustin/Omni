@@ -27,7 +27,9 @@ class CollectionManager:
         "tests": "Test files and fixtures",
         "integrations": "LangChain/LangGraph integration code",
         "learnings": "Successful solutions and past problem resolutions",
-        "debugging_knowledge": "Bug-fix pairs and debugging patterns from curated datasets"
+        "debugging_knowledge": "Bug-fix pairs and debugging patterns from curated datasets",
+        "reasoning_knowledge": "Chain-of-thought and step-by-step reasoning examples",
+        "instruction_knowledge": "Instruction-following and task completion examples"
     }
     
     def __init__(self, persist_dir: Optional[str] = None):
@@ -209,6 +211,10 @@ class CollectionManager:
             return "integrations"
         elif category == "debugging":
             return "debugging_knowledge"
+        elif category == "reasoning":
+            return "reasoning_knowledge"
+        elif category == "instruction":
+            return "instruction_knowledge"
         else:
             return "utilities"
     
@@ -354,6 +360,84 @@ class CollectionManager:
             return results
         except Exception as e:
             logger.error("debugging_knowledge_search_failed", error=str(e))
+            return []
+
+    def search_reasoning_knowledge(
+        self,
+        query: str,
+        k: int = 5,
+        reasoning_type: Optional[str] = None
+    ) -> List[Document]:
+        """
+        Search for similar reasoning patterns (chain-of-thought examples).
+
+        Args:
+            query: The problem or question
+            k: Number of results to return
+            reasoning_type: Filter by reasoning pattern (e.g., "chain-of-thought", "step-by-step")
+
+        Returns:
+            List of reasoning example documents
+        """
+        collection = self.get_collection("reasoning_knowledge")
+        if not collection:
+            return []
+
+        try:
+            filter_dict = {}
+            if reasoning_type:
+                filter_dict["reasoning_type"] = reasoning_type
+
+            results = collection.similarity_search(
+                query,
+                k=k,
+                filter=filter_dict if filter_dict else None
+            )
+
+            logger.debug("reasoning_knowledge_retrieved", count=len(results))
+            return results
+        except Exception as e:
+            logger.error("reasoning_knowledge_search_failed", error=str(e))
+            return []
+
+    def search_instruction_knowledge(
+        self,
+        query: str,
+        k: int = 5,
+        task_type: Optional[str] = None,
+        language: str = "python"
+    ) -> List[Document]:
+        """
+        Search for similar instruction-following examples.
+
+        Args:
+            query: The instruction or task
+            k: Number of results to return
+            task_type: Filter by task type (e.g., "code_generation", "refactoring")
+            language: Programming language filter (default: "python")
+
+        Returns:
+            List of instruction-completion documents
+        """
+        collection = self.get_collection("instruction_knowledge")
+        if not collection:
+            return []
+
+        try:
+            filter_dict = {"language": language}
+            if task_type:
+                filter_dict["task_type"] = task_type
+
+            results = collection.similarity_search(
+                query,
+                k=k,
+                filter=filter_dict if filter_dict else None
+            )
+
+            logger.debug("instruction_knowledge_retrieved", count=len(results))
+            return results
+        except Exception as e:
+            logger.error("instruction_knowledge_search_failed", error=str(e))
             return []
 
     @staticmethod
