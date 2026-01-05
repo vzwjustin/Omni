@@ -78,6 +78,7 @@ def get_available_tools_for_framework(
 
 def format_tool_descriptions() -> str:
     """Format tool descriptions for LLM prompting."""
+    descriptions = []
     for tool in AVAILABLE_TOOLS:
         descriptions.append(f"- **{tool.name}**: {tool.description}")
     

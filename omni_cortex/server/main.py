@@ -1408,13 +1408,21 @@ def create_server() -> Server:
 
         # Memory: save context
         if name == "save_context":
-            await save_to_langchain_memory(
-                arguments["thread_id"],
-                arguments["query"],
-                arguments["answer"],
-                arguments["framework"]
-            )
-            return [TextContent(type="text", text="Context saved successfully")]
+            try:
+                thread_id = arguments.get("thread_id")
+                query = arguments.get("query")
+                answer = arguments.get("answer")
+                framework = arguments.get("framework")
+
+                if not all([thread_id, query, answer, framework]):
+                    missing = [k for k, v in {"thread_id": thread_id, "query": query, "answer": answer, "framework": framework}.items() if not v]
+                    return [TextContent(type="text", text=f"Missing required arguments: {', '.join(missing)}")]
+
+                await save_to_langchain_memory(thread_id, query, answer, framework)
+                return [TextContent(type="text", text="Context saved successfully")]
+            except Exception as e:
+                logger.error("save_context_failed", error=str(e))
+                return [TextContent(type="text", text=f"Failed to save context: {str(e)}")]
 
         # RAG: search documentation
         if name == "search_documentation":

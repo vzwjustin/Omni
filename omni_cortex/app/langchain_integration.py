@@ -227,7 +227,8 @@ async def retrieve_context(query: str, thread_id: Optional[str] = None) -> str:
         # to avoid leaking context between sessions
         if _memory_store:
             # OrderedDict keeps insertion/access order - get the most recent
-            most_recent_thread_id = next(reversed(_memory_store))
+            # Convert to list for atomic iteration (safe under lock)
+            most_recent_thread_id = list(_memory_store.keys())[-1]
             mem = _memory_store[most_recent_thread_id]
             if mem.messages:
                 recent = mem.messages[-6:]
@@ -253,6 +254,9 @@ AVAILABLE_TOOLS = [search_documentation, execute_code, retrieve_context, save_le
 # =============================================================================
 
 _vectorstore: Optional[Chroma] = None
+_vectorstore_lock = asyncio.Lock()
+import threading
+_vectorstore_threading_lock = threading.Lock()
 
 
 def _get_embeddings():
@@ -314,25 +318,33 @@ def _get_embeddings():
 
 
 def get_vectorstore() -> Optional[Chroma]:
-    """Get or initialize a persistent Chroma vector store."""
+    """Get or initialize a persistent Chroma vector store (thread-safe)."""
     global _vectorstore
-    if _vectorstore:
+
+    # Fast path: already initialized
+    if _vectorstore is not None:
         return _vectorstore
 
-    persist_dir = os.getenv("CHROMA_PERSIST_DIR", "/app/data/chroma")
-    os.makedirs(persist_dir, exist_ok=True)
+    # Thread-safe initialization
+    with _vectorstore_threading_lock:
+        # Double-check after acquiring lock
+        if _vectorstore is not None:
+            return _vectorstore
 
-    try:
-        embeddings = _get_embeddings()
-        _vectorstore = Chroma(
-            collection_name="omni-cortex-context",
-            persist_directory=persist_dir,
-            embedding_function=embeddings
-        )
-        return _vectorstore
-    except Exception as e:
-        logger.error("vectorstore_init_failed", error=str(e))
-        return None
+        persist_dir = os.getenv("CHROMA_PERSIST_DIR", "/app/data/chroma")
+        os.makedirs(persist_dir, exist_ok=True)
+
+        try:
+            embeddings = _get_embeddings()
+            _vectorstore = Chroma(
+                collection_name="omni-cortex-context",
+                persist_directory=persist_dir,
+                embedding_function=embeddings
+            )
+            return _vectorstore
+        except Exception as e:
+            logger.error("vectorstore_init_failed", error=str(e))
+            return None
 
 
 def add_documents(texts: List[str], metadatas: Optional[List[Dict[str, Any]]] = None) -> int:

@@ -11,6 +11,8 @@ Shared components used across all framework nodes:
 import asyncio
 import functools
 import re
+import threading
+import structlog
 from typing import Callable, Optional, Any
 from ..core.config import model_config, settings
 from ..state import GraphState
@@ -19,6 +21,8 @@ from ..nodes.langchain_tools import (
     get_available_tools_for_framework,
     format_tool_descriptions,
 )
+
+logger = structlog.get_logger("common")
 
 
 # Common default values for LLM calls
@@ -60,16 +64,20 @@ def quiet_star(func: Callable) -> Callable:
             "</quiet_thought>\n"
             "[Your actual response here]"
         )
-        
+
+        # Ensure working_memory exists before accessing
+        if "working_memory" not in state or state["working_memory"] is None:
+            state["working_memory"] = {}
+
         # Store the instruction for LLM calls within this context
         state["working_memory"]["quiet_star_enabled"] = True
         state["working_memory"]["quiet_instruction"] = quiet_instruction
-        
+
         # Execute the wrapped function
         result = await func(state, *args, **kwargs)
-        
+
         return result
-    
+
     return wrapper
 
 
@@ -152,12 +160,17 @@ Respond with ONLY a single decimal number between 0.0 and 1.0."""
             max_tokens=DEFAULT_PRM_TOKENS,
             temperature=DEFAULT_PRM_TEMP
         )
-        
+
         # Parse the score
         score = float(response.strip())
         return max(0.0, min(1.0, score))
-    except Exception:
-        # ValueError from float parsing or other LLM/network errors
+    except ValueError as e:
+        # Failed to parse float from response
+        logger.warning("prm_score_parsing_failed", response=response[:100] if response else "", error=str(e))
+        return 0.5
+    except Exception as e:
+        # LLM or network error
+        logger.error("prm_scoring_failed", error=str(e))
         return 0.5  # Default on error
 
 
@@ -364,9 +377,12 @@ async def call_deep_reasoner(
 
     Handles Quiet-STaR integration and token tracking.
     """
-    callback = state.get("working_memory", {}).get("langchain_callback")
-    if callback:
-        callback.on_llm_start({"name": "call_deep_reasoner"}, [prompt])
+    callback = state.get("working_memory", {}).get("langchain_callback") if state else None
+    if callback and hasattr(callback, 'on_llm_start'):
+        try:
+            callback.on_llm_start({"name": "call_deep_reasoner"}, [prompt])
+        except Exception as e:
+            logger.warning("callback_on_llm_start_failed", error=str(e))
 
     # Check if Quiet-STaR is enabled
     if state and state.get("working_memory", {}).get("quiet_star_enabled"):
@@ -395,12 +411,18 @@ async def call_deep_reasoner(
     if state:
         quiet_thought, actual_response = extract_quiet_thought(text)
         if quiet_thought:
+            # Ensure quiet_thoughts list exists before appending
+            if "quiet_thoughts" not in state or state["quiet_thoughts"] is None:
+                state["quiet_thoughts"] = []
             state["quiet_thoughts"].append(quiet_thought)
             text = actual_response
         state["tokens_used"] = state.get("tokens_used", 0) + tokens
 
-    if callback:
-        callback.on_llm_end({"llm_output": {"token_usage": {"total_tokens": tokens}}})
+    if callback and hasattr(callback, 'on_llm_end'):
+        try:
+            callback.on_llm_end({"llm_output": {"token_usage": {"total_tokens": tokens}}})
+        except Exception as e:
+            logger.warning("callback_on_llm_end_failed", error=str(e))
 
     return text, tokens
 
@@ -420,8 +442,11 @@ async def call_fast_synthesizer(
     callback = None
     if state:
         callback = state.get("working_memory", {}).get("langchain_callback")
-        if callback:
-            callback.on_llm_start({"name": "call_fast_synthesizer"}, [prompt])
+        if callback and hasattr(callback, 'on_llm_start'):
+            try:
+                callback.on_llm_start({"name": "call_fast_synthesizer"}, [prompt])
+            except Exception as e:
+                logger.warning("callback_on_llm_start_failed", error=str(e))
 
     # Get the LLM client using the centralized helper
     client = _get_llm_client(
@@ -440,8 +465,11 @@ async def call_fast_synthesizer(
 
     if state:
         state["tokens_used"] = state.get("tokens_used", 0) + tokens
-    if callback:
-        callback.on_llm_end({"llm_output": {"token_usage": {"total_tokens": tokens}}})
+    if callback and hasattr(callback, 'on_llm_end'):
+        try:
+            callback.on_llm_end({"llm_output": {"token_usage": {"total_tokens": tokens}}})
+        except Exception as e:
+            logger.warning("callback_on_llm_end_failed", error=str(e))
 
     return text, tokens
 
