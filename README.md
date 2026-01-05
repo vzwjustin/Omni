@@ -17,6 +17,7 @@ These aren't simple prompt templates. Each framework is a **full implementation*
 - ✅ **Executes actual algorithms** (branching, voting, iteration, evaluation)
 - ✅ **No external API calls** - all inference happens client-side (local Claude)
 - ✅ **Returns structured results** with metadata (iterations, scores, reasoning traces)
+- ✅ **Learns from 6K+ real bug fixes** - integrated LLM debugging training data with embeddings
 
 ---
 
@@ -243,6 +244,7 @@ User Query → Category Router → Specialist Agent → Framework Chain → Mult
 4.  **Multi-Turn Executor**: Each framework makes multiple calls to client for its algorithm
 5.  **MCP Sampling**: Server requests completions from client (no external APIs)
 6.  **Memory**: Episodic memory + RAG for cross-session learning
+7.  **Debug Knowledge Base**: 6K+ real-world bug-fix pairs with embeddings for intelligent debugging
 
 ### Example: Tree of Thoughts
 
@@ -286,11 +288,21 @@ See [FRAMEWORKS.md](omni_cortex/FRAMEWORKS.md) for complete documentation.
 - ✅ Server-side coordination, client-side inference
 - ✅ LangChain/LangGraph utilities preserved for memory and RAG
 
+**🐛 NEW: Debugging Knowledge Base with LLM Training Data**
+- 🎯 Integrated **6,000+ real-world bug-fix pairs** from curated datasets
+- 📊 Three specialized datasets: **PyResBugs** (5K pairs), **HaPy-Bug** (793 expert-annotated), **Learning-Fixes**
+- 🧠 Pre-computed vector embeddings stored in ChromaDB for instant semantic search
+- 🔍 Intelligent bug-type filtering (TypeError, AttributeError, etc.)
+- 💡 Auto-suggests fixes based on similar bugs from production codebases
+- 📝 Each pair includes buggy code, fixed code, and natural language descriptions
+- 🚀 One-command ingestion: `python3 scripts/ingest_bug_fixes.py --all`
+- 📖 See [BUG_FIX_DATASETS.md](omni_cortex/scripts/BUG_FIX_DATASETS.md) for usage
+
 **Architecture Highlights**:
 - 🎯 Sophisticated 3-stage hierarchical routing (category → specialist → framework chain)
 - 🧠 2,000+ vibe patterns for natural language matching
 - 🔗 24 pre-defined framework chains for complex tasks
-- 💾 Multi-collection RAG with AST-based Python chunking
+- 💾 Multi-collection RAG with AST-based Python chunking + debugging knowledge base
 - 🏗️ Clean separation: 9 categories, 9 specialist agents, 62 frameworks
 - 🚀 Real algorithmic execution for every framework
 
