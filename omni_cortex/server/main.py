@@ -62,7 +62,7 @@ from app.collection_manager import get_collection_manager
 from app.core.router import HyperRouter
 
 # Import MCP sampling and orchestrators
-from app.core.sampling import ClientSampler
+from app.core.sampling import ClientSampler, SamplingNotSupportedError
 from app.orchestrators import FRAMEWORK_ORCHESTRATORS
 
 logger = logging.getLogger("omni-cortex")
@@ -1259,7 +1259,7 @@ def create_server() -> Server:
     async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         manager = get_collection_manager()
 
-        # Smart routing with HyperRouter (reason tool) - Execute orchestrator
+        # Smart routing with HyperRouter (reason tool) - Returns structured prompt
         if name == "reason":
             query = arguments.get("query", "")
             context = arguments.get("context", "")
@@ -1274,7 +1274,7 @@ def create_server() -> Server:
                 selected = hyper_router._heuristic_select(query, context)
 
             # Guaranteed fallback to self_discover if both methods fail
-            if not selected or selected not in FRAMEWORK_ORCHESTRATORS:
+            if not selected or selected not in FRAMEWORKS:
                 selected = "self_discover"
 
             # Get framework info from router
@@ -1291,79 +1291,77 @@ def create_server() -> Server:
                 if mem_context.get("framework_history"):
                     context = f"PREVIOUSLY USED FRAMEWORKS: {mem_context['framework_history'][-5:]}\n\n{context}"
 
-            # Execute orchestrator
-            orchestrator = FRAMEWORK_ORCHESTRATORS[selected]
-            result = await orchestrator(sampler, query, context or "None provided")
+            # Return structured prompt for client to execute (template mode)
+            # This preserves MCP's purpose: server routes, client does inference
+            fw = FRAMEWORKS.get(selected, {"category": "unknown", "best_for": [], "prompt": "Apply your best reasoning to: {query}\n\nContext: {context}"})
+            prompt = fw["prompt"].format(query=query, context=context or "None provided")
 
-            # Save to memory if thread_id provided
-            if thread_id:
-                await save_to_langchain_memory(
-                    thread_id,
-                    query,
-                    result["final_answer"],
-                    selected
-                )
-
-            # Return with routing metadata
-            fw = FRAMEWORKS.get(selected, {"category": fw_info.get("category", "unknown"), "best_for": []})
-            output = f"# Auto-selected Framework: {selected}\n"
-            output += f"Category: {fw_info.get('category', fw['category'])} | Complexity: {complexity:.2f}\n"
+            output = f"# Framework: {selected}\n"
+            output += f"Category: {fw_info.get('category', fw.get('category', 'unknown'))} | Complexity: {complexity:.2f}\n"
             output += f"Best for: {', '.join(fw_info.get('best_for', fw.get('best_for', [])))}\n\n"
-            if "metadata" in result:
-                output += f"**Execution Metadata:** {result['metadata']}\n\n"
             output += "---\n\n"
-            output += result["final_answer"]
+            output += prompt
 
             return [TextContent(type="text", text=output)]
 
-        # Framework tools (think_*) - Execute real orchestrators
+        # Framework tools (think_*) - Try orchestrator, fallback to template mode
         if name.startswith("think_"):
             fw_name = name[6:]
+            query = arguments.get("query", "")
+            context = arguments.get("context", "")
+            thread_id = arguments.get("thread_id")
+
+            # Enhance context with memory if thread_id provided
+            if thread_id:
+                memory = await get_memory(thread_id)
+                mem_context = memory.get_context()
+                if mem_context.get("chat_history"):
+                    history_str = "\n".join(str(m) for m in mem_context["chat_history"][-5:])
+                    context = f"CONVERSATION HISTORY:\n{history_str}\n\n{context}"
+                if mem_context.get("framework_history"):
+                    context = f"PREVIOUSLY USED FRAMEWORKS: {mem_context['framework_history'][-5:]}\n\n{context}"
+
+            # Try orchestrator with MCP sampling first (if client supports it)
             if fw_name in FRAMEWORK_ORCHESTRATORS:
-                query = arguments.get("query", "")
-                context = arguments.get("context", "")
-                thread_id = arguments.get("thread_id")
+                try:
+                    orchestrator = FRAMEWORK_ORCHESTRATORS[fw_name]
+                    result = await orchestrator(sampler, query, context or "None provided")
 
-                # Enhance context with memory if thread_id provided
-                if thread_id:
-                    memory = await get_memory(thread_id)
-                    mem_context = memory.get_context()
-                    if mem_context.get("chat_history"):
-                        history_str = "\n".join(str(m) for m in mem_context["chat_history"][-5:])
-                        context = f"CONVERSATION HISTORY:\n{history_str}\n\n{context}"
-                    if mem_context.get("framework_history"):
-                        context = f"PREVIOUSLY USED FRAMEWORKS: {mem_context['framework_history'][-5:]}\n\n{context}"
+                    # Save to memory if thread_id provided
+                    if thread_id:
+                        await save_to_langchain_memory(
+                            thread_id,
+                            query,
+                            result["final_answer"],
+                            fw_name
+                        )
 
-                # Execute orchestrator
-                orchestrator = FRAMEWORK_ORCHESTRATORS[fw_name]
-                result = await orchestrator(sampler, query, context or "None provided")
+                    # Return result with metadata
+                    output = f"# Framework: {fw_name}\n"
+                    if "metadata" in result:
+                        metadata = result["metadata"]
+                        output += f"**Metadata:** {metadata}\n\n"
+                    output += "---\n\n"
+                    output += result["final_answer"]
 
-                # Save to memory if thread_id provided
-                if thread_id:
-                    await save_to_langchain_memory(
-                        thread_id,
-                        query,
-                        result["final_answer"],
-                        fw_name
-                    )
+                    return [TextContent(type="text", text=output)]
 
-                # Return result with metadata
+                except SamplingNotSupportedError as e:
+                    # Client doesn't support sampling, fall through to template mode
+                    logger.info(f"Sampling not supported, using template mode: {e}")
+
+            # Template mode: return structured prompt for client to execute
+            if fw_name in FRAMEWORKS:
+                fw = FRAMEWORKS[fw_name]
+                prompt = fw["prompt"].format(query=query, context=context or "None provided")
+
                 output = f"# Framework: {fw_name}\n"
-                if "metadata" in result:
-                    metadata = result["metadata"]
-                    output += f"**Metadata:** {metadata}\n\n"
+                output += f"Category: {fw.get('category', 'unknown')}\n"
+                output += f"Best for: {', '.join(fw.get('best_for', []))}\n\n"
                 output += "---\n\n"
-                output += result["final_answer"]
+                output += prompt
 
                 return [TextContent(type="text", text=output)]
-
-            # Fallback if framework not found in orchestrators
-            elif fw_name in FRAMEWORKS:
-                # Return prompt template as fallback
-                query = arguments.get("query", "")
-                context = arguments.get("context", "")
-                prompt = FRAMEWORKS[fw_name]["prompt"].format(query=query, context=context or "None provided")
-                return [TextContent(type="text", text=f"[Template Mode]\n\n{prompt}")]
 
         # List frameworks
         if name == "list_frameworks":

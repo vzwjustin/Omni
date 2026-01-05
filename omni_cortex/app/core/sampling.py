@@ -2,28 +2,42 @@
 MCP Sampling Infrastructure
 
 Enables the MCP server to request completions from the client
-(Claude Desktop) without making external API calls. This allows
+(Claude Desktop/Claude Code) without making external API calls. This allows
 multi-turn orchestration where the server coordinates reasoning
 but the client does all the actual inference locally.
+
+Note: Sampling requires the client to support the sampling capability.
+Claude Code CLI support is tracked at: https://github.com/anthropics/claude-code/issues/1785
 """
 
 import re
 from typing import Optional
+import structlog
+
+logger = structlog.get_logger("sampling")
+
+
+class SamplingNotSupportedError(Exception):
+    """Raised when the MCP client doesn't support sampling."""
+    pass
 
 
 class ClientSampler:
     """
     Handles requesting samples from the MCP client.
 
-    The client (Claude Desktop) executes these locally - no external APIs.
+    The client (Claude Desktop/Claude Code) executes these locally - no external APIs.
     """
 
-    def __init__(self, server):
+    def __init__(self, server, context=None):
         """
         Args:
             server: MCP Server instance (passed during initialization)
+            context: Optional Context object from FastMCP (provides session access)
         """
         self.server = server
+        self.context = context
+        self._sampling_supported = None  # Cached capability check
 
     async def request_sample(
         self,
@@ -45,27 +59,56 @@ class ClientSampler:
 
         Returns:
             The client's response as a string
+
+        Raises:
+            SamplingNotSupportedError: If the client doesn't support sampling
         """
-        from mcp.types import SamplingMessage, ModelPreferences
+        from mcp.types import SamplingMessage, TextContent
 
-        messages = [SamplingMessage(role="user", content={"type": "text", "text": prompt})]
-
-        # MCP v1.25+ uses session.create_message() accessed via request_context
-        session = self.server.request_context.session
-
-        result = await session.create_message(
-            messages=messages,
-            max_tokens=max_tokens,
-            system_prompt=system_prompt,
-            temperature=temperature,
-            include_context="thisServer",
-            model_preferences=ModelPreferences(
-                hints=[{"name": "claude-3-5-sonnet"}],
-                costPriority=0.5,
-                speedPriority=0.5,
-                intelligencePriority=1.0
+        # Build message with proper TextContent object (not dict)
+        messages = [
+            SamplingMessage(
+                role="user",
+                content=TextContent(type="text", text=prompt)
             )
-        )
+        ]
+
+        # Get session from context or server
+        session = None
+        try:
+            if self.context and hasattr(self.context, 'session'):
+                session = self.context.session
+            elif hasattr(self.server, 'request_context') and self.server.request_context:
+                session = self.server.request_context.session
+        except Exception as e:
+            logger.warning("failed_to_get_session", error=str(e))
+
+        if not session:
+            raise SamplingNotSupportedError(
+                "No active session found. The MCP client may not support sampling."
+            )
+
+        # Check if sampling is supported by attempting the call
+        try:
+            result = await session.create_message(
+                messages=messages,
+                max_tokens=max_tokens,
+            )
+        except AttributeError as e:
+            raise SamplingNotSupportedError(
+                f"Session doesn't support create_message: {e}"
+            )
+        except NotImplementedError as e:
+            raise SamplingNotSupportedError(
+                f"Client doesn't implement sampling: {e}"
+            )
+        except Exception as e:
+            error_str = str(e)
+            if "sampling" in error_str.lower() or "not supported" in error_str.lower():
+                raise SamplingNotSupportedError(f"Sampling not supported: {e}")
+            # Re-raise other errors
+            logger.error("sampling_request_failed", error=error_str)
+            raise
 
         # Extract text from response
         if hasattr(result, 'content'):
