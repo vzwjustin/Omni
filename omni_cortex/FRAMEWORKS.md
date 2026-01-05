@@ -1,6 +1,16 @@
 # Omni-Cortex: 62 Thinking Frameworks
 
-A comprehensive library of AI reasoning frameworks for code-focused tasks. Each framework is accessible via MCP tools (`think_*`) or auto-selected by the `reason` tool.
+A comprehensive library of **fully implemented** AI reasoning frameworks for code-focused tasks.
+
+## Real Multi-Turn Orchestration
+
+These are NOT simple prompt templates. Each framework is a **real implementation** that:
+- Uses MCP client sampling (no external API calls)
+- Orchestrates multi-turn reasoning flows server-side
+- Executes the actual framework algorithm (branching, voting, iteration, etc.)
+- The MCP server coordinates the steps while the local Claude client does all the thinking
+
+Each framework is accessible via MCP tools (`think_*`) or auto-selected by the `reason` tool.
 
 ---
 
