@@ -33,38 +33,11 @@ class GraphState(TypedDict, total=False):
     
     # Working Memory (short-term, current task)
     working_memory: dict[str, Any]
-    current_hypothesis: Optional[str]
-    current_code: Optional[str]
     reasoning_steps: list[dict[str, Any]]
-    
+
     # Episodic Memory (long-term, cross-task patterns)
     episodic_memory: list[dict[str, Any]]
-    
-    # Buffer of Thoughts (successful templates)
-    thought_buffer: list[dict[str, Any]]
-    matched_template: Optional[dict[str, Any]]
-    
-    # Search State (for MCTS, ToT, GoT)
-    search_tree: dict[str, Any]
-    current_node_id: str
-    best_path: list[str]
-    explored_nodes: list[str]
-    
-    # Debate State (for Multi-Agent Debate)
-    proponent_arguments: list[str]
-    critic_arguments: list[str]
-    debate_round: int
-    consensus_reached: bool
-    
-    # Verification State
-    verification_checks: list[dict[str, Any]]
-    passed_checks: int
-    failed_checks: int
-    
-    # Process Reward Model Scores
-    prm_scores: list[float]
-    cumulative_prm_score: float
-    
+
     # Output fields
     final_code: Optional[str]
     final_answer: Optional[str]
@@ -76,8 +49,6 @@ class GraphState(TypedDict, total=False):
     
     # Error handling
     error: Optional[str]
-    should_retry: bool
-    retry_count: int
 
 
 @dataclass
@@ -162,59 +133,30 @@ def create_initial_state(
         ide_context=ide_context,
         preferred_framework=preferred_framework,
         max_iterations=max_iterations,
-        
+
         # Routing
         selected_framework="",
         framework_chain=[],
         routing_category="unknown",
         task_type="unknown",
         complexity_estimate=0.5,
-        
+
         # Working memory
         working_memory={},
-        current_hypothesis=None,
-        current_code=code_snippet,
         reasoning_steps=[],
-        
+
         # Episodic memory
         episodic_memory=[],
-        
-        # Buffer
-        thought_buffer=[],
-        matched_template=None,
-        
-        # Search
-        search_tree={},
-        current_node_id="root",
-        best_path=[],
-        explored_nodes=[],
-        
-        # Debate
-        proponent_arguments=[],
-        critic_arguments=[],
-        debate_round=0,
-        consensus_reached=False,
-        
-        # Verification
-        verification_checks=[],
-        passed_checks=0,
-        failed_checks=0,
-        
-        # PRM
-        prm_scores=[],
-        cumulative_prm_score=0.0,
-        
+
         # Output
         final_code=None,
         final_answer=None,
         confidence_score=0.5,
         tokens_used=0,
-        
+
         # Quiet-STaR
         quiet_thoughts=[],
-        
+
         # Error handling
         error=None,
-        should_retry=False,
-        retry_count=0
     )

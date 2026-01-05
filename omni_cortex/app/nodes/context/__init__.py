@@ -13,5 +13,5 @@ __all__ = [
     "analogical_node",
     "red_team_node",
     "state_machine_node",
-    "chain_of_thought_node"
+    "chain_of_thought_node",
 ]

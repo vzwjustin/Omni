@@ -17,5 +17,5 @@ __all__ = [
     "rubber_duck_debugging_node",
     "react_node",
     "reflexion_node",
-    "self_refine_node"
+    "self_refine_node",
 ]

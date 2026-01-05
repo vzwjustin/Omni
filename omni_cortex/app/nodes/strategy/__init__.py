@@ -15,5 +15,5 @@ __all__ = [
     "coala_node",
     "least_to_most_node",
     "comparative_architecture_node",
-    "plan_and_solve_node"
+    "plan_and_solve_node",
 ]

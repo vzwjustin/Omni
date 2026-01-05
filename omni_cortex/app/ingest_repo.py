@@ -55,7 +55,7 @@ def read_files(root: Path, patterns: List[str]) -> List[tuple[str, str]]:
     return docs
 
 
-def main():
+def main() -> None:
     repo_root = Path(__file__).resolve().parents[1]
     logger.info("ingest_start", root=str(repo_root))
 

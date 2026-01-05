@@ -11,5 +11,5 @@ __all__ = [
     "lats_node",
     "mrkl_node",
     "swe_agent_node",
-    "toolformer_node"
+    "toolformer_node",
 ]

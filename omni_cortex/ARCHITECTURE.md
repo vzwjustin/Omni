@@ -109,7 +109,7 @@ docker-compose down
 3. Export from `app/nodes/{category}/__init__.py`
 4. Add to `FRAMEWORK_NODES` in `app/graph.py`
 5. Add metadata to `HyperRouter.FRAMEWORKS` in `app/core/router.py`
-6. Add vibe patterns to `HyperRouter.VIBE_DICTIONARY`
+6. Add vibe patterns to `VIBE_DICTIONARY` in `app/core/vibe_dictionary.py`
 
 ## Token Efficiency
 
