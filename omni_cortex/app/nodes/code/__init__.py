@@ -13,6 +13,8 @@ from .evol_instruct import evol_instruct_node
 from .llmloop import llmloop_node
 from .procoder import procoder_node
 from .recode import recode_node
+from .pal import pal_node
+from .scratchpads import scratchpads_node
 
 __all__ = [
     "program_of_thoughts_node",
@@ -28,4 +30,6 @@ __all__ = [
     "llmloop_node",
     "procoder_node",
     "recode_node",
+    "pal_node",
+    "scratchpads_node",
 ]

@@ -62,7 +62,31 @@ class HyperRouter:
         "evol_instruct": "Evolutionary instruction complexity for code. Best for challenging code problems and constraint-based coding.",
         "llmloop": "Automated iterative feedback loops for code+tests. Best for code quality assurance and production-ready code.",
         "procoder": "Compiler-feedback-guided iterative refinement. Best for project-level code generation and API usage.",
-        "recode": "Multi-candidate validation with CFG-based debugging. Best for reliable code generation and high-stakes code."
+        "recode": "Multi-candidate validation with CFG-based debugging. Best for reliable code generation and high-stakes code.",
+        # Verification frameworks (2026 Expansion)
+        "self_consistency": "Multi-sample voting for reliable answers. Best for ambiguous bugs and tricky logic.",
+        "self_ask": "Sub-question decomposition before solving. Best for unclear tickets and missing requirements.",
+        "rar": "Rephrase-and-Respond for clarity. Best for vague prompts and ambiguous requirements.",
+        "verify_and_edit": "Verify claims then edit only failures. Best for surgical edits and code review.",
+        "rarr": "Research, Augment, Revise loop. Best for evidence-based answers and documentation.",
+        "selfcheckgpt": "Hallucination detection via sampling consistency. Best for high-stakes guidance.",
+        "metaqa": "Metamorphic testing for reasoning reliability. Best for brittle reasoning and edge cases.",
+        "ragas": "RAG Assessment for retrieval quality. Best for evaluating RAG pipelines.",
+        # Agent frameworks (2026 Expansion)
+        "rewoo": "Reasoning Without Observation - plan then execute. Best for multi-step tasks with tools.",
+        "lats": "Language Agent Tree Search over action sequences. Best for complex repo changes.",
+        "mrkl": "Modular Reasoning with specialized modules. Best for big systems and mixed domains.",
+        "swe_agent": "Repo-first execution loop. Best for multi-file bugfixes and CI failures.",
+        "toolformer": "Smart tool selection policy. Best for preventing pointless tool calls.",
+        # RAG frameworks (2026 Expansion)
+        "self_rag": "Self-triggered selective retrieval. Best for mixed knowledge tasks.",
+        "hyde": "Hypothetical Document Embeddings for better retrieval. Best for fuzzy search.",
+        "rag_fusion": "Multi-query retrieval with rank fusion. Best for improving recall.",
+        "raptor": "Hierarchical abstraction retrieval. Best for huge repos and long docs.",
+        "graphrag": "Entity-relation grounding for dependencies. Best for architecture questions.",
+        # Additional code frameworks (2026 Expansion)
+        "pal": "Program-Aided Language - code as reasoning substrate. Best for algorithms and numeric logic.",
+        "scratchpads": "Structured intermediate reasoning workspace. Best for multi-step fixes."
     }
     
     # Heuristic patterns (fallback)
@@ -540,6 +564,185 @@ class HyperRouter:
             "financial", "healthcare", "safety critical",
             "consensus", "redundancy", "fault tolerant",
             "zero downtime", "utility class", "nuclear"
+        ],
+
+        # =========================================================================
+        # VERIFICATION FRAMEWORKS (2026 Expansion)
+        # =========================================================================
+
+        # Multi-sample voting vibes
+        "self_consistency": [
+            "multiple answers", "vote", "consensus", "majority",
+            "check multiple times", "sample answers", "consistency check",
+            "are you sure", "double check", "verify answer",
+            "ambiguous", "uncertain", "could be either",
+            "tricky logic", "multiple plausible", "which is right"
+        ],
+
+        # Sub-question vibes
+        "self_ask": [
+            "break down", "sub-questions", "what do I need to know",
+            "before I can answer", "first need to understand",
+            "unclear requirements", "missing info", "need clarification",
+            "what questions should I ask", "decompose the problem",
+            "prerequisite knowledge", "dependencies between parts"
+        ],
+
+        # Rephrase vibes
+        "rar": [
+            "rephrase", "clarify the question", "what exactly",
+            "be more specific", "unclear request", "vague",
+            "what do you mean", "interpret as", "restate",
+            "poorly written", "confusing request", "ambiguous ask"
+        ],
+
+        # Verify-edit vibes
+        "verify_and_edit": [
+            "verify claims", "fact check", "edit only wrong parts",
+            "surgical fix", "minimal changes", "preserve good parts",
+            "check each claim", "verify then edit", "patch specific",
+            "don't rewrite everything", "targeted fix", "precision edit"
+        ],
+
+        # Research-revise vibes
+        "rarr": [
+            "evidence based", "prove it", "cite sources", "grounded",
+            "research first", "find evidence", "back it up",
+            "documentation says", "according to docs", "verified by",
+            "need proof", "show me where", "source please"
+        ],
+
+        # Hallucination check vibes
+        "selfcheckgpt": [
+            "am I hallucinating", "is this real", "sanity check",
+            "might be wrong", "not sure if true", "verify accuracy",
+            "could be making this up", "confidence check",
+            "before I trust this", "credibility check",
+            "final check", "pre-flight", "gate check"
+        ],
+
+        # Metamorphic test vibes
+        "metaqa": [
+            "test with variations", "edge cases", "what if slightly different",
+            "invariants", "should work for all", "consistency across",
+            "metamorphic", "transform and check", "robustness test",
+            "works for this but not that", "brittle", "fragile logic"
+        ],
+
+        # RAG assessment vibes
+        "ragas": [
+            "evaluate retrieval", "RAG quality", "were sources relevant",
+            "faithfulness", "did it use sources", "grounded in docs",
+            "retrieval quality", "chunk relevance", "answer quality",
+            "RAG pipeline", "evaluate RAG", "retrieval assessment"
+        ],
+
+        # =========================================================================
+        # AGENT FRAMEWORKS (2026 Expansion)
+        # =========================================================================
+
+        # Plan-execute vibes
+        "rewoo": [
+            "plan first then execute", "tool schedule", "batch tools",
+            "reasoning without observation", "plan once", "efficient tools",
+            "tool-free plan", "expected observations", "tool budget",
+            "minimize tool calls", "strategic tools", "planned execution"
+        ],
+
+        # Tree search agent vibes
+        "lats": [
+            "action tree", "multiple paths", "backtrack if fails",
+            "tree search", "action sequences", "branch and bound",
+            "rollback possible", "try different paths", "agent search",
+            "strategic agent", "action planning", "branch exploration"
+        ],
+
+        # Modular agent vibes
+        "mrkl": [
+            "specialized modules", "security module", "perf module",
+            "modular reasoning", "route to expert", "different perspectives",
+            "orchestrate modules", "domain experts", "specialized handling",
+            "big system", "mixed domains", "module routing"
+        ],
+
+        # SWE execution vibes
+        "swe_agent": [
+            "make tests pass", "CI green", "fix build",
+            "inspect repo", "multi-file fix", "iterate until passing",
+            "run tests", "check lint", "verify build",
+            "software engineering", "repo workflow", "CI/CD fix"
+        ],
+
+        # Tool policy vibes
+        "toolformer": [
+            "when to use tools", "tool decision", "justify tool use",
+            "tool policy", "smart tools", "efficient tool use",
+            "tool selection", "optimize tool calls", "tool strategy",
+            "when is tool needed", "tool cost benefit"
+        ],
+
+        # =========================================================================
+        # RAG FRAMEWORKS (2026 Expansion)
+        # =========================================================================
+
+        # Self-triggered retrieval vibes
+        "self_rag": [
+            "retrieve when needed", "selective retrieval", "confidence based",
+            "not sure need to check", "maybe retrieve", "targeted search",
+            "retrieve for uncertain", "gap-driven retrieval",
+            "don't retrieve everything", "smart retrieval"
+        ],
+
+        # Hypothetical doc vibes
+        "hyde": [
+            "hypothetical document", "ideal answer", "what would doc say",
+            "fuzzy query", "vague search", "broad search",
+            "unclear what to search", "improve retrieval",
+            "query expansion", "semantic search improvement"
+        ],
+
+        # Multi-query fusion vibes
+        "rag_fusion": [
+            "multiple queries", "query variations", "fuse results",
+            "rank fusion", "better recall", "diverse queries",
+            "query diversity", "combine searches", "aggregate results",
+            "comprehensive search", "thorough retrieval"
+        ],
+
+        # Hierarchical retrieval vibes
+        "raptor": [
+            "hierarchical search", "summary first", "drill down",
+            "abstraction levels", "overview then details",
+            "huge document", "long document", "large codebase",
+            "lost in chunks", "tree retrieval", "multi-level"
+        ],
+
+        # Entity-relation vibes
+        "graphrag": [
+            "entity relations", "dependency graph", "how things connect",
+            "module relationships", "call graph", "data flow",
+            "impact analysis", "blast radius", "what depends on",
+            "architecture map", "relation extraction", "knowledge graph"
+        ],
+
+        # =========================================================================
+        # CODE FRAMEWORKS (2026 Expansion - Additional)
+        # =========================================================================
+
+        # Program-aided vibes
+        "pal": [
+            "code to reason", "compute answer", "executable logic",
+            "algorithm as code", "run to verify", "code substrate",
+            "program for answer", "computation", "calculate with code",
+            "numeric reasoning", "code-based math"
+        ],
+
+        # Scratchpad vibes
+        "scratchpads": [
+            "working notes", "scratch space", "intermediate work",
+            "track state", "multi-step notes", "organized thinking",
+            "structured notes", "work area", "keep track",
+            "progressive notes", "step tracker"
         ]
     }
     
@@ -1063,6 +1266,150 @@ class HyperRouter:
                 "description": "Multi-candidate validation with CFG-based debugging",
                 "best_for": ["reliable code generation", "high-stakes code"],
                 "complexity": "high"
+            },
+            # Verification frameworks (2026 Expansion)
+            "self_consistency": {
+                "name": "Self-Consistency",
+                "category": "verification",
+                "description": "Multi-sample voting for reliable answers",
+                "best_for": ["ambiguous bugs", "tricky logic", "multiple plausible fixes"],
+                "complexity": "medium"
+            },
+            "self_ask": {
+                "name": "Self-Ask",
+                "category": "verification",
+                "description": "Sub-question decomposition before solving",
+                "best_for": ["unclear tickets", "missing requirements", "multi-part debugging"],
+                "complexity": "medium"
+            },
+            "rar": {
+                "name": "Rephrase-and-Respond",
+                "category": "verification",
+                "description": "Clarify request before solving",
+                "best_for": ["vague prompts", "ambiguous requirements"],
+                "complexity": "low"
+            },
+            "verify_and_edit": {
+                "name": "Verify-and-Edit",
+                "category": "verification",
+                "description": "Verify claims, edit only failures",
+                "best_for": ["code review", "surgical edits", "implementation plans"],
+                "complexity": "medium"
+            },
+            "rarr": {
+                "name": "RARR",
+                "category": "verification",
+                "description": "Research, Augment, Revise loop",
+                "best_for": ["evidence-based answers", "documentation", "prove-it requirements"],
+                "complexity": "medium"
+            },
+            "selfcheckgpt": {
+                "name": "SelfCheckGPT",
+                "category": "verification",
+                "description": "Hallucination detection via sampling",
+                "best_for": ["high-stakes guidance", "unfamiliar libraries", "final gate"],
+                "complexity": "medium"
+            },
+            "metaqa": {
+                "name": "MetaQA",
+                "category": "verification",
+                "description": "Metamorphic testing for reasoning",
+                "best_for": ["brittle reasoning", "edge cases", "policy consistency"],
+                "complexity": "medium"
+            },
+            "ragas": {
+                "name": "RAGAS",
+                "category": "verification",
+                "description": "RAG Assessment for retrieval quality",
+                "best_for": ["RAG pipelines", "retrieval quality", "source grounding"],
+                "complexity": "medium"
+            },
+            # Agent frameworks (2026 Expansion)
+            "rewoo": {
+                "name": "ReWOO",
+                "category": "agent",
+                "description": "Plan then execute with tools",
+                "best_for": ["multi-step tasks", "cost control", "tool efficiency"],
+                "complexity": "medium"
+            },
+            "lats": {
+                "name": "LATS",
+                "category": "agent",
+                "description": "Tree search over action sequences",
+                "best_for": ["complex repo changes", "multiple fix paths", "uncertain root cause"],
+                "complexity": "high"
+            },
+            "mrkl": {
+                "name": "MRKL",
+                "category": "agent",
+                "description": "Modular reasoning with specialized modules",
+                "best_for": ["big systems", "mixed domains", "tool-rich setups"],
+                "complexity": "high"
+            },
+            "swe_agent": {
+                "name": "SWE-Agent",
+                "category": "agent",
+                "description": "Repo-first execution loop",
+                "best_for": ["multi-file bugfixes", "CI failures", "make tests pass"],
+                "complexity": "high"
+            },
+            "toolformer": {
+                "name": "Toolformer",
+                "category": "agent",
+                "description": "Smart tool selection policy",
+                "best_for": ["router logic", "preventing pointless calls", "tool efficiency"],
+                "complexity": "medium"
+            },
+            # RAG frameworks (2026 Expansion)
+            "self_rag": {
+                "name": "Self-RAG",
+                "category": "rag",
+                "description": "Self-triggered selective retrieval",
+                "best_for": ["mixed knowledge tasks", "large corpora", "targeted retrieval"],
+                "complexity": "medium"
+            },
+            "hyde": {
+                "name": "HyDE",
+                "category": "rag",
+                "description": "Hypothetical Document Embeddings",
+                "best_for": ["fuzzy search", "unclear intent", "broad problems"],
+                "complexity": "medium"
+            },
+            "rag_fusion": {
+                "name": "RAG-Fusion",
+                "category": "rag",
+                "description": "Multi-query retrieval with rank fusion",
+                "best_for": ["improving recall", "complex queries", "noisy corpora"],
+                "complexity": "medium"
+            },
+            "raptor": {
+                "name": "RAPTOR",
+                "category": "rag",
+                "description": "Hierarchical abstraction retrieval",
+                "best_for": ["huge repos", "long docs", "monorepos"],
+                "complexity": "high"
+            },
+            "graphrag": {
+                "name": "GraphRAG",
+                "category": "rag",
+                "description": "Entity-relation grounding",
+                "best_for": ["architecture questions", "module relationships", "impact analysis"],
+                "complexity": "high"
+            },
+            # Additional code frameworks (2026 Expansion)
+            "pal": {
+                "name": "PAL",
+                "category": "code",
+                "description": "Program-Aided Language reasoning",
+                "best_for": ["algorithms", "parsing", "numeric logic", "validation"],
+                "complexity": "medium"
+            },
+            "scratchpads": {
+                "name": "Scratchpads",
+                "category": "code",
+                "description": "Structured intermediate reasoning",
+                "best_for": ["multi-step fixes", "multi-constraint reasoning", "state tracking"],
+                "complexity": "low"
             }
         }
         return INFO.get(framework, {
