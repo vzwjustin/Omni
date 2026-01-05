@@ -164,7 +164,7 @@ Key env vars:
 4. Export from `app/nodes/{category}/__init__.py`
 5. Add to `FRAMEWORK_NODES` dict in `app/graph.py`
 6. Add metadata to `HyperRouter.FRAMEWORKS` and `get_framework_info()` in `app/core/router.py`
-7. Add vibe patterns to `HyperRouter.VIBE_DICTIONARY`
+7. Add vibe patterns to `VIBE_DICTIONARY` in `app/core/vibe_dictionary.py`
 
 ## GraphState Key Fields
 

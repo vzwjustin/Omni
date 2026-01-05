@@ -53,7 +53,7 @@ class OmniCortexMemory:
     - Simple and lightweight for pass-through mode
     """
 
-    def __init__(self, thread_id: str):
+    def __init__(self, thread_id: str) -> None:
         self.thread_id = thread_id
 
         # Short-term: Recent conversation history as messages
@@ -262,7 +262,7 @@ import threading
 _vectorstore_threading_lock = threading.Lock()
 
 
-def _get_embeddings():
+def _get_embeddings() -> Any:
     """
     Get the appropriate embedding model based on provider configuration.
 
@@ -419,7 +419,7 @@ def add_documents_with_metadata(texts: List[str], metadatas: List[Dict[str, Any]
     return total_added
 
 
-def get_vectorstore_by_collection(collection_name: str):
+def get_vectorstore_by_collection(collection_name: str) -> Optional[Chroma]:
     """Get a specific collection from the manager."""
     from .collection_manager import get_collection_manager
     return get_collection_manager().get_collection(collection_name)
@@ -464,7 +464,7 @@ class OmniCortexCallback(BaseCallbackHandler):
     Custom callback handler for tracking LLM usage, timing, and errors.
     """
     
-    def __init__(self, thread_id: str):
+    def __init__(self, thread_id: str) -> None:
         self.thread_id = thread_id
         self.total_tokens = 0
         self.llm_calls = 0
@@ -654,7 +654,7 @@ class GeminiRoutingWrapper:
     Enables Google Search grounding for fresh context.
     """
 
-    def __init__(self, model):
+    def __init__(self, model: Any) -> None:
         self.model = model
 
     async def ainvoke(self, prompt: str) -> Any:
@@ -674,7 +674,7 @@ class GeminiRoutingWrapper:
 class GeminiResponse:
     """Response wrapper for compatibility with existing code."""
 
-    def __init__(self, response):
+    def __init__(self, response: Any) -> None:
         self._response = response
 
     @property

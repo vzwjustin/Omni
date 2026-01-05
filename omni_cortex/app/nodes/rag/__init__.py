@@ -11,5 +11,5 @@ __all__ = [
     "hyde_node",
     "rag_fusion_node",
     "raptor_node",
-    "graphrag_node"
+    "graphrag_node",
 ]

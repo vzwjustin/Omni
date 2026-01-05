@@ -9,5 +9,5 @@ __all__ = [
     "mcts_rstar_node",
     "tree_of_thoughts_node",
     "graph_of_thoughts_node",
-    "everything_of_thought_node"
+    "everything_of_thought_node",
 ]

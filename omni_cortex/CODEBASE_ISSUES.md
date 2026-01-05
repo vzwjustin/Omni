@@ -157,7 +157,7 @@ server/main.py (MCP Entry Point)
     │   ├── list_frameworks, recommend, health
     │   └── execute_code (sandboxed Python)
     │
-    └── Uses HyperRouter.VIBE_DICTIONARY for vibes
+    └── Uses VIBE_DICTIONARY from app/core/vibe_dictionary.py for vibes
 ```
 
 ### Internal Mode (Disabled)
@@ -172,10 +172,13 @@ server/main.py (MCP Entry Point)
     │
     ├── app/core/router.py (HyperRouter)
     │   ├── FRAMEWORKS (62 entries)
-    │   ├── VIBE_DICTIONARY (62 entries)
     │   ├── auto_select_framework() → LLM-based selection
     │   ├── _extract_framework() → Regex fallback
-    │   └── _check_vibe_dictionary() → Pattern matching
+    │   └── _check_vibe_dictionary() → Uses match_vibes()
+    │
+    ├── app/core/vibe_dictionary.py (extracted module)
+    │   ├── VIBE_DICTIONARY (62 entries)
+    │   └── match_vibes() → Pattern matching helper
     │
     ├── app/nodes/ (62 Framework Implementations)
     │   ├── strategy/ (4): reason_flux, self_discover, buffer_of_thoughts, coala

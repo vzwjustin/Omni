@@ -29,7 +29,7 @@
 ## Commit & Pull Request Guidelines
 - Use Conventional Commits seen in history: `feat: ...`, `fix: ...`, `docs: ...`, `refactor: ...`, `chore: ...`.
 - PRs should include a short summary, testing evidence (commands run), and any config changes.
-- New frameworks must update `app/graph.py`, `app/core/router.py`, and `HyperRouter.VIBE_DICTIONARY`.
+- New frameworks must update `app/graph.py`, `app/core/router.py`, and `app/core/vibe_dictionary.py`.
 
 ## Configuration & Runtime Notes
 - Copy `.env.example` to `.env`; never commit API keys.

@@ -17,5 +17,5 @@ __all__ = [
     "rarr_node",
     "selfcheckgpt_node",
     "metaqa_node",
-    "ragas_node"
+    "ragas_node",
 ]

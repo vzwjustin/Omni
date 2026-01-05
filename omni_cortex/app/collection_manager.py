@@ -7,7 +7,7 @@ enabling precise retrieval based on context.
 
 import os
 import threading
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
 import structlog
@@ -36,16 +36,16 @@ class CollectionManager:
         "instruction_knowledge": "Instruction-following and task completion examples"
     }
     
-    def __init__(self, persist_dir: Optional[str] = None):
+    def __init__(self, persist_dir: Optional[str] = None) -> None:
         self.persist_dir = persist_dir or os.getenv("CHROMA_PERSIST_DIR", "/app/data/chroma")
         os.makedirs(self.persist_dir, exist_ok=True)
 
-        self._embedding_function = None
+        self._embedding_function: Any = None
         self._collections: Dict[str, Chroma] = {}
         self._collections_lock = threading.Lock()
         self._embedding_lock = threading.Lock()
     
-    def get_embedding_function(self):
+    def get_embedding_function(self) -> Any:
         """
         Lazy initialization of embedding function using shared implementation (thread-safe).
 

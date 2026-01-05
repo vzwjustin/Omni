@@ -60,6 +60,7 @@ from app.langchain_integration import (
 )
 from app.collection_manager import get_collection_manager
 from app.core.router import HyperRouter
+from app.core.vibe_dictionary import VIBE_DICTIONARY
 
 # Import MCP sampling and orchestrators
 from app.core.sampling import (
@@ -1065,7 +1066,7 @@ def create_server() -> Server:
         # 62 Framework tools (think_*) - LLM selects based on task
         for name, fw in FRAMEWORKS.items():
             # Build vibes from router for better LLM selection
-            vibes = router.VIBE_DICTIONARY.get(name, [])[:4]
+            vibes = VIBE_DICTIONARY.get(name, [])[:4]
             vibe_str = f" Vibes: {', '.join(vibes)}" if vibes else ""
 
             tools.append(Tool(
