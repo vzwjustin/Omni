@@ -10,6 +10,7 @@ Based on: "Parsel: A (De-)compositional Framework for Algorithmic Reasoning with
 
 import logging
 from ...state import GraphState
+from ...collection_manager import get_collection_manager
 from ..common import (
     quiet_star,
     format_code_context,
@@ -17,6 +18,26 @@ from ..common import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _search_code_examples(query: str, task_type: str = "code_generation") -> str:
+    """Search instruction knowledge base for similar code examples."""
+    try:
+        manager = get_collection_manager()
+        results = manager.search_instruction_knowledge(query, k=3, task_type=task_type, language="python")
+
+        if not results:
+            return ""
+
+        examples = []
+        for i, doc in enumerate(results, 1):
+            examples.append(f"Code Example {i}:\n{doc.page_content[:500]}")
+
+        return "\n\n".join(examples)
+    except Exception as e:
+        # Gracefully degrade if no API key or collection empty
+        logger.debug("instruction_knowledge_search_skipped", error=str(e))
+        return ""
 
 
 @quiet_star
@@ -34,6 +55,11 @@ async def parsel_node(state: GraphState) -> GraphState:
         state.get("ide_context"),
         state=state
     )
+
+    # Search for similar code examples
+    code_examples = _search_code_examples(query, task_type="code_generation")
+    if code_examples:
+        logger.info("instruction_knowledge_examples_found", query_preview=query[:50])
 
     prompt = f"""# Parsel Protocol: Compositional Code Generation
 
@@ -89,7 +115,10 @@ For each function in dependency order:
 
 ## Code Context
 {code_context}
-
+{f'''
+## 💡 Similar Code Examples from 12K+ Knowledge Base
+{code_examples}
+''' if code_examples else ''}
 **Start by listing all function specs with their dependencies, then build the dependency graph.**
 """
 

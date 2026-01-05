@@ -7,7 +7,9 @@ stores insights in memory, and uses them to inform future planning.
 """
 
 import logging
+from typing import Optional
 from ...state import GraphState
+from ...collection_manager import get_collection_manager
 from ..common import (
     quiet_star,
     format_code_context,
@@ -16,6 +18,27 @@ from ..common import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _search_debugging_examples(query: str, bug_type: Optional[str] = None) -> str:
+    """Search debugging knowledge base for similar bug-fix examples."""
+    try:
+        manager = get_collection_manager()
+        results = manager.search_debugging_knowledge(query, k=3, bug_type=bug_type)
+
+        if not results:
+            return ""
+
+        examples = []
+        for i, doc in enumerate(results, 1):
+            examples.append(f"Example {i}:\n{doc.page_content[:500]}")
+
+        logger.info(f"Found {len(results)} debugging examples for reflexion")
+        return "\n\n".join(examples)
+    except Exception as e:
+        # Gracefully degrade if no API key or collection empty
+        logger.debug(f"Debugging knowledge search unavailable: {e}")
+        return ""
 
 @quiet_star
 async def reflexion_node(state: GraphState) -> GraphState:
@@ -30,8 +53,11 @@ async def reflexion_node(state: GraphState) -> GraphState:
         state=state
     )
 
+    # Search for similar debugging examples
+    debug_examples = _search_debugging_examples(query)
+
     # Construct the Protocol Prompt for the Client
-    prompt = f"""# Reflexion Protocol
+    base_prompt = f"""# Reflexion Protocol
 
 I have selected the **Reflexion** framework for this task.
 Self-Evaluation with Memory-Based Refinement
@@ -60,7 +86,20 @@ Please execute the reasoning steps for **Reflexion** using your internal context
 **Please start by outlining your approach following the Reflexion process.**
 """
 
-    state["final_answer"] = prompt
+    # Include examples in the prompt if found
+    if debug_examples:
+        enhanced_prompt = f"""{base_prompt}
+
+## 🔍 Similar Debugging Examples from Production Codebases
+
+The following examples from 10K+ real bug-fix pairs may help inform your approach:
+
+{debug_examples}
+"""
+    else:
+        enhanced_prompt = base_prompt
+
+    state["final_answer"] = enhanced_prompt
     state["confidence_score"] = 1.0
 
     add_reasoning_step(
