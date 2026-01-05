@@ -124,8 +124,11 @@ async def search_documentation(query: str) -> str:
     """Search the indexed documentation/code via vector store."""
     logger.info("tool_called", tool="search_documentation", query=query)
     try:
-        docs = search_vectorstore(query, k=5)
+        docs = await search_vectorstore_async(query, k=5)
     except VectorstoreSearchError as exc:
+        logger.error("search_documentation_failed", error=str(exc))
+        return f"Search failed: {exc}"
+    except Exception as exc:
         logger.error("search_documentation_failed", error=str(exc))
         return f"Search failed: {exc}"
     if not docs:
@@ -227,7 +230,8 @@ async def retrieve_context(query: str, thread_id: Optional[str] = None) -> str:
         # to avoid leaking context between sessions
         if _memory_store:
             # OrderedDict keeps insertion/access order - get the most recent
-            most_recent_thread_id = next(reversed(_memory_store))
+            # Convert to list for atomic iteration (safe under lock)
+            most_recent_thread_id = list(_memory_store.keys())[-1]
             mem = _memory_store[most_recent_thread_id]
             if mem.messages:
                 recent = mem.messages[-6:]
@@ -253,86 +257,125 @@ AVAILABLE_TOOLS = [search_documentation, execute_code, retrieve_context, save_le
 # =============================================================================
 
 _vectorstore: Optional[Chroma] = None
+_vectorstore_lock = asyncio.Lock()
+import threading
+_vectorstore_threading_lock = threading.Lock()
 
 
 def _get_embeddings():
     """
     Get the appropriate embedding model based on provider configuration.
 
+    Configuration (via environment variables):
+        EMBEDDING_PROVIDER: openai, huggingface, or openrouter (default: uses LLM_PROVIDER)
+        EMBEDDING_MODEL: Model name (default: text-embedding-3-small for OpenAI)
+        OPENAI_API_KEY: Required for OpenAI embeddings
+        OPENROUTER_API_KEY: For OpenRouter (uses OpenAI-compatible endpoint)
+
     Supports:
-    - openai: Uses OpenAI's embedding API (requires OPENAI_API_KEY)
+    - openai: Uses OpenAI's embedding API
+    - openrouter: Uses OpenRouter's OpenAI-compatible embedding endpoint
     - huggingface: Uses HuggingFace sentence-transformers (local, no API key needed)
-    - openrouter: Falls back to HuggingFace (OpenRouter doesn't support embeddings)
 
     Returns:
         An embedding model instance compatible with LangChain
     """
-    provider = settings.llm_provider.lower()
+    # Use dedicated embedding provider if set, otherwise fall back to LLM provider
+    provider = getattr(settings, 'embedding_provider', None)
+    if not provider or provider == "":
+        provider = settings.llm_provider.lower()
+    else:
+        provider = provider.lower()
 
-    # OpenAI embeddings - requires valid OpenAI API key
+    model = getattr(settings, 'embedding_model', 'text-embedding-3-small')
+
+    # OpenAI embeddings
     if provider == "openai" and settings.openai_api_key:
-        logger.info("embeddings_init", provider="openai", model="text-embedding-3-large")
+        logger.info("embeddings_init", provider="openai", model=model)
         return OpenAIEmbeddings(
-            model="text-embedding-3-large",
+            model=model,
             api_key=settings.openai_api_key
         )
 
+    # OpenRouter embeddings (OpenAI-compatible endpoint)
+    if provider == "openrouter" and settings.openrouter_api_key:
+        logger.info("embeddings_init", provider="openrouter", model=model)
+        return OpenAIEmbeddings(
+            model=model,
+            api_key=settings.openrouter_api_key,
+            base_url="https://openrouter.ai/api/v1"
+        )
+
     # HuggingFace embeddings - local, no API key required
-    # Also used as fallback when OpenRouter is selected (OpenRouter doesn't support embeddings)
+    if provider == "huggingface":
+        try:
+            from langchain_huggingface import HuggingFaceEmbeddings
+            hf_model = model if model != "text-embedding-3-small" else "sentence-transformers/all-MiniLM-L6-v2"
+            logger.info("embeddings_init", provider="huggingface", model=hf_model)
+            return HuggingFaceEmbeddings(model_name=hf_model)
+        except ImportError:
+            logger.error("embeddings_init_failed", error="langchain-huggingface not installed")
+
+    # Fallback chain: try OpenRouter → OpenAI → HuggingFace
+    if settings.openrouter_api_key:
+        logger.info("embeddings_fallback", provider="openrouter", model=model)
+        return OpenAIEmbeddings(
+            model=model,
+            api_key=settings.openrouter_api_key,
+            base_url="https://openrouter.ai/api/v1"
+        )
+
+    if settings.openai_api_key:
+        logger.info("embeddings_fallback", provider="openai", model=model)
+        return OpenAIEmbeddings(
+            model=model,
+            api_key=settings.openai_api_key
+        )
+
     try:
         from langchain_huggingface import HuggingFaceEmbeddings
-
         hf_model = "sentence-transformers/all-MiniLM-L6-v2"
-
-        if provider == "openrouter":
-            logger.warning(
-                "embeddings_fallback",
-                reason="OpenRouter does not support embeddings API",
-                fallback_provider="huggingface",
-                fallback_model=hf_model
-            )
-        else:
-            logger.info("embeddings_init", provider="huggingface", model=hf_model)
-
+        logger.info("embeddings_fallback", provider="huggingface", model=hf_model)
         return HuggingFaceEmbeddings(model_name=hf_model)
-
     except ImportError:
-        logger.error(
-            "embeddings_init_failed",
-            error="langchain-huggingface not installed. Install with: pip install langchain-huggingface"
-        )
-        # Last resort: try OpenAI with whatever key is available
-        if settings.openai_api_key:
-            return OpenAIEmbeddings(
-                model="text-embedding-3-large",
-                api_key=settings.openai_api_key
-            )
-        raise ValueError(
-            "No embedding provider available. Either set OPENAI_API_KEY for OpenAI embeddings, "
-            "or install langchain-huggingface for local embeddings: pip install langchain-huggingface"
-        )
+        pass
+
+    raise ValueError(
+        "No embedding provider available. Set one of:\n"
+        "- EMBEDDING_PROVIDER=openrouter + OPENROUTER_API_KEY\n"
+        "- EMBEDDING_PROVIDER=openai + OPENAI_API_KEY\n"
+        "- EMBEDDING_PROVIDER=huggingface (local, install langchain-huggingface)"
+    )
 
 
 def get_vectorstore() -> Optional[Chroma]:
-    """Get or initialize a persistent Chroma vector store."""
+    """Get or initialize a persistent Chroma vector store (thread-safe)."""
     global _vectorstore
-    if _vectorstore:
+
+    # Fast path: already initialized
+    if _vectorstore is not None:
         return _vectorstore
 
-    persist_dir = os.getenv("CHROMA_PERSIST_DIR", "/app/data/chroma")
-    os.makedirs(persist_dir, exist_ok=True)
+    # Thread-safe initialization
+    with _vectorstore_threading_lock:
+        # Double-check after acquiring lock
+        if _vectorstore is not None:
+            return _vectorstore
 
-    try:
-        embeddings = _get_embeddings()
-        _vectorstore = Chroma(
-            collection_name="omni-cortex-context",
-            persist_directory=persist_dir,
-            embedding_function=embeddings
-        )
-        return _vectorstore
-    except Exception as e:
-        logger.error("vectorstore_init_failed", error=str(e))
-        return None
+        persist_dir = os.getenv("CHROMA_PERSIST_DIR", "/app/data/chroma")
+        os.makedirs(persist_dir, exist_ok=True)
+
+        try:
+            embeddings = _get_embeddings()
+            _vectorstore = Chroma(
+                collection_name="omni-cortex-context",
+                persist_directory=persist_dir,
+                embedding_function=embeddings
+            )
+            return _vectorstore
+        except Exception as e:
+            logger.error("vectorstore_init_failed", error=str(e))
+            return None
 
 
 def add_documents(texts: List[str], metadatas: Optional[List[Dict[str, Any]]] = None) -> int:
@@ -382,19 +425,31 @@ def get_vectorstore_by_collection(collection_name: str):
     return get_collection_manager().get_collection(collection_name)
 
 
-def search_vectorstore(query: str, k: int = 5) -> List[Document]:
-    """Search the vector store for relevant documents."""
+async def search_vectorstore_async(query: str, k: int = 5) -> List[Document]:
+    """Search the vector store for relevant documents (async, non-blocking)."""
+    return await asyncio.to_thread(_search_vectorstore_sync, query, k)
 
+
+def _search_vectorstore_sync(query: str, k: int = 5) -> List[Document]:
+    """Synchronous vectorstore search (internal use)."""
+    from .collection_manager import get_collection_manager
+    manager = get_collection_manager()
+    return manager.search(
+        query,
+        collection_names=["frameworks", "documentation", "utilities"],
+        k=k,
+        raise_on_error=True
+    )
+
+
+def search_vectorstore(query: str, k: int = 5) -> List[Document]:
+    """Search the vector store for relevant documents.
+
+    Note: This is synchronous for backwards compatibility.
+    Prefer search_vectorstore_async() in async contexts to avoid blocking.
+    """
     try:
-        from .collection_manager import get_collection_manager
-        manager = get_collection_manager()
-        # Search across all core collections to maintain legacy behavior of searching "everything"
-        return manager.search(
-            query,
-            collection_names=["frameworks", "documentation", "utilities"],
-            k=k,
-            raise_on_error=True
-        )
+        return _search_vectorstore_sync(query, k)
     except Exception as e:
         logger.error("vectorstore_search_failed", error=str(e))
         raise VectorstoreSearchError(f"Vectorstore search failed: {e}") from e
@@ -551,40 +606,59 @@ framework_parser = PydanticOutputParser(pydantic_object=FrameworkSelection)
 # LangChain Chat Models
 # =============================================================================
 
-def get_chat_model(model_type: str = "deep") -> Any:
+def get_chat_model(model_type: str = "deep", enable_thinking: bool = False) -> Any:
     """
     Get configured LangChain chat model.
-    
+
     Args:
         model_type: "deep" for reasoning or "fast" for synthesis
+        enable_thinking: Enable extended thinking/reasoning mode (Gemini only)
+
+    Supports: google, anthropic, openai, openrouter
     """
-    if settings.llm_provider == "anthropic":
-        model_name = settings.deep_reasoning_model if model_type == "deep" else settings.fast_synthesis_model
-        # Remove provider prefix if present
-        if "/" in model_name:
-            model_name = model_name.split("/")[1]
-        
+    model_name = settings.deep_reasoning_model if model_type == "deep" else settings.fast_synthesis_model
+    temperature = 0.7 if model_type == "deep" else 0.5
+
+    # Remove provider prefix if present (e.g., "google/gemini-3" -> "gemini-3")
+    if "/" in model_name:
+        model_name = model_name.split("/")[-1]
+
+    if settings.llm_provider == "google":
+        from langchain_google_genai import ChatGoogleGenerativeAI
+
+        # Use configured model - thinking mode is enabled via prompting style
+        # For thinking-like behavior, we increase temperature and tokens
+        max_tokens = 8192 if enable_thinking else 4096
+        temp = max(0.7, temperature) if enable_thinking else temperature
+
+        return ChatGoogleGenerativeAI(
+            model=model_name,
+            google_api_key=settings.google_api_key,
+            temperature=temp,
+            max_output_tokens=max_tokens
+        )
+    elif settings.llm_provider == "anthropic":
         return ChatAnthropic(
             model=model_name,
             api_key=settings.anthropic_api_key,
-            temperature=0.7 if model_type == "deep" else 0.5
+            temperature=temperature
+        )
+    elif settings.llm_provider == "openrouter":
+        # OpenRouter needs full model path
+        full_model = settings.deep_reasoning_model if model_type == "deep" else settings.fast_synthesis_model
+        return ChatOpenAI(
+            model=full_model,
+            api_key=settings.openrouter_api_key,
+            base_url=settings.openrouter_base_url,
+            temperature=temperature
         )
     else:
-        # OpenAI or OpenRouter
-        model_name = settings.deep_reasoning_model if model_type == "deep" else settings.fast_synthesis_model
-        
-        kwargs = {
-            "model": model_name,
-            "temperature": 0.7 if model_type == "deep" else 0.5
-        }
-        
-        if settings.llm_provider == "openrouter":
-            kwargs["api_key"] = settings.openrouter_api_key
-            kwargs["base_url"] = settings.openrouter_base_url
-        else:
-            kwargs["api_key"] = settings.openai_api_key
-        
-        return ChatOpenAI(**kwargs)
+        # OpenAI
+        return ChatOpenAI(
+            model=model_name,
+            api_key=settings.openai_api_key,
+            temperature=temperature
+        )
 
 
 # =============================================================================

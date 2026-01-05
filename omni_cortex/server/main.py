@@ -1,7 +1,7 @@
 """
 Omni-Cortex MCP Server
 
-Exposes 62 thinking framework tools + utility tools.
+Exposes 60 thinking framework tools + utility tools.
 The calling LLM uses these tools and does the reasoning.
 LangGraph orchestrates, LangChain handles memory/RAG.
 """
@@ -62,7 +62,12 @@ from app.collection_manager import get_collection_manager
 from app.core.router import HyperRouter
 
 # Import MCP sampling and orchestrators
-from app.core.sampling import ClientSampler
+from app.core.sampling import (
+    ClientSampler,
+    SamplingNotSupportedError,
+    call_llm_with_fallback,
+    LANGCHAIN_LLM_ENABLED,
+)
 from app.orchestrators import FRAMEWORK_ORCHESTRATORS
 
 logger = logging.getLogger("omni-cortex")
@@ -1257,29 +1262,86 @@ def create_server() -> Server:
 
     @server.call_tool()
     async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
+        logger.debug("call_tool", name=name, args=list(arguments.keys()))
+
         manager = get_collection_manager()
 
-        # Smart routing with HyperRouter (reason tool) - Execute orchestrator
+        # Smart routing with HyperRouter (reason tool) - Returns structured brief
         if name == "reason":
             query = arguments.get("query", "")
             context = arguments.get("context", "")
             thread_id = arguments.get("thread_id")
 
-            # Use singleton router imported from app.graph (not new instance each time)
+            # Use singleton router imported from app.graph
             hyper_router = router
 
-            # First check vibe dictionary, then heuristics, ensure fallback
-            selected = hyper_router._check_vibe_dictionary(query)
-            if not selected:
-                selected = hyper_router._heuristic_select(query, context)
+            # Generate structured brief using the new protocol
+            try:
+                router_output = await hyper_router.generate_structured_brief(
+                    query=query,
+                    context=context,
+                    code_snippet=None,
+                    ide_context=None,
+                    file_list=None
+                )
 
-            # Guaranteed fallback to self_discover if both methods fail
-            if not selected or selected not in FRAMEWORK_ORCHESTRATORS:
-                selected = "self_discover"
+                # Build output with pipeline metadata + Claude brief
+                brief = router_output.claude_code_brief
+                pipeline = router_output.pipeline
+                gate = router_output.integrity_gate
+                telemetry = router_output.telemetry
 
-            # Get framework info from router
-            fw_info = hyper_router.get_framework_info(selected)
-            complexity = hyper_router.estimate_complexity(query, context if context != "None provided" else None)
+                # Compact header - single line metadata
+                stages = "→".join([s.framework_id for s in pipeline.stages])
+                signals = ",".join([s.type.value for s in router_output.detected_signals[:3]]) if router_output.detected_signals else ""
+
+                output = f"[{stages}] conf={gate.confidence.score:.0%} risk={router_output.task_profile.risk_level.value}"
+                if signals:
+                    output += f" signals={signals}"
+                output += "\n\n"
+
+                # The actual brief for Claude - compact but rich
+                output += brief.to_compact_prompt()
+
+                # Gate warning only if not proceeding
+                if gate.recommendation.action.value != "PROCEED":
+                    output += f"\n\n⚠️ {gate.recommendation.action.value}: {gate.recommendation.notes}"
+
+            except Exception as e:
+                # Fallback to simple template mode if structured brief fails
+                import traceback
+                import sys
+                err_detail = traceback.format_exc()
+                logger.warning(f"Structured brief generation failed: {e}\n{err_detail}")
+                # Write to stderr for visibility
+                print(f"BRIEF FAILED: {e}\n{err_detail}", file=sys.stderr)
+
+                selected = hyper_router._check_vibe_dictionary(query)
+                if not selected:
+                    selected = hyper_router._heuristic_select(query, context)
+                if not selected or selected not in FRAMEWORKS:
+                    selected = "self_discover"
+
+                fw_info = hyper_router.get_framework_info(selected)
+                complexity = hyper_router.estimate_complexity(query, context if context != "None provided" else None)
+
+                fw = FRAMEWORKS.get(selected, {"category": "unknown", "best_for": [], "prompt": "Apply your best reasoning to: {query}\n\nContext: {context}"})
+                prompt = fw["prompt"].format(query=query, context=context or "None provided")
+
+                output = f"# Framework: {selected}\n"
+                output += f"Category: {fw_info.get('category', fw.get('category', 'unknown'))} | Complexity: {complexity:.2f}\n"
+                output += f"Best for: {', '.join(fw_info.get('best_for', fw.get('best_for', [])))}\n"
+                output += "\n---\n\n"
+                output += prompt
+
+            return [TextContent(type="text", text=output)]
+
+        # Framework tools (think_*) - Try orchestrator, fallback to template mode
+        if name.startswith("think_"):
+            fw_name = name[6:]
+            query = arguments.get("query", "")
+            context = arguments.get("context", "")
+            thread_id = arguments.get("thread_id")
 
             # Enhance context with memory if thread_id provided
             if thread_id:
@@ -1291,79 +1353,76 @@ def create_server() -> Server:
                 if mem_context.get("framework_history"):
                     context = f"PREVIOUSLY USED FRAMEWORKS: {mem_context['framework_history'][-5:]}\n\n{context}"
 
-            # Execute orchestrator
-            orchestrator = FRAMEWORK_ORCHESTRATORS[selected]
-            result = await orchestrator(sampler, query, context or "None provided")
-
-            # Save to memory if thread_id provided
-            if thread_id:
-                await save_to_langchain_memory(
-                    thread_id,
-                    query,
-                    result["final_answer"],
-                    selected
-                )
-
-            # Return with routing metadata
-            fw = FRAMEWORKS.get(selected, {"category": fw_info.get("category", "unknown"), "best_for": []})
-            output = f"# Auto-selected Framework: {selected}\n"
-            output += f"Category: {fw_info.get('category', fw['category'])} | Complexity: {complexity:.2f}\n"
-            output += f"Best for: {', '.join(fw_info.get('best_for', fw.get('best_for', [])))}\n\n"
-            if "metadata" in result:
-                output += f"**Execution Metadata:** {result['metadata']}\n\n"
-            output += "---\n\n"
-            output += result["final_answer"]
-
-            return [TextContent(type="text", text=output)]
-
-        # Framework tools (think_*) - Execute real orchestrators
-        if name.startswith("think_"):
-            fw_name = name[6:]
+            # Try orchestrator with MCP sampling first (if client supports it)
             if fw_name in FRAMEWORK_ORCHESTRATORS:
-                query = arguments.get("query", "")
-                context = arguments.get("context", "")
-                thread_id = arguments.get("thread_id")
+                try:
+                    orchestrator = FRAMEWORK_ORCHESTRATORS[fw_name]
+                    result = await orchestrator(sampler, query, context or "None provided")
 
-                # Enhance context with memory if thread_id provided
-                if thread_id:
-                    memory = await get_memory(thread_id)
-                    mem_context = memory.get_context()
-                    if mem_context.get("chat_history"):
-                        history_str = "\n".join(str(m) for m in mem_context["chat_history"][-5:])
-                        context = f"CONVERSATION HISTORY:\n{history_str}\n\n{context}"
-                    if mem_context.get("framework_history"):
-                        context = f"PREVIOUSLY USED FRAMEWORKS: {mem_context['framework_history'][-5:]}\n\n{context}"
+                    # Save to memory if thread_id provided
+                    if thread_id:
+                        await save_to_langchain_memory(
+                            thread_id,
+                            query,
+                            result["final_answer"],
+                            fw_name
+                        )
 
-                # Execute orchestrator
-                orchestrator = FRAMEWORK_ORCHESTRATORS[fw_name]
-                result = await orchestrator(sampler, query, context or "None provided")
+                    # Return result with metadata
+                    output = f"# Framework: {fw_name}\n"
+                    if "metadata" in result:
+                        metadata = result["metadata"]
+                        output += f"**Metadata:** {metadata}\n\n"
+                    output += "---\n\n"
+                    output += result["final_answer"]
 
-                # Save to memory if thread_id provided
-                if thread_id:
-                    await save_to_langchain_memory(
-                        thread_id,
-                        query,
-                        result["final_answer"],
-                        fw_name
+                    return [TextContent(type="text", text=output)]
+
+                except SamplingNotSupportedError as e:
+                    # Client doesn't support sampling, try LangChain fallback
+                    logger.info(f"Sampling not supported: {e}")
+
+            # LangChain direct API fallback (if USE_LANGCHAIN_LLM=true)
+            if LANGCHAIN_LLM_ENABLED and fw_name in FRAMEWORKS:
+                try:
+                    fw = FRAMEWORKS[fw_name]
+                    prompt = fw["prompt"].format(query=query, context=context or "None provided")
+
+                    logger.info(f"Using LangChain LLM for {fw_name}")
+                    response = await call_llm_with_fallback(
+                        prompt=prompt,
+                        sampler=None,  # Skip sampling, go straight to LangChain
+                        max_tokens=4000,
+                        temperature=0.7
                     )
 
-                # Return result with metadata
+                    # Save to memory if thread_id provided
+                    if thread_id:
+                        await save_to_langchain_memory(thread_id, query, response, fw_name)
+
+                    output = f"# Framework: {fw_name} (via LangChain)\n"
+                    output += f"Category: {fw.get('category', 'unknown')}\n"
+                    output += f"Best for: {', '.join(fw.get('best_for', []))}\n\n"
+                    output += "---\n\n"
+                    output += response
+
+                    return [TextContent(type="text", text=output)]
+
+                except Exception as e:
+                    logger.warning(f"LangChain fallback failed: {e}, using template mode")
+
+            # Template mode: return structured prompt for client to execute
+            if fw_name in FRAMEWORKS:
+                fw = FRAMEWORKS[fw_name]
+                prompt = fw["prompt"].format(query=query, context=context or "None provided")
+
                 output = f"# Framework: {fw_name}\n"
-                if "metadata" in result:
-                    metadata = result["metadata"]
-                    output += f"**Metadata:** {metadata}\n\n"
+                output += f"Category: {fw.get('category', 'unknown')}\n"
+                output += f"Best for: {', '.join(fw.get('best_for', []))}\n\n"
                 output += "---\n\n"
-                output += result["final_answer"]
+                output += prompt
 
                 return [TextContent(type="text", text=output)]
-
-            # Fallback if framework not found in orchestrators
-            elif fw_name in FRAMEWORKS:
-                # Return prompt template as fallback
-                query = arguments.get("query", "")
-                context = arguments.get("context", "")
-                prompt = FRAMEWORKS[fw_name]["prompt"].format(query=query, context=context or "None provided")
-                return [TextContent(type="text", text=f"[Template Mode]\n\n{prompt}")]
 
         # List frameworks
         if name == "list_frameworks":
@@ -1408,13 +1467,21 @@ def create_server() -> Server:
 
         # Memory: save context
         if name == "save_context":
-            await save_to_langchain_memory(
-                arguments["thread_id"],
-                arguments["query"],
-                arguments["answer"],
-                arguments["framework"]
-            )
-            return [TextContent(type="text", text="Context saved successfully")]
+            try:
+                thread_id = arguments.get("thread_id")
+                query = arguments.get("query")
+                answer = arguments.get("answer")
+                framework = arguments.get("framework")
+
+                if not all([thread_id, query, answer, framework]):
+                    missing = [k for k, v in {"thread_id": thread_id, "query": query, "answer": answer, "framework": framework}.items() if not v]
+                    return [TextContent(type="text", text=f"Missing required arguments: {', '.join(missing)}")]
+
+                await save_to_langchain_memory(thread_id, query, answer, framework)
+                return [TextContent(type="text", text="Context saved successfully")]
+            except Exception as e:
+                logger.error("save_context_failed", error=str(e))
+                return [TextContent(type="text", text=f"Failed to save context: {str(e)}")]
 
         # RAG: search documentation
         if name == "search_documentation":

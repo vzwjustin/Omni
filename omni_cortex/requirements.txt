@@ -21,7 +21,10 @@ watchfiles>=0.21.0
 # =============================================================================
 # LLM Providers
 # =============================================================================
-# OpenRouter (recommended - uses OpenAI SDK with custom base_url)
+# Google AI (Gemini models - recommended for cost)
+langchain-google-genai>=4.0.0
+
+# OpenRouter (uses OpenAI SDK with custom base_url)
 # No separate package needed - uses openai package
 
 # Anthropic (Claude models)

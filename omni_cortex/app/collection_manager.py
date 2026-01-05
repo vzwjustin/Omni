@@ -6,6 +6,7 @@ enabling precise retrieval based on context.
 """
 
 import os
+import threading
 from typing import List, Dict, Any, Optional
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
@@ -14,6 +15,9 @@ import structlog
 from .core.config import settings
 
 logger = structlog.get_logger("collection-manager")
+
+# Thread-safe singleton lock
+_collection_manager_lock = threading.Lock()
 
 
 class CollectionManager:
@@ -35,18 +39,29 @@ class CollectionManager:
     def __init__(self, persist_dir: Optional[str] = None):
         self.persist_dir = persist_dir or os.getenv("CHROMA_PERSIST_DIR", "/app/data/chroma")
         os.makedirs(self.persist_dir, exist_ok=True)
-        
+
         self._embedding_function = None
         self._collections: Dict[str, Chroma] = {}
+        self._collections_lock = threading.Lock()
+        self._embedding_lock = threading.Lock()
     
     def get_embedding_function(self):
         """
-        Lazy initialization of embedding function using shared implementation.
+        Lazy initialization of embedding function using shared implementation (thread-safe).
 
         Uses the same provider logic as langchain_integration._get_embeddings()
         to ensure consistency across the codebase.
         """
-        if self._embedding_function is None:
+        # Fast path: already initialized
+        if self._embedding_function is not None:
+            return self._embedding_function
+
+        # Thread-safe initialization
+        with self._embedding_lock:
+            # Double-check after acquiring lock
+            if self._embedding_function is not None:
+                return self._embedding_function
+
             # Import shared embedding function to avoid duplication
             from .langchain_integration import _get_embeddings
             try:
@@ -58,26 +73,33 @@ class CollectionManager:
         return self._embedding_function
     
     def get_collection(self, collection_name: str) -> Optional[Chroma]:
-        """Get or create a collection."""
+        """Get or create a collection (thread-safe)."""
+        # Fast path: already cached
         if collection_name in self._collections:
             return self._collections[collection_name]
-        
+
         if collection_name not in self.COLLECTIONS:
             logger.warning("unknown_collection", name=collection_name)
             return None
-        
-        try:
-            collection = Chroma(
-                collection_name=f"omni-cortex-{collection_name}",
-                persist_directory=self.persist_dir,
-                embedding_function=self.get_embedding_function()
-            )
-            self._collections[collection_name] = collection
-            logger.info("collection_loaded", name=collection_name)
-            return collection
-        except Exception as e:
-            logger.error("collection_load_failed", name=collection_name, error=str(e))
-            return None
+
+        # Thread-safe initialization
+        with self._collections_lock:
+            # Double-check after acquiring lock
+            if collection_name in self._collections:
+                return self._collections[collection_name]
+
+            try:
+                collection = Chroma(
+                    collection_name=f"omni-cortex-{collection_name}",
+                    persist_directory=self.persist_dir,
+                    embedding_function=self.get_embedding_function()
+                )
+                self._collections[collection_name] = collection
+                logger.info("collection_loaded", name=collection_name)
+                return collection
+            except Exception as e:
+                logger.error("collection_load_failed", name=collection_name, error=str(e))
+                return None
     
     def search(
         self,
@@ -463,8 +485,17 @@ _collection_manager: Optional[CollectionManager] = None
 
 
 def get_collection_manager() -> CollectionManager:
-    """Get or create the global collection manager."""
+    """Get or create the global collection manager (thread-safe)."""
     global _collection_manager
-    if _collection_manager is None:
+
+    # Fast path: already initialized
+    if _collection_manager is not None:
+        return _collection_manager
+
+    # Thread-safe initialization
+    with _collection_manager_lock:
+        # Double-check after acquiring lock
+        if _collection_manager is not None:
+            return _collection_manager
         _collection_manager = CollectionManager()
     return _collection_manager

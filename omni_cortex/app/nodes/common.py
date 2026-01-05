@@ -11,6 +11,7 @@ Shared components used across all framework nodes:
 import asyncio
 import functools
 import re
+import structlog
 from typing import Callable, Optional, Any
 from ..core.config import model_config, settings
 from ..state import GraphState
@@ -19,6 +20,8 @@ from ..nodes.langchain_tools import (
     get_available_tools_for_framework,
     format_tool_descriptions,
 )
+
+logger = structlog.get_logger("common")
 
 
 # Common default values for LLM calls
@@ -60,16 +63,20 @@ def quiet_star(func: Callable) -> Callable:
             "</quiet_thought>\n"
             "[Your actual response here]"
         )
-        
+
+        # Ensure working_memory exists before accessing
+        if "working_memory" not in state or state["working_memory"] is None:
+            state["working_memory"] = {}
+
         # Store the instruction for LLM calls within this context
         state["working_memory"]["quiet_star_enabled"] = True
         state["working_memory"]["quiet_instruction"] = quiet_instruction
-        
+
         # Execute the wrapped function
         result = await func(state, *args, **kwargs)
-        
+
         return result
-    
+
     return wrapper
 
 
@@ -152,12 +159,23 @@ Respond with ONLY a single decimal number between 0.0 and 1.0."""
             max_tokens=DEFAULT_PRM_TOKENS,
             temperature=DEFAULT_PRM_TEMP
         )
-        
-        # Parse the score
-        score = float(response.strip())
-        return max(0.0, min(1.0, score))
-    except Exception:
-        # ValueError from float parsing or other LLM/network errors
+
+        # Parse the score - extract first decimal number from response
+        # Handles cases like "0.8", "0.8 because...", "I rate this 0.75", etc.
+        match = re.search(r'(\d+\.?\d*)', response.strip())
+        if match:
+            score = float(match.group(1))
+            return max(0.0, min(1.0, score))
+        else:
+            logger.warning("prm_score_no_number", response=response[:100] if response else "")
+            return 0.5
+    except ValueError as e:
+        # Failed to parse float from response
+        logger.warning("prm_score_parsing_failed", response=response[:100] if response else "", error=str(e))
+        return 0.5
+    except Exception as e:
+        # LLM or network error
+        logger.error("prm_scoring_failed", error=str(e))
         return 0.5  # Default on error
 
 
@@ -237,6 +255,7 @@ Return ONLY the optimized prompt, no explanations."""
         return optimized.strip()
     except Exception as e:
         # LLM or network error during optimization; fall back to original
+        logger.warning("prompt_optimization_failed", error=str(e), task=task_description[:50])
         return base_prompt
 
 
@@ -287,8 +306,10 @@ def _get_llm_client(
 
     # Determine effective provider: explicit setting takes priority, then auto-detect
     effective_provider = None
-    if provider in ("anthropic", "openai", "openrouter"):
+    if provider in ("google", "anthropic", "openai", "openrouter"):
         effective_provider = provider
+    elif settings.google_api_key:
+        effective_provider = "google"
     elif settings.anthropic_api_key:
         effective_provider = "anthropic"
     elif settings.openai_api_key:
@@ -297,12 +318,24 @@ def _get_llm_client(
         effective_provider = "openrouter"
     else:
         raise ValueError(
-            "No LLM provider configured. Either set LLM_PROVIDER to 'anthropic', 'openai', or 'openrouter' "
+            "No LLM provider configured. Set LLM_PROVIDER to 'google', 'anthropic', 'openai', or 'openrouter' "
             "with the corresponding API key, or provide any API key for auto-detection."
         )
 
     # Create client based on effective provider
-    if effective_provider == "anthropic":
+    if effective_provider == "google":
+        if not settings.google_api_key:
+            raise ValueError("LLM_PROVIDER=google but GOOGLE_API_KEY is not set")
+        from langchain_google_genai import ChatGoogleGenerativeAI
+        # Google uses model name like "gemini-2.0-flash" (strip google/ prefix if present)
+        model_name = strip_prefix(base_model)
+        return ChatGoogleGenerativeAI(
+            model=model_name,
+            google_api_key=settings.google_api_key,
+            temperature=temperature,
+            max_output_tokens=max_tokens
+        )
+    elif effective_provider == "anthropic":
         if not settings.anthropic_api_key:
             raise ValueError("LLM_PROVIDER=anthropic but ANTHROPIC_API_KEY is not set")
         from langchain_anthropic import ChatAnthropic
@@ -364,9 +397,12 @@ async def call_deep_reasoner(
 
     Handles Quiet-STaR integration and token tracking.
     """
-    callback = state.get("working_memory", {}).get("langchain_callback")
-    if callback:
-        callback.on_llm_start({"name": "call_deep_reasoner"}, [prompt])
+    callback = state.get("working_memory", {}).get("langchain_callback") if state else None
+    if callback and hasattr(callback, 'on_llm_start'):
+        try:
+            callback.on_llm_start({"name": "call_deep_reasoner"}, [prompt])
+        except Exception as e:
+            logger.warning("callback_on_llm_start_failed", error=str(e))
 
     # Check if Quiet-STaR is enabled
     if state and state.get("working_memory", {}).get("quiet_star_enabled"):
@@ -388,19 +424,31 @@ async def call_deep_reasoner(
         client.invoke,
         prompt if not system else f"{system}\n\n{prompt}"
     )
-    text = lc_response.content if hasattr(lc_response, "content") else str(lc_response)
+    # Handle different response formats (Google AI returns list, others return string)
+    content = lc_response.content if hasattr(lc_response, "content") else str(lc_response)
+    if isinstance(content, list):
+        # Google AI format: [{'type': 'text', 'text': '...'}]
+        text = content[0].get('text', str(content)) if content else ""
+    else:
+        text = content
     tokens = _estimate_tokens(text)
 
     # Extract and store quiet thought if present
     if state:
         quiet_thought, actual_response = extract_quiet_thought(text)
         if quiet_thought:
+            # Ensure quiet_thoughts list exists before appending
+            if "quiet_thoughts" not in state or state["quiet_thoughts"] is None:
+                state["quiet_thoughts"] = []
             state["quiet_thoughts"].append(quiet_thought)
             text = actual_response
         state["tokens_used"] = state.get("tokens_used", 0) + tokens
 
-    if callback:
-        callback.on_llm_end({"llm_output": {"token_usage": {"total_tokens": tokens}}})
+    if callback and hasattr(callback, 'on_llm_end'):
+        try:
+            callback.on_llm_end({"llm_output": {"token_usage": {"total_tokens": tokens}}})
+        except Exception as e:
+            logger.warning("callback_on_llm_end_failed", error=str(e))
 
     return text, tokens
 
@@ -420,8 +468,11 @@ async def call_fast_synthesizer(
     callback = None
     if state:
         callback = state.get("working_memory", {}).get("langchain_callback")
-        if callback:
-            callback.on_llm_start({"name": "call_fast_synthesizer"}, [prompt])
+        if callback and hasattr(callback, 'on_llm_start'):
+            try:
+                callback.on_llm_start({"name": "call_fast_synthesizer"}, [prompt])
+            except Exception as e:
+                logger.warning("callback_on_llm_start_failed", error=str(e))
 
     # Get the LLM client using the centralized helper
     client = _get_llm_client(
@@ -435,13 +486,22 @@ async def call_fast_synthesizer(
         client.invoke,
         prompt if not system else f"{system}\n\n{prompt}"
     )
-    text = lc_response.content if hasattr(lc_response, "content") else str(lc_response)
+    # Handle different response formats (Google AI returns list, others return string)
+    content = lc_response.content if hasattr(lc_response, "content") else str(lc_response)
+    if isinstance(content, list):
+        # Google AI format: [{'type': 'text', 'text': '...'}]
+        text = content[0].get('text', str(content)) if content else ""
+    else:
+        text = content
     tokens = _estimate_tokens(text)
 
     if state:
         state["tokens_used"] = state.get("tokens_used", 0) + tokens
-    if callback:
-        callback.on_llm_end({"llm_output": {"token_usage": {"total_tokens": tokens}}})
+    if callback and hasattr(callback, 'on_llm_end'):
+        try:
+            callback.on_llm_end({"llm_output": {"token_usage": {"total_tokens": tokens}}})
+        except Exception as e:
+            logger.warning("callback_on_llm_end_failed", error=str(e))
 
     return text, tokens
 
@@ -459,6 +519,9 @@ def add_reasoning_step(
     score: Optional[float] = None
 ) -> None:
     """Add a reasoning step to the state trace."""
+    # Ensure reasoning_steps exists
+    if "reasoning_steps" not in state or state["reasoning_steps"] is None:
+        state["reasoning_steps"] = []
     step_num = len(state["reasoning_steps"]) + 1
     state["reasoning_steps"].append({
         "step_number": step_num,

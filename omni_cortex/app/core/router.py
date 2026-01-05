@@ -1013,14 +1013,25 @@ TASK: {query}
 ## Pre-defined Chains (for complex tasks):
 {chr(10).join(chain_descriptions) if chain_descriptions else '  (none - single framework recommended)'}
 
-## Instructions:
-1. Analyze the task complexity
-2. For SIMPLE tasks: recommend a single framework
-3. For COMPLEX tasks: recommend a chain of 2-4 frameworks
+## When to Chain (IMPORTANT):
+Use a chain of 2-4 frameworks when the task has ANY of these signals:
+- Multiple distinct phases (e.g., "first... then... finally...")
+- Requires both analysis AND implementation
+- Mentions verification, testing, or review as a final step
+- Involves understanding before changing
+- Security-sensitive changes that need audit
+- Complex debugging that needs hypothesis → test → verify
 
-Respond in this format:
+Single framework only for: quick fixes, simple questions, one-step tasks.
+
+## Instructions:
+1. Analyze the task - look for multi-phase signals
+2. For SIMPLE tasks: recommend a single framework
+3. For COMPLEX tasks: recommend a chain of 2-4 frameworks in logical order
+
+Respond EXACTLY in this format:
 COMPLEXITY: simple|complex
-FRAMEWORKS: framework1 [→ framework2 → framework3]
+FRAMEWORKS: framework1 → framework2 → framework3
 REASONING: Brief explanation of your choice
 """
 
@@ -1060,7 +1071,13 @@ REASONING: Brief explanation of your choice
             prompt = self._get_specialist_prompt(category, query, context)
             llm = get_chat_model("fast")
             response = await llm.ainvoke(prompt)
-            response_text = response.content if hasattr(response, "content") else str(response)
+            # Handle different response formats (Google AI returns list, others return string)
+            content = response.content if hasattr(response, "content") else str(response)
+            if isinstance(content, list):
+                # Google AI format: [{'type': 'text', 'text': '...'}]
+                response_text = content[0].get('text', str(content)) if content else ""
+            else:
+                response_text = content
 
             # Parse response
             frameworks_line = ""
@@ -1079,7 +1096,9 @@ REASONING: Brief explanation of your choice
                     return selected, reasoning or f"Specialist selected: {frameworks_line}"
 
         except Exception as e:
-            pass  # Fall through to default
+            import structlog
+            logger = structlog.get_logger("router")
+            logger.warning("specialist_selection_failed", error=str(e), category=category)
 
         # Default: pick first framework in category
         return [frameworks[0]], f"Default selection for {category}"
@@ -1098,17 +1117,28 @@ REASONING: Brief explanation of your choice
         - reasoning: Explanation of selection
         - category: The matched category
         """
+        from ..core.config import settings
+
         # Stage 1: Route to category
         category, confidence = self._route_to_category(query)
 
         # Stage 2: Specialist agent selection
-        if confidence < 0.5:
-            # Low confidence - let specialist decide more carefully
+        # When LLM is enabled (not pass-through), always use specialist for intelligent routing
+        llm_enabled = settings.llm_provider not in ("pass-through", "none", "")
+
+        if llm_enabled:
+            # LLM-powered routing - always use specialist agent
+            chain, reasoning = await self._select_with_specialist(
+                category, query, code_snippet, ide_context
+            )
+            reasoning = f"[Gemini] {reasoning}"
+        elif confidence < 0.5:
+            # Low confidence without LLM - try specialist anyway
             chain, reasoning = await self._select_with_specialist(
                 category, query, code_snippet, ide_context
             )
         else:
-            # High confidence - check for quick vibe match within category
+            # High confidence, no LLM - use vibe matching
             cat_frameworks = self.CATEGORIES[category]["frameworks"]
             vibe_match = self._check_vibe_dictionary(query)
 
@@ -1116,7 +1146,6 @@ REASONING: Brief explanation of your choice
                 chain = [vibe_match]
                 reasoning = f"Vibe match in {category}: {query[:30]}..."
             else:
-                # Use specialist for nuanced selection
                 chain, reasoning = await self._select_with_specialist(
                     category, query, code_snippet, ide_context
                 )
@@ -1150,7 +1179,9 @@ REASONING: Brief explanation of your choice
                     reasoning = f"[Chain: {' → '.join(chain)}] {reasoning}"
                 return chain[0], reasoning
         except Exception as e:
-            pass  # Fall through to legacy method
+            import structlog
+            logger = structlog.get_logger("router")
+            logger.warning("framework_chain_selection_failed", error=str(e))
 
         # Legacy fallback: direct vibe matching
         vibe_match = self._check_vibe_dictionary(query)
@@ -1871,6 +1902,741 @@ REASONING: Brief explanation of your choice
             "best_for": [],
             "complexity": "unknown"
         })
+
+    # ==========================================================================
+    # GEMINI-POWERED TASK ANALYSIS
+    # ==========================================================================
+
+    async def _gemini_analyze_task(
+        self,
+        query: str,
+        context: Optional[str],
+        framework_chain: List[str],
+        category: str
+    ) -> dict:
+        """
+        Use Gemini to generate rich task analysis.
+        Returns specific execution plan, focus areas, assumptions, questions.
+        This offloads thinking from Claude to cheaper Gemini.
+        """
+        try:
+            from ..langchain_integration import get_chat_model
+
+            # Pull relevant learnings from Chroma (category-aware)
+            prior_learnings = await self._get_relevant_learnings(query, category)
+
+            prompt = f"""Analyze this coding task and provide a detailed execution plan.
+
+TASK: {query}
+{f'CONTEXT: {context}' if context else ''}
+FRAMEWORK CHAIN: {' → '.join(framework_chain)}
+CATEGORY: {category}
+
+{f'## Similar Past Solutions:{chr(10)}{prior_learnings}' if prior_learnings else ''}
+
+Generate a SPECIFIC execution plan (not generic steps). Include:
+1. Exact files/areas to investigate
+2. Specific code patterns to look for
+3. Concrete implementation steps
+4. Edge cases to handle
+5. Verification approach
+
+Respond in this EXACT format:
+EXECUTION_PLAN:
+- Step 1: [specific action]
+- Step 2: [specific action]
+- Step 3: [specific action]
+- Step 4: [specific action]
+- Step 5: [specific action]
+
+FOCUS_AREAS: [comma-separated list of specific files/modules]
+
+KEY_ASSUMPTIONS:
+- [assumption 1]
+- [assumption 2]
+
+QUESTIONS_FOR_USER:
+- [question if context unclear]
+
+PRIOR_KNOWLEDGE: [relevant insights from similar problems, or "none"]
+"""
+
+            # Use Gemini with thinking mode for rich analysis
+            llm = get_chat_model("fast", enable_thinking=True)
+            response = await llm.ainvoke(prompt)
+            content = response.content if hasattr(response, "content") else str(response)
+            if isinstance(content, list):
+                content = content[0].get('text', str(content)) if content else ""
+
+            # Parse response
+            result = {
+                "execution_plan": [],
+                "focus_areas": [],
+                "assumptions": [],
+                "questions": [],
+                "prior_knowledge": ""
+            }
+
+            current_section = None
+            for line in content.split("\n"):
+                line = line.strip()
+                if line.startswith("EXECUTION_PLAN:"):
+                    current_section = "plan"
+                elif line.startswith("FOCUS_AREAS:"):
+                    areas = line.replace("FOCUS_AREAS:", "").strip()
+                    result["focus_areas"] = [a.strip() for a in areas.split(",") if a.strip()]
+                    current_section = None
+                elif line.startswith("KEY_ASSUMPTIONS:"):
+                    current_section = "assumptions"
+                elif line.startswith("QUESTIONS_FOR_USER:"):
+                    current_section = "questions"
+                elif line.startswith("PRIOR_KNOWLEDGE:"):
+                    result["prior_knowledge"] = line.replace("PRIOR_KNOWLEDGE:", "").strip()
+                    current_section = None
+                elif line.startswith("- ") and current_section:
+                    item = line[2:].strip()
+                    if current_section == "plan":
+                        # Remove "Step N:" prefix if present
+                        item = item.split(":", 1)[-1].strip() if ":" in item else item
+                        result["execution_plan"].append(item)
+                    elif current_section == "assumptions":
+                        result["assumptions"].append(item)
+                    elif current_section == "questions":
+                        result["questions"].append(item)
+
+            return result
+
+        except Exception as e:
+            import structlog
+            logger = structlog.get_logger("router")
+            logger.warning("gemini_analysis_failed", error=str(e))
+            return {
+                "execution_plan": [],
+                "focus_areas": [],
+                "assumptions": [],
+                "questions": [],
+                "prior_knowledge": ""
+            }
+
+    async def _get_relevant_learnings(self, query: str, category: str = "") -> str:
+        """Pull relevant prior learnings and training knowledge from Chroma."""
+        try:
+            from ..collection_manager import get_collection_manager
+            manager = get_collection_manager()
+
+            all_context = []
+
+            # 1. Search learnings (successful past solutions)
+            try:
+                learnings = manager.search_learnings(query, k=2)
+                for l in learnings:
+                    all_context.append(f"[PRIOR_SOLUTION|{l.get('framework', 'unknown')}] {l.get('solution', '')[:200]}")
+            except Exception:
+                pass
+
+            # 2. Search debugging knowledge (for debug tasks)
+            if category in ("debug", "verification") or any(w in query.lower() for w in ["bug", "error", "fix", "debug"]):
+                try:
+                    docs = manager.search(query, collection_names=["debugging_knowledge"], k=2)
+                    for doc in docs:
+                        all_context.append(f"[DEBUG_PATTERN] {doc.page_content[:200]}")
+                except Exception:
+                    pass
+
+            # 3. Search reasoning knowledge (for complex tasks)
+            if category in ("architecture", "exploration", "refactor"):
+                try:
+                    docs = manager.search(query, collection_names=["reasoning_knowledge"], k=2)
+                    for doc in docs:
+                        all_context.append(f"[REASONING_EXAMPLE] {doc.page_content[:200]}")
+                except Exception:
+                    pass
+
+            # 4. Search instruction knowledge (for implementation tasks)
+            if category in ("code_gen", "agent"):
+                try:
+                    docs = manager.search(query, collection_names=["instruction_knowledge"], k=2)
+                    for doc in docs:
+                        all_context.append(f"[INSTRUCTION_EXAMPLE] {doc.page_content[:200]}")
+                except Exception:
+                    pass
+
+            return "\n".join(all_context[:5]) if all_context else ""
+        except Exception:
+            return ""
+
+    async def _save_task_analysis(
+        self,
+        query: str,
+        analysis: dict,
+        framework_chain: List[str],
+        category: str
+    ) -> None:
+        """Save task analysis to Chroma for future reference."""
+        try:
+            from ..collection_manager import get_collection_manager
+            manager = get_collection_manager()
+
+            # Format analysis as text
+            content = f"Task: {query}\n"
+            content += f"Chain: {' → '.join(framework_chain)}\n"
+            content += f"Plan: {'; '.join(analysis.get('execution_plan', []))}\n"
+            if analysis.get("prior_knowledge"):
+                content += f"Insight: {analysis['prior_knowledge']}"
+
+            metadata = {
+                "type": "task_analysis",
+                "category": category,
+                "framework": framework_chain[0] if framework_chain else "unknown",
+                "chain_length": len(framework_chain)
+            }
+
+            manager.add_documents([content], [metadata], "learnings")
+        except Exception:
+            pass  # Silent fail - not critical
+
+    # ==========================================================================
+    # STRUCTURED BRIEF GENERATION
+    # ==========================================================================
+
+    async def generate_structured_brief(
+        self,
+        query: str,
+        context: Optional[str] = None,
+        code_snippet: Optional[str] = None,
+        ide_context: Optional[str] = None,
+        file_list: Optional[List[str]] = None
+    ) -> "GeminiRouterOutput":
+        """
+        Generate a structured GeminiRouterOutput with ClaudeCodeBrief.
+
+        This is the main entry point for the new structured handoff protocol.
+        Gemini orchestrates, Claude executes.
+        """
+        import time
+        from .schemas import (
+            GeminiRouterOutput, RouterMeta, TaskProfile, TaskType, RiskLevel,
+            DetectedSignal, SignalType, Pipeline, PipelineStage, StageRole,
+            StageInputs, StageBudget, CostClass, OutputType, SelectionRationale,
+            PipelineFallback, FallbackAction, IntegrityGate, Confidence,
+            ConfidenceBand, AlignmentCheck, GateRecommendation, GateAction,
+            ClaudeCodeBrief, RepoTargets, Verification, EvidenceExcerpt,
+            SourceType, Telemetry, SAFE_BASELINE_PIPELINE, DEFAULT_STOP_CONDITIONS
+        )
+
+        start_time = time.time()
+
+        # Detect signals from input
+        detected_signals = self._detect_signals(query, context, code_snippet)
+
+        # Route to category and select frameworks
+        try:
+            framework_chain, reasoning, category = await self.select_framework_chain(
+                query, code_snippet, ide_context
+            )
+        except Exception:
+            framework_chain = ["self_discover", "chain_of_thought"]
+            reasoning = "Safe baseline fallback"
+            category = "exploration"
+
+        # Determine task type from signals and query
+        task_type = self._detect_task_type(query, detected_signals)
+        risk_level = self._assess_risk(query, context, detected_signals)
+
+        # Build pipeline stages (max 3)
+        stages = []
+        role_sequence = [StageRole.SCOUT, StageRole.ARCHITECT, StageRole.OPERATOR]
+        for i, fw in enumerate(framework_chain[:3]):
+            stage_role = role_sequence[min(i, 2)]
+            cost = CostClass.LIGHT if i == 0 else (CostClass.MEDIUM if i == 1 else CostClass.HEAVY)
+
+            stages.append(PipelineStage(
+                stage_role=stage_role,
+                framework_id=fw,
+                inputs=StageInputs(
+                    facts_only=(i > 0),
+                    derived_allowed=(i < 2),
+                    evidence=[]
+                ),
+                expected_outputs=self._get_expected_outputs(stage_role),
+                budget=StageBudget(cost_class=cost, notes=f"Stage {i+1}: {fw}")
+            ))
+
+        # Calculate confidence
+        confidence_score = self._calculate_confidence(detected_signals, framework_chain, category)
+        confidence_band = (
+            ConfidenceBand.HIGH if confidence_score >= 0.75 else
+            ConfidenceBand.MEDIUM if confidence_score >= 0.5 else
+            ConfidenceBand.LOW
+        )
+
+        # Build pipeline
+        pipeline = Pipeline(
+            max_frameworks=min(3, len(framework_chain)),
+            stages=stages,
+            selection_rationale=SelectionRationale(
+                top_pick=framework_chain[0] if framework_chain else "self_discover",
+                runner_up=framework_chain[1] if len(framework_chain) > 1 else "chain_of_thought",
+                why_top_pick=reasoning[:260],
+                why_not_runner_up="Used as subsequent stage" if len(framework_chain) > 1 else "Alternative approach",
+                confidence=Confidence(band=confidence_band, score=confidence_score)
+            ),
+            fallback=PipelineFallback(
+                action=FallbackAction.USE_SAFE_BASELINE,
+                framework_id="self_discover",
+                notes="Fallback to self_discover if pipeline fails"
+            )
+        )
+
+        # Build integrity gate
+        facts = self._extract_facts(query, context, code_snippet)
+        assumptions = self._extract_assumptions(query, context)
+
+        integrity_gate = IntegrityGate(
+            top_facts=facts[:5] if facts else ["Query received: " + query[:100]],
+            top_assumptions=assumptions[:5],
+            falsifiers=self._generate_falsifiers(query, detected_signals),
+            alignment_check=AlignmentCheck(
+                matches_user_goal=True,
+                notes=f"Pipeline matches detected task type: {task_type.value}"
+            ),
+            confidence=Confidence(band=confidence_band, score=confidence_score),
+            recommendation=GateRecommendation(
+                action=GateAction.PROCEED if confidence_score >= 0.5 else GateAction.REQUEST_MORE_INPUT,
+                notes="Proceed with pipeline" if confidence_score >= 0.5 else "Low confidence - may need more context"
+            )
+        )
+
+        # Build evidence excerpts
+        evidence = []
+        if code_snippet:
+            evidence.append(EvidenceExcerpt(
+                source_type=SourceType.FILE,
+                ref="code_snippet",
+                content=code_snippet[:1800],
+                relevance="User-provided code context"
+            ))
+        if context and len(context) > 10:
+            evidence.append(EvidenceExcerpt(
+                source_type=SourceType.USER_TEXT,
+                ref="context",
+                content=context[:1800],
+                relevance="User-provided context"
+            ))
+
+        # Use Gemini for rich task analysis (offload thinking from Claude)
+        gemini_analysis = await self._gemini_analyze_task(
+            query, context, framework_chain, category
+        )
+
+        # Use Gemini's analysis if available, fallback to static templates
+        if gemini_analysis.get("execution_plan"):
+            execution_plan = gemini_analysis["execution_plan"][:5]
+        else:
+            execution_plan = self._generate_execution_plan(query, framework_chain, task_type)
+
+        if gemini_analysis.get("focus_areas"):
+            focus_areas = gemini_analysis["focus_areas"][:5]
+        else:
+            focus_areas = self._extract_areas(query, context)
+
+        if gemini_analysis.get("assumptions"):
+            rich_assumptions = gemini_analysis["assumptions"][:5]
+        else:
+            rich_assumptions = assumptions[:5]
+
+        if gemini_analysis.get("questions"):
+            open_questions = gemini_analysis["questions"][:5]
+        else:
+            open_questions = self._generate_open_questions(query, detected_signals)
+
+        # Add prior knowledge as evidence if available
+        if gemini_analysis.get("prior_knowledge") and gemini_analysis["prior_knowledge"] != "none":
+            evidence.append(EvidenceExcerpt(
+                source_type=SourceType.USER_TEXT,
+                ref="prior_knowledge",
+                content=gemini_analysis["prior_knowledge"][:500],
+                relevance="Relevant insight from similar past problems"
+            ))
+
+        claude_brief = ClaudeCodeBrief(
+            objective=self._generate_objective(query, task_type),
+            task_type=task_type,
+            constraints=self._extract_constraints(query, context),
+            repo_targets=RepoTargets(
+                files=file_list[:10] if file_list else [],
+                areas=focus_areas,
+                do_not_touch=[]
+            ),
+            execution_plan=execution_plan,
+            verification=Verification(
+                commands=self._suggest_verification_commands(task_type),
+                acceptance_criteria=self._generate_acceptance_criteria(query, task_type)
+            ),
+            stop_conditions=DEFAULT_STOP_CONDITIONS[:3],
+            evidence=evidence[:6],
+            assumptions=rich_assumptions,
+            open_questions=open_questions
+        )
+
+        # Save analysis to Chroma for future reference
+        await self._save_task_analysis(query, gemini_analysis, framework_chain, category)
+
+        # Calculate telemetry
+        routing_latency = int((time.time() - start_time) * 1000)
+        inputs_estimate = len(query) + len(context or "") + len(code_snippet or "")
+        brief_estimate = len(claude_brief.to_prompt())
+
+        # Build full output
+        output = GeminiRouterOutput(
+            router_meta=RouterMeta(),
+            task_profile=TaskProfile(
+                task_type=task_type,
+                risk_level=risk_level,
+                primary_goal=query[:240],
+                constraints=claude_brief.constraints
+            ),
+            detected_signals=detected_signals,
+            pipeline=pipeline,
+            integrity_gate=integrity_gate,
+            claude_code_brief=claude_brief,
+            telemetry=Telemetry(
+                routing_latency_ms=routing_latency,
+                inputs_token_estimate=inputs_estimate // 4,
+                brief_token_estimate=brief_estimate // 4,
+                notes=f"Pipeline: {' → '.join(framework_chain[:3])}"
+            )
+        )
+
+        return output
+
+    def _detect_signals(
+        self,
+        query: str,
+        context: Optional[str],
+        code_snippet: Optional[str]
+    ) -> List["DetectedSignal"]:
+        """Detect signals from input to guide framework selection."""
+        from .schemas import DetectedSignal, SignalType
+
+        signals = []
+        combined = f"{query} {context or ''} {code_snippet or ''}".lower()
+
+        signal_patterns = {
+            SignalType.STACK_TRACE: ["traceback", "exception", "error at line", "stack trace", "at line"],
+            SignalType.FAILING_TESTS: ["test fail", "assertion error", "expected", "actual", "npm test", "pytest"],
+            SignalType.REPRO_STEPS: ["to reproduce", "steps:", "1.", "when i", "after running"],
+            SignalType.PERF_REGRESSION: ["slow", "performance", "latency", "timeout", "memory leak"],
+            SignalType.API_CONTRACT_CHANGE: ["api", "endpoint", "breaking change", "deprecat"],
+            SignalType.AMBIGUOUS_REQUIREMENTS: ["unclear", "not sure", "maybe", "should i", "which approach"],
+            SignalType.MULTI_SERVICE: ["microservice", "service a", "service b", "cross-service", "distributed"],
+            SignalType.MIGRATION: ["migrate", "upgrade", "v2", "legacy", "deprecate"],
+            SignalType.DEPENDENCY_CONFLICT: ["dependency", "version conflict", "incompatible", "peer dep"],
+            SignalType.ENVIRONMENT_SPECIFIC: ["only in prod", "works locally", "docker", "kubernetes"],
+            SignalType.SECURITY_RELEVANT: ["security", "vulnerability", "auth", "injection", "xss", "csrf"],
+            SignalType.UI_ONLY: ["css", "layout", "style", "ui", "frontend", "display"],
+            SignalType.DATA_INTEGRITY: ["data loss", "corrupt", "integrity", "consistency"],
+        }
+
+        for signal_type, patterns in signal_patterns.items():
+            if any(p in combined for p in patterns):
+                signals.append(DetectedSignal(
+                    type=signal_type,
+                    evidence_refs=["query", "context"],
+                    notes=f"Detected from input patterns"
+                ))
+
+        return signals
+
+    def _detect_task_type(
+        self,
+        query: str,
+        signals: List["DetectedSignal"]
+    ) -> "TaskType":
+        """Determine task type from query and signals."""
+        from .schemas import TaskType, SignalType
+
+        query_lower = query.lower()
+
+        # Check signals first
+        signal_types = {s.type for s in signals}
+        if SignalType.STACK_TRACE in signal_types or SignalType.FAILING_TESTS in signal_types:
+            return TaskType.DEBUG
+        if SignalType.PERF_REGRESSION in signal_types:
+            return TaskType.PERF
+        if SignalType.SECURITY_RELEVANT in signal_types:
+            return TaskType.SECURITY
+
+        # Check query patterns
+        if any(w in query_lower for w in ["fix", "bug", "error", "broken", "not working", "debug"]):
+            return TaskType.DEBUG
+        if any(w in query_lower for w in ["add", "create", "new feature", "implement"]):
+            return TaskType.ADD_FEATURE
+        if any(w in query_lower for w in ["refactor", "clean", "restructure", "reorganize"]):
+            return TaskType.REFACTOR
+        if any(w in query_lower for w in ["improve", "optimize", "enhance", "better"]):
+            return TaskType.IMPROVE
+        if any(w in query_lower for w in ["document", "readme", "docs", "comment"]):
+            return TaskType.DOCS
+        if any(w in query_lower for w in ["test", "coverage", "spec"]):
+            return TaskType.TESTING
+        if any(w in query_lower for w in ["deploy", "release", "publish"]):
+            return TaskType.RELEASE
+
+        return TaskType.IMPLEMENT
+
+    def _assess_risk(
+        self,
+        query: str,
+        context: Optional[str],
+        signals: List["DetectedSignal"]
+    ) -> "RiskLevel":
+        """Assess risk level of the task."""
+        from .schemas import RiskLevel, SignalType
+
+        signal_types = {s.type for s in signals}
+
+        # Critical indicators
+        if SignalType.SECURITY_RELEVANT in signal_types:
+            return RiskLevel.CRITICAL
+        if SignalType.DATA_INTEGRITY in signal_types:
+            return RiskLevel.HIGH
+
+        # High risk indicators
+        combined = f"{query} {context or ''}".lower()
+        if any(w in combined for w in ["production", "live", "customer", "payment", "auth"]):
+            return RiskLevel.HIGH
+
+        if SignalType.API_CONTRACT_CHANGE in signal_types or SignalType.MIGRATION in signal_types:
+            return RiskLevel.MEDIUM
+
+        return RiskLevel.LOW
+
+    def _get_expected_outputs(self, role: "StageRole") -> List["OutputType"]:
+        """Get expected outputs for a stage role."""
+        from .schemas import StageRole, OutputType
+
+        if role == StageRole.SCOUT:
+            return [OutputType.FACTS, OutputType.ASSUMPTIONS, OutputType.OPEN_QUESTIONS]
+        elif role == StageRole.ARCHITECT:
+            return [OutputType.DECISIONS, OutputType.NEXT_ACTIONS, OutputType.PATCH_PLAN]
+        else:  # OPERATOR
+            return [OutputType.PATCH_PLAN, OutputType.VERIFICATION_PLAN, OutputType.NEXT_ACTIONS]
+
+    def _calculate_confidence(
+        self,
+        signals: List["DetectedSignal"],
+        framework_chain: List[str],
+        category: str
+    ) -> float:
+        """Calculate confidence score for the routing decision."""
+        base = 0.5
+
+        # More signals = more context = higher confidence
+        base += min(len(signals) * 0.1, 0.2)
+
+        # Known category = higher confidence
+        if category in self.CATEGORIES:
+            base += 0.1
+
+        # Framework in category = higher confidence
+        if framework_chain and category in self.CATEGORIES:
+            cat_frameworks = self.CATEGORIES[category].get("frameworks", [])
+            if framework_chain[0] in cat_frameworks:
+                base += 0.1
+
+        return min(base, 1.0)
+
+    def _extract_facts(
+        self,
+        query: str,
+        context: Optional[str],
+        code_snippet: Optional[str]
+    ) -> List[str]:
+        """Extract factual statements from input."""
+        facts = [f"User query: {query[:100]}"]
+
+        if context:
+            facts.append(f"Context provided: {len(context)} chars")
+        if code_snippet:
+            facts.append(f"Code snippet provided: {len(code_snippet)} chars")
+
+        return facts
+
+    def _extract_assumptions(self, query: str, context: Optional[str]) -> List[str]:
+        """Extract assumptions from input."""
+        assumptions = []
+
+        if not context:
+            assumptions.append("No additional context provided - may need more information")
+
+        if "?" in query:
+            assumptions.append("User is seeking guidance, not just execution")
+
+        return assumptions if assumptions else ["Standard implementation approach is acceptable"]
+
+    def _generate_falsifiers(
+        self,
+        query: str,
+        signals: List["DetectedSignal"]
+    ) -> List[str]:
+        """Generate conditions that would invalidate the approach."""
+        falsifiers = [
+            "If the root cause is in a different module than identified",
+            "If the fix requires breaking API changes",
+        ]
+
+        if any(s.type.value == "FAILING_TESTS" for s in signals):
+            falsifiers.append("If tests fail for unrelated reasons after fix")
+
+        return falsifiers[:5]
+
+    def _generate_objective(self, query: str, task_type: "TaskType") -> str:
+        """Generate a clear objective statement."""
+        from .schemas import TaskType
+
+        prefixes = {
+            TaskType.DEBUG: "Fix: ",
+            TaskType.IMPLEMENT: "Implement: ",
+            TaskType.REFACTOR: "Refactor: ",
+            TaskType.IMPROVE: "Improve: ",
+            TaskType.ADD_FEATURE: "Add feature: ",
+            TaskType.DOCS: "Document: ",
+            TaskType.PERF: "Optimize: ",
+            TaskType.SECURITY: "Secure: ",
+            TaskType.TESTING: "Test: ",
+            TaskType.RELEASE: "Release: ",
+        }
+
+        prefix = prefixes.get(task_type, "")
+        return f"{prefix}{query[:200]}"
+
+    def _extract_constraints(self, query: str, context: Optional[str]) -> List[str]:
+        """Extract constraints from input."""
+        constraints = []
+        combined = f"{query} {context or ''}".lower()
+
+        if "don't" in combined or "do not" in combined:
+            constraints.append("Respect explicit restrictions in query")
+        if "existing" in combined or "current" in combined:
+            constraints.append("Preserve existing functionality")
+        if "api" in combined or "contract" in combined:
+            constraints.append("Do not break public API contracts")
+
+        return constraints if constraints else ["Follow existing code conventions"]
+
+    def _extract_areas(self, query: str, context: Optional[str]) -> List[str]:
+        """Extract code areas to focus on."""
+        areas = []
+        combined = f"{query} {context or ''}".lower()
+
+        # Common area patterns
+        if "auth" in combined:
+            areas.append("authentication")
+        if "api" in combined or "endpoint" in combined:
+            areas.append("api")
+        if "database" in combined or "sql" in combined:
+            areas.append("database")
+        if "test" in combined:
+            areas.append("tests")
+        if "ui" in combined or "frontend" in combined:
+            areas.append("frontend")
+
+        return areas[:5]
+
+    def _generate_execution_plan(
+        self,
+        query: str,
+        framework_chain: List[str],
+        task_type: "TaskType"
+    ) -> List[str]:
+        """Generate step-by-step execution plan."""
+        from .schemas import TaskType
+
+        # Get framework-specific steps
+        steps = []
+
+        if task_type == TaskType.DEBUG:
+            steps = [
+                "Identify the error location from logs/stack trace",
+                "Understand the expected vs actual behavior",
+                "Trace the data flow to find root cause",
+                "Implement minimal fix without side effects",
+                "Verify fix with targeted tests",
+            ]
+        elif task_type == TaskType.IMPLEMENT or task_type == TaskType.ADD_FEATURE:
+            steps = [
+                "Review existing patterns in the codebase",
+                "Design the implementation approach",
+                "Implement core functionality",
+                "Add error handling and edge cases",
+                "Write tests and verify",
+            ]
+        elif task_type == TaskType.REFACTOR:
+            steps = [
+                "Understand current implementation",
+                "Identify refactoring targets",
+                "Apply changes incrementally",
+                "Verify behavior is preserved",
+                "Update tests if needed",
+            ]
+        else:
+            steps = [
+                f"Apply {framework_chain[0] if framework_chain else 'reasoning'} approach",
+                "Gather relevant context",
+                "Formulate solution",
+                "Implement changes",
+                "Verify results",
+            ]
+
+        return steps[:5]
+
+    def _suggest_verification_commands(self, task_type: "TaskType") -> List[str]:
+        """Suggest verification commands based on task type."""
+        from .schemas import TaskType
+
+        base = ["npm test", "npm run lint"]
+
+        if task_type == TaskType.DEBUG or task_type == TaskType.TESTING:
+            return ["npm test -- --coverage", "npm run lint"]
+        elif task_type == TaskType.PERF:
+            return ["npm run benchmark", "npm test"]
+        elif task_type == TaskType.SECURITY:
+            return ["npm audit", "npm run lint:security"]
+
+        return base
+
+    def _generate_acceptance_criteria(self, query: str, task_type: "TaskType") -> List[str]:
+        """Generate acceptance criteria."""
+        from .schemas import TaskType
+
+        criteria = ["All existing tests pass"]
+
+        if task_type == TaskType.DEBUG:
+            criteria.append("The reported issue is resolved")
+        elif task_type == TaskType.ADD_FEATURE:
+            criteria.append("New feature works as specified")
+        elif task_type == TaskType.REFACTOR:
+            criteria.append("Behavior is unchanged")
+
+        criteria.append("No new linting errors")
+        return criteria[:4]
+
+    def _generate_open_questions(
+        self,
+        query: str,
+        signals: List["DetectedSignal"]
+    ) -> List[str]:
+        """Generate open questions that may need clarification."""
+        questions = []
+
+        if "?" not in query:
+            questions.append("Are there any constraints not mentioned?")
+
+        if not signals:
+            questions.append("Can you provide more context or examples?")
+
+        return questions[:3]
 
 
 # Global router instance
