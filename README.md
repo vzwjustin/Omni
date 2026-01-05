@@ -6,9 +6,17 @@
 [![MCP Compatible](https://img.shields.io/badge/MCP-Compatible-green?style=for-the-badge)](https://modelcontextprotocol.io)
 [![Frameworks](https://img.shields.io/badge/Frameworks-62-purple?style=for-the-badge)](omni_cortex/FRAMEWORKS.md)
 
-**Omni Cortex** is an MCP server that gives your IDE's AI access to **62 advanced reasoning frameworks**. It doesn't write the code for you; it gives your AI the *strategy* to write better code.
+**Omni Cortex** is an MCP server that gives your IDE's AI access to **62 fully implemented reasoning frameworks**. Each framework executes as a real multi-turn orchestration - not just prompt templates, but actual algorithmic reasoning flows.
 
-> **"Don't memorize complex prompt engineering. Just tell Omni how you feel about the code, and it picks the perfect cognitive strategy."**
+> **"Don't memorize complex prompt engineering. Just tell Omni how you feel about the code, and it orchestrates multi-turn reasoning using the perfect framework."**
+
+## 🔥 Real Orchestrations, Not Templates
+
+These aren't simple prompt templates. Each framework is a **full implementation** that:
+- ✅ **Orchestrates multi-turn reasoning** server-side via MCP sampling
+- ✅ **Executes actual algorithms** (branching, voting, iteration, evaluation)
+- ✅ **No external API calls** - all inference happens client-side (local Claude)
+- ✅ **Returns structured results** with metadata (iterations, scores, reasoning traces)
 
 ---
 
@@ -214,25 +222,38 @@ Omni contains the world's largest collection of formalized cognitive architectur
 
 ---
 
-## 🧠 Architecture: "Headless" Protocols
-Omni-Cortex acts as a **Protocol Provider**.
+## 🧠 Architecture: Multi-Turn Orchestration
+
+Omni-Cortex **executes real reasoning algorithms** using MCP client sampling.
 
 ```
-User Query → Category Router → Specialist Agent → Framework Chain → Pipeline Executor
-                  ↓                   ↓                  ↓               ↓
-            "debug"           Debug Detective      [fw1, fw2, fw3]    Execute each
-            "code_gen"        Code Architect           ↓              in sequence
-            "refactor"        Refactor Surgeon    Pass state between
-                ...                                frameworks
+User Query → Category Router → Specialist Agent → Framework Chain → Multi-Turn Executor
+                  ↓                   ↓                  ↓                    ↓
+            "debug"           Debug Detective      [fw1, fw2, fw3]    Server orchestrates
+            "code_gen"        Code Architect           ↓              multiple client calls
+            "refactor"        Refactor Surgeon    Each framework     per framework
+                ...                               runs its algorithm  (branch, evaluate, etc.)
 ```
+
+### How It Works
 
 1.  **Hierarchical Router**: Two-stage routing—fast category match, then specialist selection
 2.  **Specialist Agents**: 9 domain experts that understand their framework toolbox
 3.  **Framework Chaining**: Complex tasks get 2-4 frameworks run in sequence
-4.  **Pipeline Executor**: Each framework builds on the previous output
-5.  **Memory**: Episodic memory + RAG for cross-session learning
+4.  **Multi-Turn Executor**: Each framework makes multiple calls to client for its algorithm
+5.  **MCP Sampling**: Server requests completions from client (no external APIs)
+6.  **Memory**: Episodic memory + RAG for cross-session learning
 
-This means **Omni doesn't need your API keys**. It just tells your AI *how* to think.
+### Example: Tree of Thoughts
+
+When you use Tree of Thoughts, the server:
+1. Requests 3 solution branches from client (temp=0.8)
+2. Requests evaluation of each branch (temp=0.2)
+3. Selects best based on extracted scores
+4. Requests expansion of winner (temp=0.3)
+5. Returns final solution + metadata
+
+**No API keys needed** - all inference happens in your local Claude Desktop client.
 
 ---
 
@@ -257,13 +278,13 @@ See [FRAMEWORKS.md](omni_cortex/FRAMEWORKS.md) for complete documentation.
 
 ## 📊 Recent Updates (2026-01-05)
 
-**Comprehensive Codebase Analysis Completed**
-- ✅ Multi-agent deep-dive analysis using 5 parallel Opus agents with ultrathink
-- ✅ All documentation framework counts synchronized (62 frameworks)
-- ✅ Fixed placeholder text in 12 framework implementations
-- ✅ Added development tooling (.editorconfig, requirements-dev.txt, enhanced .gitignore)
-- 📄 Full analysis report: [COMPREHENSIVE_CODEBASE_ANALYSIS_2026.md](COMPREHENSIVE_CODEBASE_ANALYSIS_2026.md)
-- 📋 Actionable recommendations: [ACTIONABLE_RECOMMENDATIONS.md](ACTIONABLE_RECOMMENDATIONS.md)
+**🔥 All 62 Frameworks Now Real Multi-Turn Orchestrations**
+- ✅ Converted all frameworks from prompt templates to actual implementations
+- ✅ Each framework executes its specific algorithm (branching, voting, iteration)
+- ✅ Multi-turn orchestration via MCP client sampling (no external APIs)
+- ✅ Structured results with metadata (iterations, scores, reasoning traces)
+- ✅ Server-side coordination, client-side inference
+- ✅ LangChain/LangGraph utilities preserved for memory and RAG
 
 **Architecture Highlights**:
 - 🎯 Sophisticated 3-stage hierarchical routing (category → specialist → framework chain)
@@ -271,6 +292,7 @@ See [FRAMEWORKS.md](omni_cortex/FRAMEWORKS.md) for complete documentation.
 - 🔗 24 pre-defined framework chains for complex tasks
 - 💾 Multi-collection RAG with AST-based Python chunking
 - 🏗️ Clean separation: 9 categories, 9 specialist agents, 62 frameworks
+- 🚀 Real algorithmic execution for every framework
 
 ---
 
