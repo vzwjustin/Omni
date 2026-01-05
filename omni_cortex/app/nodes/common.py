@@ -418,7 +418,13 @@ async def call_deep_reasoner(
         client.invoke,
         prompt if not system else f"{system}\n\n{prompt}"
     )
-    text = lc_response.content if hasattr(lc_response, "content") else str(lc_response)
+    # Handle different response formats (Google AI returns list, others return string)
+    content = lc_response.content if hasattr(lc_response, "content") else str(lc_response)
+    if isinstance(content, list):
+        # Google AI format: [{'type': 'text', 'text': '...'}]
+        text = content[0].get('text', str(content)) if content else ""
+    else:
+        text = content
     tokens = _estimate_tokens(text)
 
     # Extract and store quiet thought if present
@@ -474,7 +480,13 @@ async def call_fast_synthesizer(
         client.invoke,
         prompt if not system else f"{system}\n\n{prompt}"
     )
-    text = lc_response.content if hasattr(lc_response, "content") else str(lc_response)
+    # Handle different response formats (Google AI returns list, others return string)
+    content = lc_response.content if hasattr(lc_response, "content") else str(lc_response)
+    if isinstance(content, list):
+        # Google AI format: [{'type': 'text', 'text': '...'}]
+        text = content[0].get('text', str(content)) if content else ""
+    else:
+        text = content
     tokens = _estimate_tokens(text)
 
     if state:
