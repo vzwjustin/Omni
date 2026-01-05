@@ -5,8 +5,6 @@ on:
     branches:
       - main
       - master
-    tags:
-      - 'v*.*.*'
   pull_request:
     branches:
       - main
@@ -45,20 +43,8 @@ jobs:
         with:
           images: ${{ env.DOCKER_IMAGE }}
           tags: |
-            # Set latest tag for main/master branch
-            type=raw,value=latest,enable={{is_default_branch}}
-            # Tag with git tag version (e.g., v1.2.3 -> 1.2.3)
-            type=semver,pattern={{version}}
-            # Tag with git tag major.minor (e.g., v1.2.3 -> 1.2)
-            type=semver,pattern={{major}}.{{minor}}
-            # Tag with git tag major (e.g., v1.2.3 -> 1)
-            type=semver,pattern={{major}}
-            # Tag with branch name
-            type=ref,event=branch
-            # Tag with PR number
-            type=ref,event=pr
-            # Tag with git short SHA
-            type=sha,prefix={{branch}}-
+            # Always use latest tag
+            type=raw,value=latest
           labels: |
             org.opencontainers.image.title=Omni-Cortex
             org.opencontainers.image.description=MCP Server with 62 AI reasoning frameworks - multi-turn orchestration via client sampling

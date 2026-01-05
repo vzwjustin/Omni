@@ -26,19 +26,14 @@ You need to add the following secrets to your GitHub repository:
 The workflow automatically runs on:
 
 - ✅ **Push to `main` or `master`** → Builds and pushes with `latest` tag
-- ✅ **Git tags** (e.g., `v3.0.0`) → Builds and pushes with version tags
 - ✅ **Pull requests** → Builds only (does not push)
 - ✅ **Manual trigger** → Can be run manually from Actions tab
 
 ## Image Tags
 
-When you push, the following tags are created:
+All pushes to `main`/`master` are tagged as:
 
-| Event | Tags Created |
-|-------|-------------|
-| Push to `main` | `latest`, `main-<sha>` |
-| Tag `v3.0.0` | `3.0.0`, `3.0`, `3`, `latest` |
-| Push to branch `feature-x` | `feature-x`, `feature-x-<sha>` |
+- `vzwjustin/omni-cortex:latest` (always the latest build from main)
 
 ## Docker Image
 
