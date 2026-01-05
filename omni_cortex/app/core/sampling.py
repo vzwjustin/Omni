@@ -46,29 +46,26 @@ class ClientSampler:
         Returns:
             The client's response as a string
         """
-        from mcp.types import SamplingMessage, CreateMessageRequest, CreateMessageRequestParams
+        from mcp.types import SamplingMessage, ModelPreferences
 
         messages = [SamplingMessage(role="user", content={"type": "text", "text": prompt})]
 
-        # MCP v1.25+ requires params wrapper
-        params = CreateMessageRequestParams(
+        # MCP v1.25+ uses session.create_message() accessed via request_context
+        session = self.server.request_context.session
+
+        result = await session.create_message(
             messages=messages,
-            modelPreferences={
-                "hints": [{"name": "claude-3-5-sonnet"}],  # Preference hint
-                "costPriority": 0.5,
-                "speedPriority": 0.5,
-                "intelligencePriority": 1.0
-            },
-            systemPrompt=system_prompt or "",
-            maxTokens=max_tokens,
+            max_tokens=max_tokens,
+            system_prompt=system_prompt,
             temperature=temperature,
-            includeContext="thisServer"
+            include_context="thisServer",
+            model_preferences=ModelPreferences(
+                hints=[{"name": "claude-3-5-sonnet"}],
+                costPriority=0.5,
+                speedPriority=0.5,
+                intelligencePriority=1.0
+            )
         )
-
-        request = CreateMessageRequest(params=params)
-
-        # Request sampling from client
-        result = await self.server.request_sampling(request)
 
         # Extract text from response
         if hasattr(result, 'content'):
