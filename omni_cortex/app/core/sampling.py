@@ -8,13 +8,22 @@ but the client does all the actual inference locally.
 
 Note: Sampling requires the client to support the sampling capability.
 Claude Code CLI support is tracked at: https://github.com/anthropics/claude-code/issues/1785
+
+Configuration:
+    Set ENABLE_MCP_SAMPLING=true to attempt MCP sampling.
+    Default is false (use template mode for Claude Code compatibility).
 """
 
+import os
 import re
 from typing import Optional
 import structlog
 
 logger = structlog.get_logger("sampling")
+
+# Check if MCP sampling is explicitly enabled
+# Default to False since Claude Code doesn't support it yet
+SAMPLING_ENABLED = os.getenv("ENABLE_MCP_SAMPLING", "false").lower() == "true"
 
 
 class SamplingNotSupportedError(Exception):
@@ -63,6 +72,13 @@ class ClientSampler:
         Raises:
             SamplingNotSupportedError: If the client doesn't support sampling
         """
+        # Check if sampling is enabled (default: disabled for Claude Code compatibility)
+        if not SAMPLING_ENABLED:
+            raise SamplingNotSupportedError(
+                "MCP sampling disabled. Set ENABLE_MCP_SAMPLING=true to enable. "
+                "Note: Claude Code doesn't support sampling yet (Issue #1785)."
+            )
+
         from mcp.types import SamplingMessage, TextContent
 
         # Build message with proper TextContent object (not dict)
@@ -88,11 +104,26 @@ class ClientSampler:
                 "No active session found. The MCP client may not support sampling."
             )
 
-        # Check if sampling is supported by attempting the call
+        # Check if session has create_message capability
+        if not hasattr(session, 'create_message'):
+            raise SamplingNotSupportedError(
+                "Session doesn't have create_message method. Client may not support sampling."
+            )
+
+        # Try the sampling call with timeout protection
+        import asyncio
         try:
-            result = await session.create_message(
-                messages=messages,
-                max_tokens=max_tokens,
+            # Use a timeout to detect clients that don't respond to sampling
+            result = await asyncio.wait_for(
+                session.create_message(
+                    messages=messages,
+                    max_tokens=max_tokens,
+                ),
+                timeout=30.0  # 30 second timeout
+            )
+        except asyncio.TimeoutError:
+            raise SamplingNotSupportedError(
+                "Sampling request timed out. Client may not support sampling."
             )
         except AttributeError as e:
             raise SamplingNotSupportedError(
@@ -106,6 +137,8 @@ class ClientSampler:
             error_str = str(e)
             if "sampling" in error_str.lower() or "not supported" in error_str.lower():
                 raise SamplingNotSupportedError(f"Sampling not supported: {e}")
+            if "timeout" in error_str.lower():
+                raise SamplingNotSupportedError(f"Sampling timed out: {e}")
             # Re-raise other errors
             logger.error("sampling_request_failed", error=error_str)
             raise
