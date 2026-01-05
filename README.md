@@ -28,6 +28,53 @@ You don't need to ask for "Active Inference" or "Chain of Verification." Just sp
 
 ---
 
+## 🔗 Framework Chaining — NEW
+
+For complex tasks, Omni doesn't just pick one framework—it **chains multiple frameworks** together in a pipeline, each building on the output of the last.
+
+### How It Works
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    HIERARCHICAL ROUTING                         │
+├─────────────────────────────────────────────────────────────────┤
+│  Stage 1: CATEGORY        Fast pattern match to 1 of 9 domains │
+│  Stage 2: SPECIALIST      Domain expert picks framework chain   │
+│  Stage 3: PIPELINE        Execute frameworks in sequence        │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### The 9 Specialist Agents
+
+| Specialist | Domain | Example Chain |
+|:---|:---|:---|
+| **Debug Detective** | Bug hunting, root cause | `self_ask → active_inference → verify_and_edit` |
+| **Code Architect** | New implementations | `plan_and_solve → parsel → tdd_prompting → self_refine` |
+| **Refactor Surgeon** | Code cleanup | `plan_and_solve → graph_of_thoughts → verify_and_edit` |
+| **System Architect** | Design decisions | `reason_flux → multi_agent_debate → plan_and_solve` |
+| **Verification Expert** | Security, correctness | `red_team → chain_of_verification → verify_and_edit` |
+| **Agent Orchestrator** | Multi-step tasks | `swe_agent → tdd_prompting → verify_and_edit` |
+| **Retrieval Specialist** | Docs, knowledge | `hyde → rag_fusion → rarr` |
+| **Explorer** | Novel problems | `self_discover → analogical → self_refine` |
+| **Speed Demon** | Quick fixes | `system1` (single framework, no chain) |
+
+### Example: Complex Bug Fix
+
+When you say *"This async handler crashes randomly under load, I've tried everything"*:
+
+1. **Category Match** → `debug` (vibe: "crashes", "tried everything")
+2. **Specialist Decision** → Debug Detective selects `complex_bug` chain
+3. **Pipeline Execution**:
+   ```
+   self_ask          →  "What exactly are we debugging?"
+   active_inference  →  Hypothesis testing loop
+   verify_and_edit   →  Validate fix, patch only what's wrong
+   ```
+
+Each framework passes its output to the next. The final answer incorporates insights from all three.
+
+---
+
 ## ⚡ Installation
 
 ### Option 1: The One-Liner (Docker)
@@ -169,10 +216,21 @@ Omni contains the world's largest collection of formalized cognitive architectur
 
 ## 🧠 Architecture: "Headless" Protocols
 Omni-Cortex acts as a **Protocol Provider**.
-1.  **Router**: Determines the best strategy based on your "vibe".
-2.  **Context**: Retrieves relevant memories or docs (RAG).
-3.  **Protocol Generation**: Constructs a highly structured, scientifically-backed system prompt.
-4.  **Handoff**: Returns this protocol to your **Client LLM** (Claude, GPT-4, etc.) to execute.
+
+```
+User Query → Category Router → Specialist Agent → Framework Chain → Pipeline Executor
+                  ↓                   ↓                  ↓               ↓
+            "debug"           Debug Detective      [fw1, fw2, fw3]    Execute each
+            "code_gen"        Code Architect           ↓              in sequence
+            "refactor"        Refactor Surgeon    Pass state between
+                ...                                frameworks
+```
+
+1.  **Hierarchical Router**: Two-stage routing—fast category match, then specialist selection
+2.  **Specialist Agents**: 9 domain experts that understand their framework toolbox
+3.  **Framework Chaining**: Complex tasks get 2-4 frameworks run in sequence
+4.  **Pipeline Executor**: Each framework builds on the previous output
+5.  **Memory**: Episodic memory + RAG for cross-session learning
 
 This means **Omni doesn't need your API keys**. It just tells your AI *how* to think.
 
