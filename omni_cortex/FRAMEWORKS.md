@@ -1,4 +1,4 @@
-# Omni-Cortex: 40 Thinking Frameworks
+# Omni-Cortex: 60 Thinking Frameworks
 
 A comprehensive library of AI reasoning frameworks for code-focused tasks. Each framework is accessible via MCP tools (`think_*`) or auto-selected by the `reason` tool.
 
@@ -44,7 +44,7 @@ A comprehensive library of AI reasoning frameworks for code-focused tasks. Each 
 
 ---
 
-## Code Frameworks (13)
+## Code Frameworks (15)
 
 | Framework | Tool | Description | Best For |
 |-----------|------|-------------|----------|
@@ -61,6 +61,8 @@ A comprehensive library of AI reasoning frameworks for code-focused tasks. Each 
 | **LLMLoop** | `think_llmloop` | Automated iterative feedback loops for code+tests | Code quality assurance, production-ready code |
 | **ProCoder** | `think_procoder` | Compiler-feedback-guided iterative refinement | Project-level code generation, API usage |
 | **RECODE** | `think_recode` | Multi-candidate validation with CFG-based debugging | Reliable code generation, high-stakes code |
+| **PAL** | `think_pal` | Program-Aided Language - code as reasoning substrate | Algorithms, parsing, numeric logic, validation |
+| **Scratchpads** | `think_scratchpads` | Structured intermediate reasoning workspace | Multi-step fixes, multi-constraint reasoning |
 
 ---
 
@@ -86,6 +88,45 @@ A comprehensive library of AI reasoning frameworks for code-focused tasks. Each 
 
 ---
 
+## Verification Frameworks (8) ✨ NEW
+
+| Framework | Tool | Description | Best For |
+|-----------|------|-------------|----------|
+| **Self-Consistency** | `think_self_consistency` | Multi-sample voting for reliable answers | Ambiguous bugs, tricky logic, multiple plausible fixes |
+| **Self-Ask** | `think_self_ask` | Sub-question decomposition before solving | Unclear tickets, missing requirements, multi-part debugging |
+| **RaR** | `think_rar` | Rephrase-and-Respond for clarity | Vague prompts, poorly written bug reports, ambiguous requirements |
+| **Verify-and-Edit** | `think_verify_and_edit` | Verify claims, edit only failures | Code review, security guidance, surgical edits |
+| **RARR** | `think_rarr` | Research, Augment, Revise loop | External docs, repo knowledge, prove-it requirements |
+| **SelfCheckGPT** | `think_selfcheckgpt` | Hallucination detection via sampling | High-stakes guidance, unfamiliar libraries, final gate |
+| **MetaQA** | `think_metaqa` | Metamorphic testing for reasoning reliability | Brittle reasoning, edge cases, policy consistency |
+| **RAGAS** | `think_ragas` | RAG Assessment for retrieval quality | RAG pipelines, retrieval quality, source grounding |
+
+---
+
+## Agent Frameworks (5) ✨ NEW
+
+| Framework | Tool | Description | Best For |
+|-----------|------|-------------|----------|
+| **ReWOO** | `think_rewoo` | Reasoning Without Observation - plan then execute | Multi-step tasks, cost control, plan-once-execute-clean |
+| **LATS** | `think_lats` | Language Agent Tree Search over action sequences | Complex repo changes, multiple fix paths, uncertain root cause |
+| **MRKL** | `think_mrkl` | Modular Reasoning with specialized modules | Big systems, mixed domains, tool-rich setups |
+| **SWE-Agent** | `think_swe_agent` | Repo-first execution loop - inspect/edit/run/iterate | Multi-file bugfixes, CI failures, make tests pass |
+| **Toolformer** | `think_toolformer` | Smart tool selection policy | Router logic, preventing pointless calls, tool efficiency |
+
+---
+
+## RAG Frameworks (5) ✨ NEW
+
+| Framework | Tool | Description | Best For |
+|-----------|------|-------------|----------|
+| **Self-RAG** | `think_self_rag` | Self-triggered selective retrieval | Mixed knowledge tasks, large corpora, minimizing irrelevant retrieval |
+| **HyDE** | `think_hyde` | Hypothetical Document Embeddings for better retrieval | Fuzzy search, unclear intent, broad problems |
+| **RAG-Fusion** | `think_rag_fusion` | Multi-query retrieval with rank fusion | Improving recall, complex queries, noisy corpora |
+| **RAPTOR** | `think_raptor` | Hierarchical abstraction retrieval for large docs | Huge repos, long design docs, monorepos |
+| **GraphRAG** | `think_graphrag` | Entity-relation grounding for dependencies | Architecture questions, module relationships, impact analysis |
+
+---
+
 ## Usage
 
 ### Auto-Selection (Recommended)
@@ -105,6 +146,9 @@ Just describe your problem naturally:
 - "make it faster" → Tree of Thoughts
 - "design a system" → ReasonFlux
 - "is this secure?" → Chain of Verification
+- "prove it with evidence" → RARR
+- "make tests pass" → SWE-Agent
+- "how do modules relate" → GraphRAG
 
 ---
 
@@ -114,11 +158,41 @@ Just describe your problem naturally:
 |----------|----------------------|
 | **Debugging** | active_inference, mcts_rstar, reverse_cot, self_debugging |
 | **Refactoring** | graph_of_thoughts, least_to_most, everything_of_thought |
-| **Architecture** | reason_flux, plan_and_solve, comparative_arch |
+| **Architecture** | reason_flux, plan_and_solve, comparative_arch, graphrag |
 | **Security** | chain_of_verification, red_team |
 | **Performance** | tree_of_thoughts, step_back |
 | **Testing** | tdd_prompting, program_of_thoughts |
 | **Documentation** | chain_of_note, skeleton_of_thought |
 | **Quick Fixes** | system1, skeleton_of_thought |
 | **Complex Problems** | everything_of_thought, mcts_rstar, coala |
-| **Code Generation** | alphacodium, codechain, procoder, recode |
+| **Code Generation** | alphacodium, codechain, procoder, recode, pal |
+| **Verification** | self_consistency, verify_and_edit, selfcheckgpt, ragas |
+| **Agent Tasks** | rewoo, lats, mrkl, swe_agent, toolformer |
+| **Retrieval/RAG** | self_rag, hyde, rag_fusion, raptor, graphrag |
+
+---
+
+## High-Risk Output Recommendations
+
+For high-stakes outputs (security, auth, payments, data loss):
+
+1. **Primary**: Use your best-fit framework for the task
+2. **Verification Gate**: `think_verify_and_edit` or `think_rarr`
+3. **Final Sanity**: `think_selfcheckgpt` or `think_metaqa`
+
+## Large Repo/Docs Grounding
+
+For large codebase or documentation grounding:
+
+1. **Start**: `think_hyde` or `think_rag_fusion`
+2. **If very large**: `think_raptor`
+3. **If relationships matter**: `think_graphrag`
+4. **Evaluate**: `think_ragas`
+
+## Multi-Step Tool-Heavy Work
+
+For complex tool-based tasks:
+
+1. **Plan/Schedule**: `think_rewoo` for efficiency
+2. **Multiple paths**: `think_lats` when backtracking likely
+3. **Make CI green**: `think_swe_agent` for execution discipline

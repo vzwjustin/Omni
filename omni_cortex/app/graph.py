@@ -77,6 +77,34 @@ from .nodes.fast import (
     skeleton_of_thought_node,
     system1_node
 )
+from .nodes.verification import (
+    self_consistency_node,
+    self_ask_node,
+    rar_node,
+    verify_and_edit_node,
+    rarr_node,
+    selfcheckgpt_node,
+    metaqa_node,
+    ragas_node
+)
+from .nodes.agent import (
+    rewoo_node,
+    lats_node,
+    mrkl_node,
+    swe_agent_node,
+    toolformer_node
+)
+from .nodes.rag import (
+    self_rag_node,
+    hyde_node,
+    rag_fusion_node,
+    raptor_node,
+    graphrag_node
+)
+from .nodes.code import (
+    pal_node,
+    scratchpads_node
+)
 
 
 # Framework registry
@@ -127,6 +155,30 @@ FRAMEWORK_NODES = {
     # Fast
     "skeleton_of_thought": skeleton_of_thought_node,
     "system1": system1_node,
+    # Verification
+    "self_consistency": self_consistency_node,
+    "self_ask": self_ask_node,
+    "rar": rar_node,
+    "verify_and_edit": verify_and_edit_node,
+    "rarr": rarr_node,
+    "selfcheckgpt": selfcheckgpt_node,
+    "metaqa": metaqa_node,
+    "ragas": ragas_node,
+    # Agent
+    "rewoo": rewoo_node,
+    "lats": lats_node,
+    "mrkl": mrkl_node,
+    "swe_agent": swe_agent_node,
+    "toolformer": toolformer_node,
+    # RAG
+    "self_rag": self_rag_node,
+    "hyde": hyde_node,
+    "rag_fusion": rag_fusion_node,
+    "raptor": raptor_node,
+    "graphrag": graphrag_node,
+    # Code (additional)
+    "pal": pal_node,
+    "scratchpads": scratchpads_node,
 }
 
 

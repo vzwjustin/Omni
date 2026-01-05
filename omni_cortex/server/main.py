@@ -53,6 +53,7 @@ from app.langchain_integration import (
     get_memory,
     save_to_langchain_memory,
     search_vectorstore,
+    VectorstoreSearchError,
     enhance_state_with_langchain,
     AVAILABLE_TOOLS,
     OmniCortexCallback,
@@ -692,6 +693,321 @@ CONTEXT: {context}
    - Clarity
 5. FINALIZE: Present winning candidate with confidence assessment"""
     },
+    # =========================================================================
+    # VERIFICATION FRAMEWORKS (2026 Expansion)
+    # =========================================================================
+    "self_consistency": {
+        "category": "verification",
+        "description": "Multi-sample voting for reliable answers",
+        "best_for": ["ambiguous bugs", "tricky logic", "multiple plausible fixes"],
+        "prompt": """Apply Self-Consistency:
+
+TASK: {query}
+CONTEXT: {context}
+
+1. GENERATE: Create 3-7 independent solution paths (don't reuse reasoning)
+2. NORMALIZE: Structure as (hypothesis -> fix -> expected evidence)
+3. SCORE: Rate consistency, constraint fit, simplicity, testability
+4. SELECT: Choose winner; keep runner-up if high risk
+5. OUTPUT: Final solution + why it won + validation checks"""
+    },
+    "self_ask": {
+        "category": "verification",
+        "description": "Sub-question decomposition before solving",
+        "best_for": ["unclear tickets", "missing requirements", "multi-part debugging"],
+        "prompt": """Apply Self-Ask:
+
+TASK: {query}
+CONTEXT: {context}
+
+1. GENERATE: List 5-12 sub-questions that must be answered
+2. CLASSIFY: Mark each as must-know vs nice-to-know
+3. ANSWER: Address must-know using context, tools, or docs
+4. RECOMPOSE: Build final solution with stated assumptions
+5. VALIDATE: Check against acceptance criteria"""
+    },
+    "rar": {
+        "category": "verification",
+        "description": "Rephrase-and-Respond for clarity",
+        "best_for": ["vague prompts", "poorly written bug reports", "ambiguous requirements"],
+        "prompt": """Apply Rephrase-and-Respond (RaR):
+
+TASK: {query}
+CONTEXT: {context}
+
+1. REPHRASE: Write precise task spec (objective, constraints, acceptance criteria)
+2. CONFIRM: Check for internal consistency
+3. SOLVE: Implement strictly against rephrased spec
+4. VERIFY: Map results to acceptance criteria"""
+    },
+    "verify_and_edit": {
+        "category": "verification",
+        "description": "Verify claims, edit only failures",
+        "best_for": ["code review", "security guidance", "implementation plans", "surgical edits"],
+        "prompt": """Apply Verify-and-Edit:
+
+TASK: {query}
+CONTEXT: {context}
+
+1. DRAFT: Create initial solution
+2. EXTRACT: Identify verifiable claims and risky assertions
+3. VERIFY: Check each via context, tests, docs (mark assumptions)
+4. EDIT: Fix ONLY failing sections; preserve good sections
+5. FINALIZE: Produce verification ledger"""
+    },
+    "rarr": {
+        "category": "verification",
+        "description": "Research, Augment, Revise - evidence-driven revision",
+        "best_for": ["external docs", "repo knowledge", "prove-it requirements"],
+        "prompt": """Apply RARR (Research, Augment, Revise):
+
+TASK: {query}
+CONTEXT: {context}
+
+1. DRAFT: Create initial output
+2. GENERATE: Create 3-8 targeted evidence queries
+3. RETRIEVE: Gather relevant evidence
+4. REVISE: Update to align with evidence; remove unsupported claims
+5. CITE: Provide anchors (file:line when possible)"""
+    },
+    "selfcheckgpt": {
+        "category": "verification",
+        "description": "Hallucination detection via sampling consistency",
+        "best_for": ["high-stakes guidance", "unfamiliar libraries", "final pre-flight gate"],
+        "prompt": """Apply SelfCheckGPT:
+
+TASK: {query}
+CONTEXT: {context}
+
+1. IDENTIFY: Flag high-risk claims in draft
+2. SAMPLE: Generate multiple re-answers focusing on risky claims
+3. CHECK: Compare answers; flag disagreement hotspots
+4. REPLACE: Disputed content with verified evidence or explicit uncertainty
+5. OUTPUT: Final result + risk register"""
+    },
+    "metaqa": {
+        "category": "verification",
+        "description": "Metamorphic testing for reasoning reliability",
+        "best_for": ["brittle reasoning", "edge cases", "policy consistency"],
+        "prompt": """Apply MetaQA (Metamorphic QA):
+
+TASK: {query}
+CONTEXT: {context}
+
+1. DEFINE: Invariants that must stay true
+2. GENERATE: 3-10 transformed variants (rewording, constraint tweaks)
+3. SOLVE: Answer each variant
+4. CHECK: Identify contradictions between answers
+5. PATCH: Fix solution to satisfy invariants across variants"""
+    },
+    "ragas": {
+        "category": "verification",
+        "description": "RAG Assessment - evaluate retrieval quality",
+        "best_for": ["RAG pipelines", "retrieval quality", "source grounding"],
+        "prompt": """Apply RAGAS (RAG Assessment):
+
+TASK: {query}
+CONTEXT: {context}
+
+Evaluate across dimensions:
+1. RELEVANCE: Are retrieved chunks relevant?
+2. FAITHFULNESS: Does answer stick to sources?
+3. COMPLETENESS: All aspects covered?
+4. NOISE: Any irrelevant/misleading content?
+5. DIAGNOSE: Failure modes + corrective actions"""
+    },
+    # =========================================================================
+    # AGENT FRAMEWORKS (2026 Expansion)
+    # =========================================================================
+    "rewoo": {
+        "category": "agent",
+        "description": "Reasoning Without Observation - plan then execute",
+        "best_for": ["multi-step tasks", "cost control", "plan-once-execute-clean"],
+        "prompt": """Apply ReWOO (Reasoning Without Observation):
+
+TASK: {query}
+CONTEXT: {context}
+
+1. PLAN: Create tool-free plan with expected observations
+2. SCHEDULE: Convert to tool call schedule (what, when, why)
+3. EXECUTE: Run tools in batches; collect observations
+4. REVISE: Update plan only if observations contradict
+5. FINALIZE: Result + checks + next actions"""
+    },
+    "lats": {
+        "category": "agent",
+        "description": "Language Agent Tree Search over action sequences",
+        "best_for": ["complex repo changes", "multiple fix paths", "uncertain root cause"],
+        "prompt": """Apply LATS (Language Agent Tree Search):
+
+TASK: {query}
+CONTEXT: {context}
+
+1. PRIMITIVES: Define actions (edit, test, inspect, search)
+2. EXPAND: Generate multiple action sequence branches
+3. SCORE: Rate by likelihood, risk, effort, rollback ease
+4. EXECUTE: Run best branch; backtrack if fails
+5. FINALIZE: Chosen path + alternatives considered"""
+    },
+    "mrkl": {
+        "category": "agent",
+        "description": "Modular Reasoning with specialized modules",
+        "best_for": ["big systems", "mixed domains", "tool-rich setups"],
+        "prompt": """Apply MRKL (Modular Reasoning, Knowledge, Language):
+
+TASK: {query}
+CONTEXT: {context}
+
+1. DECOMPOSE: Break into module tasks (Security, Perf, Test, Product)
+2. ROUTE: Specify input/output/validation for each module
+3. EXECUTE: Run modules with clear interfaces
+4. RECONCILE: Resolve conflicting outputs
+5. SYNTHESIZE: Combine into final decision + verification plan"""
+    },
+    "swe_agent": {
+        "category": "agent",
+        "description": "Repo-first execution loop - inspect/edit/run/iterate",
+        "best_for": ["multi-file bugfixes", "CI failures", "make tests pass"],
+        "prompt": """Apply SWE-Agent:
+
+TASK: {query}
+CONTEXT: {context}
+
+1. INSPECT: Entry points, failing tests, logs, config
+2. IDENTIFY: Minimal change set
+3. PATCH: Apply changes in small increments
+4. VERIFY: Run tests/lint/typecheck
+5. ITERATE: Until green, then summarize + remaining risks"""
+    },
+    "toolformer": {
+        "category": "agent",
+        "description": "Smart tool selection policy",
+        "best_for": ["router logic", "preventing pointless calls", "standardized prompts"],
+        "prompt": """Apply Toolformer (Tool Selection Policy):
+
+TASK: {query}
+CONTEXT: {context}
+
+1. IDENTIFY: What claims require external confirmation?
+2. JUSTIFY: Does tool call materially reduce uncertainty?
+3. OPTIMIZE: Specify tight inputs + expected outputs
+4. INTEGRATE: Parse results, update confidence
+5. DOCUMENT: Tool decision rationale"""
+    },
+    # =========================================================================
+    # RAG FRAMEWORKS (2026 Expansion)
+    # =========================================================================
+    "self_rag": {
+        "category": "rag",
+        "description": "Self-triggered selective retrieval",
+        "best_for": ["mixed knowledge tasks", "large corpora", "minimizing irrelevant retrieval"],
+        "prompt": """Apply Self-RAG:
+
+TASK: {query}
+CONTEXT: {context}
+
+1. DRAFT: Write with confidence tags (HIGH/MEDIUM/LOW)
+2. IDENTIFY: Gaps in LOW-confidence segments
+3. RETRIEVE: Fetch evidence only for uncertain parts
+4. UPDATE: Revise only uncertain segments
+5. CRITIQUE: Confirm groundedness; remove unsupported claims"""
+    },
+    "hyde": {
+        "category": "rag",
+        "description": "Hypothetical Document Embeddings for better retrieval",
+        "best_for": ["fuzzy search", "unclear intent", "broad problems"],
+        "prompt": """Apply HyDE (Hypothetical Document Embeddings):
+
+TASK: {query}
+CONTEXT: {context}
+
+1. HYPOTHESIZE: Write ideal answer document
+2. EXTRACT: Convert to strong retrieval queries
+3. RETRIEVE: Find real documents/snippets
+4. GROUND: Answer based on retrieved evidence
+5. CITE: Evidence anchors for claims"""
+    },
+    "rag_fusion": {
+        "category": "rag",
+        "description": "Multi-query retrieval with rank fusion",
+        "best_for": ["improving recall", "complex queries", "noisy corpora"],
+        "prompt": """Apply RAG-Fusion:
+
+TASK: {query}
+CONTEXT: {context}
+
+1. GENERATE: 3-8 diverse queries (synonyms, facets, constraints)
+2. RETRIEVE: Top-K per query
+3. FUSE: Dedupe + reciprocal rank merge
+4. SYNTHESIZE: Answer using fused evidence
+5. COVERAGE: Ensure all query facets addressed"""
+    },
+    "raptor": {
+        "category": "rag",
+        "description": "Hierarchical abstraction retrieval for large docs",
+        "best_for": ["huge repos", "long design docs", "monorepos"],
+        "prompt": """Apply RAPTOR (Recursive Abstraction Retrieval):
+
+TASK: {query}
+CONTEXT: {context}
+
+1. HIERARCHY: Summaries at chunk/section/doc levels
+2. RETRIEVE TOP-DOWN: High-level first, then drill down
+3. GATHER: Supporting details from lower levels
+4. SYNTHESIZE: Combine abstraction with specifics
+5. ANCHOR: Both overview context and specific citations"""
+    },
+    "graphrag": {
+        "category": "rag",
+        "description": "Entity-relation grounding for dependencies",
+        "best_for": ["architecture questions", "module relationships", "impact analysis"],
+        "prompt": """Apply GraphRAG:
+
+TASK: {query}
+CONTEXT: {context}
+
+1. EXTRACT: Entities (modules, APIs, tables, services)
+2. MAP: Relations (calls, reads/writes, owns, triggers)
+3. GRAPH: Build conceptual relation map
+4. QUERY: Trace paths, find blast radius, identify dependencies
+5. CITE: Show relationship chains supporting claims"""
+    },
+    # =========================================================================
+    # CODE FRAMEWORKS (2026 Expansion - Additional)
+    # =========================================================================
+    "pal": {
+        "category": "code",
+        "description": "Program-Aided Language - code as reasoning substrate",
+        "best_for": ["algorithms", "parsing", "numeric logic", "validation"],
+        "prompt": """Apply PAL (Program-Aided Language):
+
+TASK: {query}
+CONTEXT: {context}
+
+1. TRANSLATE: Convert reasoning to a small program
+2. PSEUDOCODE: Start with pseudocode if unsure
+3. IMPLEMENT: Write executable code
+4. VALIDATE: Test with examples (normal + edge cases)
+5. CONVERT: Translate verified code to final solution"""
+    },
+    "scratchpads": {
+        "category": "code",
+        "description": "Structured intermediate reasoning workspace",
+        "best_for": ["multi-step fixes", "multi-constraint reasoning", "state tracking"],
+        "prompt": """Apply Scratchpads:
+
+TASK: {query}
+CONTEXT: {context}
+
+Maintain structured scratchpad:
+- FACTS: Key known information
+- CONSTRAINTS: Must-do and cannot-do
+- PLAN: Ordered approach
+- RISKS: Potential issues + mitigations
+- CHECKS: Verification steps
+
+Update as you work; present final with scratchpad summary."""
+    },
 }
 
 
@@ -703,7 +1019,7 @@ def create_server() -> Server:
     async def list_tools() -> list[Tool]:
         tools = []
 
-        # 40 Framework tools (think_*) - LLM selects based on task
+        # 60 Framework tools (think_*) - LLM selects based on task
         for name, fw in FRAMEWORKS.items():
             # Build vibes from router for better LLM selection
             vibes = router.VIBE_DICTIONARY.get(name, [])[:4]
@@ -741,7 +1057,7 @@ def create_server() -> Server:
         # Framework discovery tools
         tools.append(Tool(
             name="list_frameworks",
-            description="List all 40 thinking frameworks by category",
+            description="List all 60 thinking frameworks by category",
             inputSchema={"type": "object", "properties": {}}
         ))
 
@@ -974,8 +1290,8 @@ def create_server() -> Server:
 
         # List frameworks
         if name == "list_frameworks":
-            output = "# Omni-Cortex: 40 Thinking Frameworks\n\n"
-            for cat in ["strategy", "search", "iterative", "code", "context", "fast"]:
+            output = "# Omni-Cortex: 60 Thinking Frameworks\n\n"
+            for cat in ["strategy", "search", "iterative", "code", "context", "fast", "verification", "agent", "rag"]:
                 output += f"## {cat.upper()}\n"
                 for n, fw in FRAMEWORKS.items():
                     if fw["category"] == cat:
@@ -1027,7 +1343,11 @@ def create_server() -> Server:
         if name == "search_documentation":
             query = arguments.get("query", "")
             k = arguments.get("k", 5)
-            docs = search_vectorstore(query, k=k)
+            try:
+                docs = search_vectorstore(query, k=k)
+            except VectorstoreSearchError as exc:
+                logger.error("search_documentation_failed: %s", exc)
+                return [TextContent(type="text", text=f"Search failed: {exc}")]
             if not docs:
                 return [TextContent(type="text", text="No results found. Try refining your query.")]
             formatted = []
@@ -1129,7 +1449,7 @@ def create_server() -> Server:
             return [TextContent(type="text", text=json.dumps({
                 "status": "healthy",
                 "frameworks": len(FRAMEWORKS),
-                "tools": len(FRAMEWORKS) + 14,  # 40 think_* + 14 utility tools
+                "tools": len(FRAMEWORKS) + 14,  # 60 think_* + 14 utility tools
                 "collections": collections,
                 "memory_enabled": True,
                 "rag_enabled": True
