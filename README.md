@@ -1,7 +1,7 @@
 # 🧠 Omni Cortex
 ### The Headless Strategy Engine for AI Coding Agents
 
-[![Docker Version](https://img.shields.io/docker/v/vzwjustin/omni-cortex?sort=semver&style=for-the-badge&logo=docker&logoColor=white)](https://hub.docker.com/r/vzwjustin/omni-cortex)
+[![Docker](https://img.shields.io/badge/docker-latest-blue?style=for-the-badge&logo=docker&logoColor=white)](https://hub.docker.com/r/vzwjustin/omni-cortex)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge&logo=github)](LICENSE)
 [![MCP Compatible](https://img.shields.io/badge/MCP-Compatible-green?style=for-the-badge)](https://modelcontextprotocol.io)
 [![Frameworks](https://img.shields.io/badge/Frameworks-60-purple?style=for-the-badge)](omni_cortex/FRAMEWORKS.md)
