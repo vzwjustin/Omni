@@ -46,11 +46,12 @@ class ClientSampler:
         Returns:
             The client's response as a string
         """
-        from mcp.types import SamplingMessage, CreateMessageRequest
+        from mcp.types import SamplingMessage, CreateMessageRequest, CreateMessageRequestParams
 
         messages = [SamplingMessage(role="user", content={"type": "text", "text": prompt})]
 
-        request = CreateMessageRequest(
+        # MCP v1.25+ requires params wrapper
+        params = CreateMessageRequestParams(
             messages=messages,
             modelPreferences={
                 "hints": [{"name": "claude-3-5-sonnet"}],  # Preference hint
@@ -63,6 +64,8 @@ class ClientSampler:
             temperature=temperature,
             includeContext="thisServer"
         )
+
+        request = CreateMessageRequest(params=params)
 
         # Request sampling from client
         result = await self.server.request_sampling(request)
