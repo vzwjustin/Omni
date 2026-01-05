@@ -1,7 +1,7 @@
 """
 Omni-Cortex MCP Server
 
-Exposes 40 thinking framework tools + utility tools.
+Exposes 62 thinking framework tools + utility tools.
 The calling LLM uses these tools and does the reasoning.
 LangGraph orchestrates, LangChain handles memory/RAG.
 """
@@ -1008,6 +1008,37 @@ Maintain structured scratchpad:
 
 Update as you work; present final with scratchpad summary."""
     },
+    "parsel": {
+        "category": "code",
+        "description": "Compositional code generation from natural language specs",
+        "best_for": ["complex functions", "dependency graphs", "spec-to-code", "modular systems"],
+        "prompt": """Apply Parsel (Compositional Code Generation):
+
+TASK: {query}
+CONTEXT: {context}
+
+1. DECOMPOSE: Break task into individual function specs
+   - Name, description, inputs, outputs, dependencies
+2. GRAPH: Build dependency order (no cycles)
+3. BASE: Generate leaf functions first (no dependencies)
+4. COMPOSE: Build dependent functions using generated ones
+5. INTEGRATE: Combine into cohesive module with entry point"""
+    },
+    "docprompting": {
+        "category": "code",
+        "description": "Documentation-driven code generation",
+        "best_for": ["API usage", "library integration", "following docs", "correct usage"],
+        "prompt": """Apply DocPrompting (Documentation-Driven):
+
+TASK: {query}
+CONTEXT: {context}
+
+1. IDENTIFY: List required APIs/libraries
+2. RETRIEVE: Find relevant documentation + examples
+3. EXTRACT: Note function signatures, usage patterns, idioms
+4. GENERATE: Write code following doc patterns
+5. VERIFY: Cross-check against doc for correct params, types, error handling"""
+    },
 }
 
 
@@ -1019,7 +1050,7 @@ def create_server() -> Server:
     async def list_tools() -> list[Tool]:
         tools = []
 
-        # 60 Framework tools (think_*) - LLM selects based on task
+        # 62 Framework tools (think_*) - LLM selects based on task
         for name, fw in FRAMEWORKS.items():
             # Build vibes from router for better LLM selection
             vibes = router.VIBE_DICTIONARY.get(name, [])[:4]

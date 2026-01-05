@@ -15,6 +15,8 @@ from .procoder import procoder_node
 from .recode import recode_node
 from .pal import pal_node
 from .scratchpads import scratchpads_node
+from .parsel import parsel_node
+from .docprompting import docprompting_node
 
 __all__ = [
     "program_of_thoughts_node",
@@ -32,4 +34,6 @@ __all__ = [
     "recode_node",
     "pal_node",
     "scratchpads_node",
+    "parsel_node",
+    "docprompting_node",
 ]

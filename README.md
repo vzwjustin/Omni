@@ -4,9 +4,9 @@
 [![Docker](https://img.shields.io/badge/docker-latest-blue?style=for-the-badge&logo=docker&logoColor=white)](https://hub.docker.com/r/vzwjustin/omni-cortex)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge&logo=github)](LICENSE)
 [![MCP Compatible](https://img.shields.io/badge/MCP-Compatible-green?style=for-the-badge)](https://modelcontextprotocol.io)
-[![Frameworks](https://img.shields.io/badge/Frameworks-60-purple?style=for-the-badge)](omni_cortex/FRAMEWORKS.md)
+[![Frameworks](https://img.shields.io/badge/Frameworks-62-purple?style=for-the-badge)](omni_cortex/FRAMEWORKS.md)
 
-**Omni Cortex** is an MCP server that gives your IDE's AI access to **60 advanced reasoning frameworks**. It doesn't write the code for you; it gives your AI the *strategy* to write better code.
+**Omni Cortex** is an MCP server that gives your IDE's AI access to **62 advanced reasoning frameworks**. It doesn't write the code for you; it gives your AI the *strategy* to write better code.
 
 > **"Don't memorize complex prompt engineering. Just tell Omni how you feel about the code, and it picks the perfect cognitive strategy."**
 
@@ -60,7 +60,7 @@ Add this to your IDE's MCP settings file (e.g., `claude_desktop_config.json` or 
 
 ---
 
-## 🧩 The 60 Frameworks
+## 🧩 The 62 Frameworks
 Omni contains the world's largest collection of formalized cognitive architectures for coding.
 
 <details>
@@ -185,13 +185,13 @@ This means **Omni doesn't need your API keys**. It just tells your AI *how* to t
 | Strategy | 7 | Architecture, planning, system design |
 | Search | 4 | Optimization, exploration, complex bugs |
 | Iterative | 8 | Debugging, refinement, learning loops |
-| Code | 15 | Code generation, testing, algorithms |
+| Code | 17 | Code generation, testing, algorithms |
 | Context | 6 | Research, abstraction, security |
 | Fast | 2 | Quick fixes, scaffolding |
 | Verification | 8 | Claim integrity, hallucination detection |
 | Agent | 5 | Tool orchestration, execution loops |
 | RAG | 5 | Retrieval grounding, evidence-based |
-| **Total** | **60** | |
+| **Total** | **62** | |
 
 See [FRAMEWORKS.md](omni_cortex/FRAMEWORKS.md) for complete documentation.
 

@@ -63,7 +63,9 @@ from .nodes.code import (
     evol_instruct_node,
     llmloop_node,
     procoder_node,
-    recode_node
+    recode_node,
+    parsel_node,
+    docprompting_node
 )
 from .nodes.context import (
     chain_of_note_node,
@@ -179,6 +181,8 @@ FRAMEWORK_NODES = {
     # Code (additional)
     "pal": pal_node,
     "scratchpads": scratchpads_node,
+    "parsel": parsel_node,
+    "docprompting": docprompting_node,
 }
 
 
