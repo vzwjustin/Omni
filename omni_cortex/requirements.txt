@@ -53,3 +53,4 @@ structlog>=24.0.0
 # Dataset Ingestion (Optional)
 # =============================================================================
 pandas>=2.0.0  # For CSV parsing in bug-fix datasets
+datasets>=2.15.0  # For loading HuggingFace datasets

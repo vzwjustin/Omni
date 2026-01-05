@@ -17,7 +17,7 @@ These aren't simple prompt templates. Each framework is a **full implementation*
 - ✅ **Executes actual algorithms** (branching, voting, iteration, evaluation)
 - ✅ **No external API calls** - all inference happens client-side (local Claude)
 - ✅ **Returns structured results** with metadata (iterations, scores, reasoning traces)
-- ✅ **Learns from 6K+ real bug fixes** - integrated LLM debugging training data with embeddings
+- ✅ **Learns from 16K+ training examples** - bug-fixes, reasoning patterns, and instruction datasets (requires API key for embeddings)
 
 ---
 
@@ -289,13 +289,25 @@ See [FRAMEWORKS.md](omni_cortex/FRAMEWORKS.md) for complete documentation.
 - ✅ LangChain/LangGraph utilities preserved for memory and RAG
 
 **🐛 NEW: Debugging Knowledge Base with LLM Training Data**
-- 🎯 Integrated **6,000+ real-world bug-fix pairs** from curated datasets
-- 📊 Three specialized datasets: **PyResBugs** (5K pairs), **HaPy-Bug** (793 expert-annotated), **Learning-Fixes**
-- 🧠 Pre-computed vector embeddings stored in ChromaDB for instant semantic search
-- 🔍 Intelligent bug-type filtering (TypeError, AttributeError, etc.)
+- 🎯 Integrated **10,000+ real-world bug-fix pairs** from curated datasets
+- 📊 Six specialized datasets:
+  - **PyResBugs** (5K pairs) - Production bugs from real Python projects
+  - **HaPy-Bug** (793 pairs) - Expert-annotated bug-fix commits
+  - **Learning-Fixes** - Line-aligned bug-fix patterns
+  - **Muennighoff/python-bugs** (1-10K) - Curated Python bug collection
+  - **alexjercan/bugnet** - CodeNet competition bugs with error messages
+  - **HuggingFaceH4/Code-Feedback** - Code review and feedback patterns
+- 🧠 **6,000+ reasoning examples** with chain-of-thought steps
+  - **moremilk/General_Inquiry_Thinking-Chain-Of-Thought** (6K) - Step-by-step logic
+  - **AlekseyKorshuk/chain-of-thoughts-chatml** - Structured reasoning patterns
+- 📝 **Instruction-following datasets** for coding tasks
+  - **nampdn-ai/tiny-codes** (1.6M snippets) - High-quality commented code
+  - **HuggingFaceH4/helpful_instructions** - Instruction-completion pairs
+- 🔧 Pre-computed vector embeddings stored in ChromaDB for instant semantic search
+- 🔍 Intelligent filtering by bug type, reasoning pattern, or instruction type
 - 💡 Auto-suggests fixes based on similar bugs from production codebases
-- 📝 Each pair includes buggy code, fixed code, and natural language descriptions
 - 🚀 One-command ingestion: `python3 scripts/ingest_bug_fixes.py --all`
+- ⚙️ **Requires API key**: Set `OPENAI_API_KEY` or `OPENROUTER_API_KEY` for embeddings
 - 📖 See [BUG_FIX_DATASETS.md](omni_cortex/scripts/BUG_FIX_DATASETS.md) for usage
 
 **Architecture Highlights**:
