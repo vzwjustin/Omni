@@ -1,7 +1,7 @@
 """
 Omni-Cortex MCP Server
 
-Exposes 62 thinking framework tools + utility tools.
+Exposes 60 thinking framework tools + utility tools.
 The calling LLM uses these tools and does the reasoning.
 LangGraph orchestrates, LangChain handles memory/RAG.
 """
@@ -1262,9 +1262,7 @@ def create_server() -> Server:
 
     @server.call_tool()
     async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
-        # Debug immediately at entry
-        with open("/tmp/omni-debug.log", "a") as f:
-            f.write(f"call_tool called: name={name}, args={list(arguments.keys())}\n")
+        logger.debug("call_tool", name=name, args=list(arguments.keys()))
 
         manager = get_collection_manager()
 
@@ -1293,27 +1291,21 @@ def create_server() -> Server:
                 gate = router_output.integrity_gate
                 telemetry = router_output.telemetry
 
-                # Header with routing info
-                stages = " → ".join([s.framework_id for s in pipeline.stages])
-                output = f"# {router_output.task_profile.task_type.value}: {brief.objective[:80]}\n"
-                output += f"Pipeline: {stages}\n"
-                output += f"Confidence: {gate.confidence.band.value} ({gate.confidence.score:.2f}) | "
-                output += f"Risk: {router_output.task_profile.risk_level.value}\n"
-                output += f"Routing: {telemetry.routing_latency_ms}ms | ~{telemetry.brief_token_estimate} tokens\n"
-                output += "\n---\n\n"
+                # Compact header - single line metadata
+                stages = "→".join([s.framework_id for s in pipeline.stages])
+                signals = ",".join([s.type.value for s in router_output.detected_signals[:3]]) if router_output.detected_signals else ""
 
-                # The actual brief for Claude to execute
-                output += brief.to_prompt()
+                output = f"[{stages}] conf={gate.confidence.score:.0%} risk={router_output.task_profile.risk_level.value}"
+                if signals:
+                    output += f" signals={signals}"
+                output += "\n\n"
 
-                # Add detected signals if any
-                if router_output.detected_signals:
-                    output += "\n\n## Detected Signals\n"
-                    for sig in router_output.detected_signals[:3]:
-                        output += f"- {sig.type.value}: {sig.notes}\n"
+                # The actual brief for Claude - compact but rich
+                output += brief.to_compact_prompt()
 
-                # Add integrity gate summary
+                # Gate warning only if not proceeding
                 if gate.recommendation.action.value != "PROCEED":
-                    output += f"\n⚠️ Gate: {gate.recommendation.action.value} - {gate.recommendation.notes}\n"
+                    output += f"\n\n⚠️ {gate.recommendation.action.value}: {gate.recommendation.notes}"
 
             except Exception as e:
                 # Fallback to simple template mode if structured brief fails

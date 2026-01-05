@@ -2,6 +2,7 @@ version: "3.9"
 
 services:
   omni-cortex:
+    build: .
     image: vzwjustin/omni-cortex:latest
     container_name: omni-cortex
     stdin_open: true  # Keep stdin open for MCP stdio

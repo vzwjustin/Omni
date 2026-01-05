@@ -303,6 +303,57 @@ class ClaudeCodeBrief(BaseModel):
 
         return "\n".join(lines)
 
+    def to_compact_prompt(self) -> str:
+        """Token-optimized brief format - rich context, efficient format."""
+        lines = [f"**{self.task_type.value}**: {self.objective}"]
+
+        # Targets - single line
+        targets = []
+        if self.repo_targets.files:
+            targets.append(f"files={','.join(self.repo_targets.files[:4])}")
+        if self.repo_targets.areas:
+            targets.append(f"areas={','.join(self.repo_targets.areas[:3])}")
+        if self.repo_targets.do_not_touch:
+            targets.append(f"avoid={','.join(self.repo_targets.do_not_touch[:2])}")
+        if targets:
+            lines.append(f"**Scope**: {' | '.join(targets)}")
+
+        # Execution plan - numbered but compact
+        if self.execution_plan:
+            steps = [f"{i+1}.{s}" for i, s in enumerate(self.execution_plan[:5])]
+            lines.append(f"**Plan**: {' → '.join(steps)}")
+
+        # Verification - single line
+        if self.verification.commands or self.verification.acceptance_criteria:
+            v_parts = []
+            if self.verification.commands:
+                v_parts.append(f"run: {' && '.join(self.verification.commands[:2])}")
+            if self.verification.acceptance_criteria:
+                v_parts.append(f"pass: {'; '.join(self.verification.acceptance_criteria[:2])}")
+            lines.append(f"**Verify**: {' | '.join(v_parts)}")
+
+        # Constraints - single line
+        if self.constraints:
+            lines.append(f"**Constraints**: {'; '.join(self.constraints[:3])}")
+
+        # Stop conditions - single line
+        if self.stop_conditions:
+            lines.append(f"**Stop if**: {'; '.join(self.stop_conditions[:2])}")
+
+        # Evidence - compact but full content
+        if self.evidence:
+            lines.append("**Evidence**:")
+            for e in self.evidence[:4]:
+                lines.append(f"  [{e.source_type.value}] {e.ref}: {e.content[:300]}")
+
+        # Assumptions & questions - single lines
+        if self.assumptions:
+            lines.append(f"**Assumes**: {'; '.join(self.assumptions[:3])}")
+        if self.open_questions:
+            lines.append(f"**Questions**: {'; '.join(self.open_questions[:3])}")
+
+        return "\n".join(lines)
+
 
 # =============================================================================
 # PIPELINE STAGES

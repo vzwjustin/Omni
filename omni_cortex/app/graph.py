@@ -354,8 +354,8 @@ async def execute_framework_node(state: GraphState) -> GraphState:
 
         await save_to_langchain_memory(
             thread_id=thread_id,
-            query=state["query"],
-            answer=state["final_answer"],
+            query=state.get("query", ""),
+            answer=state.get("final_answer", ""),
             framework=framework_str
         )
         logger.info(

@@ -124,8 +124,11 @@ async def search_documentation(query: str) -> str:
     """Search the indexed documentation/code via vector store."""
     logger.info("tool_called", tool="search_documentation", query=query)
     try:
-        docs = search_vectorstore(query, k=5)
+        docs = await search_vectorstore_async(query, k=5)
     except VectorstoreSearchError as exc:
+        logger.error("search_documentation_failed", error=str(exc))
+        return f"Search failed: {exc}"
+    except Exception as exc:
         logger.error("search_documentation_failed", error=str(exc))
         return f"Search failed: {exc}"
     if not docs:
@@ -422,19 +425,31 @@ def get_vectorstore_by_collection(collection_name: str):
     return get_collection_manager().get_collection(collection_name)
 
 
-def search_vectorstore(query: str, k: int = 5) -> List[Document]:
-    """Search the vector store for relevant documents."""
+async def search_vectorstore_async(query: str, k: int = 5) -> List[Document]:
+    """Search the vector store for relevant documents (async, non-blocking)."""
+    return await asyncio.to_thread(_search_vectorstore_sync, query, k)
 
+
+def _search_vectorstore_sync(query: str, k: int = 5) -> List[Document]:
+    """Synchronous vectorstore search (internal use)."""
+    from .collection_manager import get_collection_manager
+    manager = get_collection_manager()
+    return manager.search(
+        query,
+        collection_names=["frameworks", "documentation", "utilities"],
+        k=k,
+        raise_on_error=True
+    )
+
+
+def search_vectorstore(query: str, k: int = 5) -> List[Document]:
+    """Search the vector store for relevant documents.
+
+    Note: This is synchronous for backwards compatibility.
+    Prefer search_vectorstore_async() in async contexts to avoid blocking.
+    """
     try:
-        from .collection_manager import get_collection_manager
-        manager = get_collection_manager()
-        # Search across all core collections to maintain legacy behavior of searching "everything"
-        return manager.search(
-            query,
-            collection_names=["frameworks", "documentation", "utilities"],
-            k=k,
-            raise_on_error=True
-        )
+        return _search_vectorstore_sync(query, k)
     except Exception as e:
         logger.error("vectorstore_search_failed", error=str(e))
         raise VectorstoreSearchError(f"Vectorstore search failed: {e}") from e
@@ -591,40 +606,59 @@ framework_parser = PydanticOutputParser(pydantic_object=FrameworkSelection)
 # LangChain Chat Models
 # =============================================================================
 
-def get_chat_model(model_type: str = "deep") -> Any:
+def get_chat_model(model_type: str = "deep", enable_thinking: bool = False) -> Any:
     """
     Get configured LangChain chat model.
-    
+
     Args:
         model_type: "deep" for reasoning or "fast" for synthesis
+        enable_thinking: Enable extended thinking/reasoning mode (Gemini only)
+
+    Supports: google, anthropic, openai, openrouter
     """
-    if settings.llm_provider == "anthropic":
-        model_name = settings.deep_reasoning_model if model_type == "deep" else settings.fast_synthesis_model
-        # Remove provider prefix if present
-        if "/" in model_name:
-            model_name = model_name.split("/")[1]
-        
+    model_name = settings.deep_reasoning_model if model_type == "deep" else settings.fast_synthesis_model
+    temperature = 0.7 if model_type == "deep" else 0.5
+
+    # Remove provider prefix if present (e.g., "google/gemini-3" -> "gemini-3")
+    if "/" in model_name:
+        model_name = model_name.split("/")[-1]
+
+    if settings.llm_provider == "google":
+        from langchain_google_genai import ChatGoogleGenerativeAI
+
+        # Use configured model - thinking mode is enabled via prompting style
+        # For thinking-like behavior, we increase temperature and tokens
+        max_tokens = 8192 if enable_thinking else 4096
+        temp = max(0.7, temperature) if enable_thinking else temperature
+
+        return ChatGoogleGenerativeAI(
+            model=model_name,
+            google_api_key=settings.google_api_key,
+            temperature=temp,
+            max_output_tokens=max_tokens
+        )
+    elif settings.llm_provider == "anthropic":
         return ChatAnthropic(
             model=model_name,
             api_key=settings.anthropic_api_key,
-            temperature=0.7 if model_type == "deep" else 0.5
+            temperature=temperature
+        )
+    elif settings.llm_provider == "openrouter":
+        # OpenRouter needs full model path
+        full_model = settings.deep_reasoning_model if model_type == "deep" else settings.fast_synthesis_model
+        return ChatOpenAI(
+            model=full_model,
+            api_key=settings.openrouter_api_key,
+            base_url=settings.openrouter_base_url,
+            temperature=temperature
         )
     else:
-        # OpenAI or OpenRouter
-        model_name = settings.deep_reasoning_model if model_type == "deep" else settings.fast_synthesis_model
-        
-        kwargs = {
-            "model": model_name,
-            "temperature": 0.7 if model_type == "deep" else 0.5
-        }
-        
-        if settings.llm_provider == "openrouter":
-            kwargs["api_key"] = settings.openrouter_api_key
-            kwargs["base_url"] = settings.openrouter_base_url
-        else:
-            kwargs["api_key"] = settings.openai_api_key
-        
-        return ChatOpenAI(**kwargs)
+        # OpenAI
+        return ChatOpenAI(
+            model=model_name,
+            api_key=settings.openai_api_key,
+            temperature=temperature
+        )
 
 
 # =============================================================================

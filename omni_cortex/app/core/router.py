@@ -1013,14 +1013,25 @@ TASK: {query}
 ## Pre-defined Chains (for complex tasks):
 {chr(10).join(chain_descriptions) if chain_descriptions else '  (none - single framework recommended)'}
 
-## Instructions:
-1. Analyze the task complexity
-2. For SIMPLE tasks: recommend a single framework
-3. For COMPLEX tasks: recommend a chain of 2-4 frameworks
+## When to Chain (IMPORTANT):
+Use a chain of 2-4 frameworks when the task has ANY of these signals:
+- Multiple distinct phases (e.g., "first... then... finally...")
+- Requires both analysis AND implementation
+- Mentions verification, testing, or review as a final step
+- Involves understanding before changing
+- Security-sensitive changes that need audit
+- Complex debugging that needs hypothesis → test → verify
 
-Respond in this format:
+Single framework only for: quick fixes, simple questions, one-step tasks.
+
+## Instructions:
+1. Analyze the task - look for multi-phase signals
+2. For SIMPLE tasks: recommend a single framework
+3. For COMPLEX tasks: recommend a chain of 2-4 frameworks in logical order
+
+Respond EXACTLY in this format:
 COMPLEXITY: simple|complex
-FRAMEWORKS: framework1 [→ framework2 → framework3]
+FRAMEWORKS: framework1 → framework2 → framework3
 REASONING: Brief explanation of your choice
 """
 
@@ -1893,6 +1904,198 @@ REASONING: Brief explanation of your choice
         })
 
     # ==========================================================================
+    # GEMINI-POWERED TASK ANALYSIS
+    # ==========================================================================
+
+    async def _gemini_analyze_task(
+        self,
+        query: str,
+        context: Optional[str],
+        framework_chain: List[str],
+        category: str
+    ) -> dict:
+        """
+        Use Gemini to generate rich task analysis.
+        Returns specific execution plan, focus areas, assumptions, questions.
+        This offloads thinking from Claude to cheaper Gemini.
+        """
+        try:
+            from ..langchain_integration import get_chat_model
+
+            # Pull relevant learnings from Chroma (category-aware)
+            prior_learnings = await self._get_relevant_learnings(query, category)
+
+            prompt = f"""Analyze this coding task and provide a detailed execution plan.
+
+TASK: {query}
+{f'CONTEXT: {context}' if context else ''}
+FRAMEWORK CHAIN: {' → '.join(framework_chain)}
+CATEGORY: {category}
+
+{f'## Similar Past Solutions:{chr(10)}{prior_learnings}' if prior_learnings else ''}
+
+Generate a SPECIFIC execution plan (not generic steps). Include:
+1. Exact files/areas to investigate
+2. Specific code patterns to look for
+3. Concrete implementation steps
+4. Edge cases to handle
+5. Verification approach
+
+Respond in this EXACT format:
+EXECUTION_PLAN:
+- Step 1: [specific action]
+- Step 2: [specific action]
+- Step 3: [specific action]
+- Step 4: [specific action]
+- Step 5: [specific action]
+
+FOCUS_AREAS: [comma-separated list of specific files/modules]
+
+KEY_ASSUMPTIONS:
+- [assumption 1]
+- [assumption 2]
+
+QUESTIONS_FOR_USER:
+- [question if context unclear]
+
+PRIOR_KNOWLEDGE: [relevant insights from similar problems, or "none"]
+"""
+
+            # Use Gemini with thinking mode for rich analysis
+            llm = get_chat_model("fast", enable_thinking=True)
+            response = await llm.ainvoke(prompt)
+            content = response.content if hasattr(response, "content") else str(response)
+            if isinstance(content, list):
+                content = content[0].get('text', str(content)) if content else ""
+
+            # Parse response
+            result = {
+                "execution_plan": [],
+                "focus_areas": [],
+                "assumptions": [],
+                "questions": [],
+                "prior_knowledge": ""
+            }
+
+            current_section = None
+            for line in content.split("\n"):
+                line = line.strip()
+                if line.startswith("EXECUTION_PLAN:"):
+                    current_section = "plan"
+                elif line.startswith("FOCUS_AREAS:"):
+                    areas = line.replace("FOCUS_AREAS:", "").strip()
+                    result["focus_areas"] = [a.strip() for a in areas.split(",") if a.strip()]
+                    current_section = None
+                elif line.startswith("KEY_ASSUMPTIONS:"):
+                    current_section = "assumptions"
+                elif line.startswith("QUESTIONS_FOR_USER:"):
+                    current_section = "questions"
+                elif line.startswith("PRIOR_KNOWLEDGE:"):
+                    result["prior_knowledge"] = line.replace("PRIOR_KNOWLEDGE:", "").strip()
+                    current_section = None
+                elif line.startswith("- ") and current_section:
+                    item = line[2:].strip()
+                    if current_section == "plan":
+                        # Remove "Step N:" prefix if present
+                        item = item.split(":", 1)[-1].strip() if ":" in item else item
+                        result["execution_plan"].append(item)
+                    elif current_section == "assumptions":
+                        result["assumptions"].append(item)
+                    elif current_section == "questions":
+                        result["questions"].append(item)
+
+            return result
+
+        except Exception as e:
+            import structlog
+            logger = structlog.get_logger("router")
+            logger.warning("gemini_analysis_failed", error=str(e))
+            return {
+                "execution_plan": [],
+                "focus_areas": [],
+                "assumptions": [],
+                "questions": [],
+                "prior_knowledge": ""
+            }
+
+    async def _get_relevant_learnings(self, query: str, category: str = "") -> str:
+        """Pull relevant prior learnings and training knowledge from Chroma."""
+        try:
+            from ..collection_manager import get_collection_manager
+            manager = get_collection_manager()
+
+            all_context = []
+
+            # 1. Search learnings (successful past solutions)
+            try:
+                learnings = manager.search_learnings(query, k=2)
+                for l in learnings:
+                    all_context.append(f"[PRIOR_SOLUTION|{l.get('framework', 'unknown')}] {l.get('solution', '')[:200]}")
+            except Exception:
+                pass
+
+            # 2. Search debugging knowledge (for debug tasks)
+            if category in ("debug", "verification") or any(w in query.lower() for w in ["bug", "error", "fix", "debug"]):
+                try:
+                    docs = manager.search(query, collection_names=["debugging_knowledge"], k=2)
+                    for doc in docs:
+                        all_context.append(f"[DEBUG_PATTERN] {doc.page_content[:200]}")
+                except Exception:
+                    pass
+
+            # 3. Search reasoning knowledge (for complex tasks)
+            if category in ("architecture", "exploration", "refactor"):
+                try:
+                    docs = manager.search(query, collection_names=["reasoning_knowledge"], k=2)
+                    for doc in docs:
+                        all_context.append(f"[REASONING_EXAMPLE] {doc.page_content[:200]}")
+                except Exception:
+                    pass
+
+            # 4. Search instruction knowledge (for implementation tasks)
+            if category in ("code_gen", "agent"):
+                try:
+                    docs = manager.search(query, collection_names=["instruction_knowledge"], k=2)
+                    for doc in docs:
+                        all_context.append(f"[INSTRUCTION_EXAMPLE] {doc.page_content[:200]}")
+                except Exception:
+                    pass
+
+            return "\n".join(all_context[:5]) if all_context else ""
+        except Exception:
+            return ""
+
+    async def _save_task_analysis(
+        self,
+        query: str,
+        analysis: dict,
+        framework_chain: List[str],
+        category: str
+    ) -> None:
+        """Save task analysis to Chroma for future reference."""
+        try:
+            from ..collection_manager import get_collection_manager
+            manager = get_collection_manager()
+
+            # Format analysis as text
+            content = f"Task: {query}\n"
+            content += f"Chain: {' → '.join(framework_chain)}\n"
+            content += f"Plan: {'; '.join(analysis.get('execution_plan', []))}\n"
+            if analysis.get("prior_knowledge"):
+                content += f"Insight: {analysis['prior_knowledge']}"
+
+            metadata = {
+                "type": "task_analysis",
+                "category": category,
+                "framework": framework_chain[0] if framework_chain else "unknown",
+                "chain_length": len(framework_chain)
+            }
+
+            manager.add_documents([content], [metadata], "learnings")
+        except Exception:
+            pass  # Silent fail - not critical
+
+    # ==========================================================================
     # STRUCTURED BRIEF GENERATION
     # ==========================================================================
 
@@ -2021,8 +2224,40 @@ REASONING: Brief explanation of your choice
                 relevance="User-provided context"
             ))
 
-        # Build Claude Code Brief
-        execution_plan = self._generate_execution_plan(query, framework_chain, task_type)
+        # Use Gemini for rich task analysis (offload thinking from Claude)
+        gemini_analysis = await self._gemini_analyze_task(
+            query, context, framework_chain, category
+        )
+
+        # Use Gemini's analysis if available, fallback to static templates
+        if gemini_analysis.get("execution_plan"):
+            execution_plan = gemini_analysis["execution_plan"][:5]
+        else:
+            execution_plan = self._generate_execution_plan(query, framework_chain, task_type)
+
+        if gemini_analysis.get("focus_areas"):
+            focus_areas = gemini_analysis["focus_areas"][:5]
+        else:
+            focus_areas = self._extract_areas(query, context)
+
+        if gemini_analysis.get("assumptions"):
+            rich_assumptions = gemini_analysis["assumptions"][:5]
+        else:
+            rich_assumptions = assumptions[:5]
+
+        if gemini_analysis.get("questions"):
+            open_questions = gemini_analysis["questions"][:5]
+        else:
+            open_questions = self._generate_open_questions(query, detected_signals)
+
+        # Add prior knowledge as evidence if available
+        if gemini_analysis.get("prior_knowledge") and gemini_analysis["prior_knowledge"] != "none":
+            evidence.append(EvidenceExcerpt(
+                source_type=SourceType.USER_TEXT,
+                ref="prior_knowledge",
+                content=gemini_analysis["prior_knowledge"][:500],
+                relevance="Relevant insight from similar past problems"
+            ))
 
         claude_brief = ClaudeCodeBrief(
             objective=self._generate_objective(query, task_type),
@@ -2030,7 +2265,7 @@ REASONING: Brief explanation of your choice
             constraints=self._extract_constraints(query, context),
             repo_targets=RepoTargets(
                 files=file_list[:10] if file_list else [],
-                areas=self._extract_areas(query, context),
+                areas=focus_areas,
                 do_not_touch=[]
             ),
             execution_plan=execution_plan,
@@ -2040,9 +2275,12 @@ REASONING: Brief explanation of your choice
             ),
             stop_conditions=DEFAULT_STOP_CONDITIONS[:3],
             evidence=evidence[:6],
-            assumptions=assumptions[:5],
-            open_questions=self._generate_open_questions(query, detected_signals)
+            assumptions=rich_assumptions,
+            open_questions=open_questions
         )
+
+        # Save analysis to Chroma for future reference
+        await self._save_task_analysis(query, gemini_analysis, framework_chain, category)
 
         # Calculate telemetry
         routing_latency = int((time.time() - start_time) * 1000)

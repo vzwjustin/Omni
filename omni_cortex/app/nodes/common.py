@@ -11,7 +11,6 @@ Shared components used across all framework nodes:
 import asyncio
 import functools
 import re
-import threading
 import structlog
 from typing import Callable, Optional, Any
 from ..core.config import model_config, settings
@@ -161,9 +160,15 @@ Respond with ONLY a single decimal number between 0.0 and 1.0."""
             temperature=DEFAULT_PRM_TEMP
         )
 
-        # Parse the score
-        score = float(response.strip())
-        return max(0.0, min(1.0, score))
+        # Parse the score - extract first decimal number from response
+        # Handles cases like "0.8", "0.8 because...", "I rate this 0.75", etc.
+        match = re.search(r'(\d+\.?\d*)', response.strip())
+        if match:
+            score = float(match.group(1))
+            return max(0.0, min(1.0, score))
+        else:
+            logger.warning("prm_score_no_number", response=response[:100] if response else "")
+            return 0.5
     except ValueError as e:
         # Failed to parse float from response
         logger.warning("prm_score_parsing_failed", response=response[:100] if response else "", error=str(e))
@@ -250,6 +255,7 @@ Return ONLY the optimized prompt, no explanations."""
         return optimized.strip()
     except Exception as e:
         # LLM or network error during optimization; fall back to original
+        logger.warning("prompt_optimization_failed", error=str(e), task=task_description[:50])
         return base_prompt
 
 
@@ -513,6 +519,9 @@ def add_reasoning_step(
     score: Optional[float] = None
 ) -> None:
     """Add a reasoning step to the state trace."""
+    # Ensure reasoning_steps exists
+    if "reasoning_steps" not in state or state["reasoning_steps"] is None:
+        state["reasoning_steps"] = []
     step_num = len(state["reasoning_steps"]) + 1
     state["reasoning_steps"].append({
         "step_number": step_num,
