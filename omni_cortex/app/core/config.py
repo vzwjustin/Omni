@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     openrouter_api_key: Optional[str] = Field(default=None, alias="OPENROUTER_API_KEY")
     openrouter_base_url: str = Field(default="https://openrouter.ai/api/v1", alias="OPENROUTER_BASE_URL")
     anthropic_api_key: Optional[str] = Field(default=None, alias="ANTHROPIC_API_KEY")
+    google_api_key: Optional[str] = Field(default=None, alias="GOOGLE_API_KEY")
 
     # Embedding configuration
     embedding_provider: str = Field(default="openrouter", alias="EMBEDDING_PROVIDER")  # openrouter, openai, huggingface
@@ -40,8 +41,8 @@ class Settings(BaseSettings):
 
     # LLM settings (used when USE_LANGCHAIN_LLM=true)
     llm_provider: str = Field(default="pass-through", alias="LLM_PROVIDER")
-    deep_reasoning_model: str = Field(default="google/gemini-3-flash-preview", alias="DEEP_REASONING_MODEL")
-    fast_synthesis_model: str = Field(default="google/gemini-3-flash-preview", alias="FAST_SYNTHESIS_MODEL")
+    deep_reasoning_model: str = Field(default="gemini-3-flash-preview", alias="DEEP_REASONING_MODEL")
+    fast_synthesis_model: str = Field(default="gemini-3-flash-preview", alias="FAST_SYNTHESIS_MODEL")
 
     class Config:
         env_file = ".env"

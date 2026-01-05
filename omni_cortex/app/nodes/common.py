@@ -300,8 +300,10 @@ def _get_llm_client(
 
     # Determine effective provider: explicit setting takes priority, then auto-detect
     effective_provider = None
-    if provider in ("anthropic", "openai", "openrouter"):
+    if provider in ("google", "anthropic", "openai", "openrouter"):
         effective_provider = provider
+    elif settings.google_api_key:
+        effective_provider = "google"
     elif settings.anthropic_api_key:
         effective_provider = "anthropic"
     elif settings.openai_api_key:
@@ -310,12 +312,24 @@ def _get_llm_client(
         effective_provider = "openrouter"
     else:
         raise ValueError(
-            "No LLM provider configured. Either set LLM_PROVIDER to 'anthropic', 'openai', or 'openrouter' "
+            "No LLM provider configured. Set LLM_PROVIDER to 'google', 'anthropic', 'openai', or 'openrouter' "
             "with the corresponding API key, or provide any API key for auto-detection."
         )
 
     # Create client based on effective provider
-    if effective_provider == "anthropic":
+    if effective_provider == "google":
+        if not settings.google_api_key:
+            raise ValueError("LLM_PROVIDER=google but GOOGLE_API_KEY is not set")
+        from langchain_google_genai import ChatGoogleGenerativeAI
+        # Google uses model name like "gemini-2.0-flash" (strip google/ prefix if present)
+        model_name = strip_prefix(base_model)
+        return ChatGoogleGenerativeAI(
+            model=model_name,
+            google_api_key=settings.google_api_key,
+            temperature=temperature,
+            max_output_tokens=max_tokens
+        )
+    elif effective_provider == "anthropic":
         if not settings.anthropic_api_key:
             raise ValueError("LLM_PROVIDER=anthropic but ANTHROPIC_API_KEY is not set")
         from langchain_anthropic import ChatAnthropic

@@ -14,7 +14,7 @@ async def test_mcp_search():
     print("Testing MCP search_documentation flow...", file=sys.stderr)
     
     # Import the same way main.py does
-    from app.langchain_integration import search_vectorstore
+    from app.langchain_integration import search_vectorstore, VectorstoreSearchError
     from app.collection_manager import get_collection_manager
     
     print("\n1. Testing search_vectorstore directly:", file=sys.stderr)
@@ -23,8 +23,12 @@ async def test_mcp_search():
         print(f"   Results: {len(docs)}", file=sys.stderr)
         for i, doc in enumerate(docs):
             print(f"   {i+1}. {doc.metadata.get('path', 'unknown')}", file=sys.stderr)
-    except Exception as e:
+    except VectorstoreSearchError as e:
         print(f"   ERROR: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
+    except Exception as e:
+        print(f"   ERROR (unexpected): {e}", file=sys.stderr)
         import traceback
         traceback.print_exc()
     
@@ -41,8 +45,12 @@ async def test_mcp_search():
                 print(f"   {coll_name}: loaded, count={count}", file=sys.stderr)
             else:
                 print(f"   {coll_name}: FAILED TO LOAD", file=sys.stderr)
-    except Exception as e:
+    except VectorstoreSearchError as e:
         print(f"   ERROR: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
+    except Exception as e:
+        print(f"   ERROR (unexpected): {e}", file=sys.stderr)
         import traceback
         traceback.print_exc()
     
