@@ -33,7 +33,7 @@ async def chain_of_note_node(state: GraphState) -> GraphState:
     # Construct the Protocol Prompt for the Client
     prompt = f"""# Framework Protocol
 
-I have selected the **Framework** framework for this task.
+I have selected the **Chain-of-Note (CoN)** framework for this task.
 Chain-of-Note (CoN): Research Mode with Gap Analysis
 
 ## Use Case
@@ -44,7 +44,7 @@ Research, documentation, learning new codebases
 
 ## 🧠 Execution Protocol (Client-Side)
 
-Please execute the reasoning steps for **Framework** using your internal context:
+Please execute the reasoning steps for **Chain-of-Note (CoN)** using your internal context:
 
 ### Framework Steps
 1. READ: Carefully read all provided context

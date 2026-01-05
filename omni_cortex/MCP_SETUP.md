@@ -151,13 +151,13 @@ Requires: `pip install -r requirements.txt`
 
 After configuring, you should see these tools available:
 
-**With API Key (48 tools):**
-- 40 `think_*` framework tools
+**With API Key (70 tools):**
+- 62 `think_*` framework tools
 - 7 RAG/search tools
 - 1 `reason` (smart router)
 
-**Without API Key (41 tools):**
-- 40 `think_*` framework tools
+**Without API Key (63 tools):**
+- 62 `think_*` framework tools
 - 1 `reason` (smart router)
 
 ---

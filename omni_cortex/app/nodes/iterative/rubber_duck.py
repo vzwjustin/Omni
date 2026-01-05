@@ -34,7 +34,7 @@ async def rubber_duck_debugging_node(state: GraphState) -> GraphState:
     # Construct the Protocol Prompt for the Client
     prompt = f"""# Framework Protocol
 
-I have selected the **Framework** framework for this task.
+I have selected the **Rubber Duck Debugging** framework for this task.
 Rubber Duck Debugging (Socratic Method)
 
 ## Use Case
@@ -45,7 +45,7 @@ Architectural bottlenecks, logic blind spots, unclear requirements
 
 ## 🧠 Execution Protocol (Client-Side)
 
-Please execute the reasoning steps for **Framework** using your internal context:
+Please execute the reasoning steps for **Rubber Duck Debugging** using your internal context:
 
 ### Framework Steps
 1. LISTEN: Understand the problem statement

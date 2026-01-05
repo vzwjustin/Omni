@@ -33,7 +33,7 @@ async def chain_of_code_node(state: GraphState) -> GraphState:
     # Construct the Protocol Prompt for the Client
     prompt = f"""# Framework Protocol
 
-I have selected the **Framework** framework for this task.
+I have selected the **Chain-of-Code (CoC)** framework for this task.
 Chain-of-Code (CoC): Code-Based Problem Decomposition
 
 ## Use Case
@@ -44,7 +44,7 @@ Logic puzzles, algorithmic complexity, recursive debugging
 
 ## 🧠 Execution Protocol (Client-Side)
 
-Please execute the reasoning steps for **Framework** using your internal context:
+Please execute the reasoning steps for **Chain-of-Code (CoC)** using your internal context:
 
 ### Framework Steps
 1. TRANSLATE: Convert problem to computational representation

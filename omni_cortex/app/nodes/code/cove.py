@@ -33,7 +33,7 @@ async def chain_of_verification_node(state: GraphState) -> GraphState:
     # Construct the Protocol Prompt for the Client
     prompt = f"""# Framework Protocol
 
-I have selected the **Framework** framework for this task.
+I have selected the **Chain of Verification (CoVe)** framework for this task.
 Chain of Verification (CoVe): Draft-Verify-Patch
 
 ## Use Case
@@ -44,7 +44,7 @@ Security review, code validation, quality assurance
 
 ## 🧠 Execution Protocol (Client-Side)
 
-Please execute the reasoning steps for **Framework** using your internal context:
+Please execute the reasoning steps for **Chain of Verification (CoVe)** using your internal context:
 
 ### Framework Steps
 1. DRAFT: Generate initial code solution

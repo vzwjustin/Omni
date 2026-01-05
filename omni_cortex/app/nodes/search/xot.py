@@ -33,7 +33,7 @@ async def everything_of_thought_node(state: GraphState) -> GraphState:
     # Construct the Protocol Prompt for the Client
     prompt = f"""# Framework Protocol
 
-I have selected the **Framework** framework for this task.
+I have selected the **Everything-of-Thought (XoT)** framework for this task.
 Everything-of-Thought (XoT): MCTS + Fast Thought Generation
 
 ## Use Case
@@ -44,7 +44,7 @@ Complex refactoring, large changes, migration tasks
 
 ## 🧠 Execution Protocol (Client-Side)
 
-Please execute the reasoning steps for **Framework** using your internal context:
+Please execute the reasoning steps for **Everything-of-Thought (XoT)** using your internal context:
 
 ### Framework Steps
 1. Fast thought generation (parallel, cached)

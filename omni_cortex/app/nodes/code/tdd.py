@@ -33,7 +33,7 @@ async def tdd_prompting_node(state: GraphState) -> GraphState:
     # Construct the Protocol Prompt for the Client
     prompt = f"""# Framework Protocol
 
-I have selected the **Framework** framework for this task.
+I have selected the **Test-Driven Development (TDD)** framework for this task.
 Test-Driven Development (TDD) Prompting
 
 ## Use Case
@@ -44,7 +44,7 @@ New features, API design, edge case coverage
 
 ## 🧠 Execution Protocol (Client-Side)
 
-Please execute the reasoning steps for **Framework** using your internal context:
+Please execute the reasoning steps for **Test-Driven Development (TDD)** using your internal context:
 
 ### Framework Steps
 1. SPECIFY: Understand requirements clearly

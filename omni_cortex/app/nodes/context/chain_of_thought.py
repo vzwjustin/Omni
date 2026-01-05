@@ -33,7 +33,7 @@ async def chain_of_thought_node(state: GraphState) -> GraphState:
     # Construct the Protocol Prompt for the Client
     prompt = f"""# Framework Protocol
 
-I have selected the **Framework** framework for this task.
+I have selected the **Chain-of-Thought (CoT)** framework for this task.
 Chain-of-Thought (CoT): Step-by-Step Reasoning
 
 ## Use Case
@@ -44,7 +44,7 @@ Complex reasoning, math problems, logical deduction, debugging
 
 ## 🧠 Execution Protocol (Client-Side)
 
-Please execute the reasoning steps for **Framework** using your internal context:
+Please execute the reasoning steps for **Chain-of-Thought (CoT)** using your internal context:
 
 ### Framework Steps
 1. UNDERSTAND: Restate the problem in own words

@@ -33,7 +33,7 @@ async def skeleton_of_thought_node(state: GraphState) -> GraphState:
     # Construct the Protocol Prompt for the Client
     prompt = f"""# Framework Protocol
 
-I have selected the **Framework** framework for this task.
+I have selected the **Skeleton-of-Thought (SoT)** framework for this task.
 Skeleton-of-Thought (SoT): Parallel Outline Expansion
 
 ## Use Case
@@ -44,7 +44,7 @@ Documentation, boilerplate, scaffolding, fast generation
 
 ## 🧠 Execution Protocol (Client-Side)
 
-Please execute the reasoning steps for **Framework** using your internal context:
+Please execute the reasoning steps for **Skeleton-of-Thought (SoT)** using your internal context:
 
 ### Framework Steps
 1. SKELETON: Generate high-level outline of the answer

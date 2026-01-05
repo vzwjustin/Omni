@@ -13,7 +13,7 @@ Latest fixes (2026-01-03):
 - Fixed LangChain 1.0+ import compatibility across all files
 - Fixed LangGraph 1.0+ SqliteSaver API
 - Fixed deprecated ChromaDB persist() calls
-- All 20 frameworks loading correctly
+- All 62 frameworks loading correctly
 - Memory system working
 - Vibe routing working
 
@@ -108,13 +108,13 @@ Latest fixes (2026-01-03):
 
 | Component | Status | Details |
 |-----------|--------|---------|
-| 20 Frameworks in FRAMEWORK_NODES | ✓ 20/20 | All imported and callable |
-| 20 Frameworks in HyperRouter.FRAMEWORKS | ✓ 20/20 | All registered with descriptions |
-| 20 Frameworks in VIBE_DICTIONARY | ✓ 20/20 | Pattern matching works |
-| 20 Frameworks in get_framework_info() | ✓ 20/20 | Full metadata available |
+| 62 Frameworks in FRAMEWORK_NODES | ✓ 62/62 | All imported and callable |
+| 62 Frameworks in HyperRouter.FRAMEWORKS | ✓ 62/62 | All registered with descriptions |
+| 62 Frameworks in VIBE_DICTIONARY | ✓ 62/62 | Pattern matching works |
+| 62 Frameworks in get_framework_info() | ✓ 62/62 | Full metadata available |
 | GraphState field consistency | ✓ 100% | Zero undefined field accesses |
 | Circular Import Check | ✓ PASS | No circular imports remain |
-| MCP Tool Registration | ✓ 32 tools | 2 core + 20 fw_* + 4 utility + 6 enhanced search |
+| MCP Tool Registration | ✓ 74 tools | 2 core + 62 fw_* + 4 utility + 6 enhanced search |
 | LangChain Memory Integration | ✓ Working | ConversationBufferMemory active |
 | LangChain Callback System | ✓ Working | OmniCortexCallback integrated |
 | Vector Store RAG | ✓ Working | Chroma collections accessible |
@@ -138,7 +138,7 @@ CLI LLM (Claude/Codex/Gemini)
 
 server/main.py (MCP Entry Point)
     │
-    ├── 20 think_* tools (framework prompts)
+    ├── 62 think_* tools (framework prompts)
     │   └── Returns structured prompt for LLM to execute
     │
     ├── 1 reason tool (auto-selection via VIBE_DICTIONARY)
@@ -171,13 +171,13 @@ server/main.py (MCP Entry Point)
     │   └── execute_framework_node → FRAMEWORK_NODES[selected]
     │
     ├── app/core/router.py (HyperRouter)
-    │   ├── FRAMEWORKS (20 entries)
-    │   ├── VIBE_DICTIONARY (20 entries)
+    │   ├── FRAMEWORKS (62 entries)
+    │   ├── VIBE_DICTIONARY (62 entries)
     │   ├── auto_select_framework() → LLM-based selection
     │   ├── _extract_framework() → Regex fallback
     │   └── _check_vibe_dictionary() → Pattern matching
     │
-    ├── app/nodes/ (20 Framework Implementations)
+    ├── app/nodes/ (62 Framework Implementations)
     │   ├── strategy/ (4): reason_flux, self_discover, buffer_of_thoughts, coala
     │   ├── search/ (4): mcts_rstar, tree_of_thoughts, graph_of_thoughts, everything_of_thought
     │   ├── iterative/ (4): active_inference, multi_agent_debate, adaptive_injection, re2
