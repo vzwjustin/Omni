@@ -263,58 +263,86 @@ def _get_embeddings():
     """
     Get the appropriate embedding model based on provider configuration.
 
+    Configuration (via environment variables):
+        EMBEDDING_PROVIDER: openai, huggingface, or openrouter (default: uses LLM_PROVIDER)
+        EMBEDDING_MODEL: Model name (default: text-embedding-3-small for OpenAI)
+        OPENAI_API_KEY: Required for OpenAI embeddings
+        OPENROUTER_API_KEY: For OpenRouter (uses OpenAI-compatible endpoint)
+
     Supports:
-    - openai: Uses OpenAI's embedding API (requires OPENAI_API_KEY)
+    - openai: Uses OpenAI's embedding API
+    - openrouter: Uses OpenRouter's OpenAI-compatible embedding endpoint
     - huggingface: Uses HuggingFace sentence-transformers (local, no API key needed)
-    - openrouter: Falls back to HuggingFace (OpenRouter doesn't support embeddings)
 
     Returns:
         An embedding model instance compatible with LangChain
     """
-    provider = settings.llm_provider.lower()
+    # Use dedicated embedding provider if set, otherwise fall back to LLM provider
+    provider = getattr(settings, 'embedding_provider', None)
+    if not provider or provider == "":
+        provider = settings.llm_provider.lower()
+    else:
+        provider = provider.lower()
 
-    # OpenAI embeddings - requires valid OpenAI API key
+    model = getattr(settings, 'embedding_model', 'text-embedding-3-small')
+
+    # OpenAI embeddings
     if provider == "openai" and settings.openai_api_key:
-        logger.info("embeddings_init", provider="openai", model="text-embedding-3-large")
+        logger.info("embeddings_init", provider="openai", model=model)
         return OpenAIEmbeddings(
-            model="text-embedding-3-large",
+            model=model,
             api_key=settings.openai_api_key
         )
 
+    # OpenRouter embeddings (OpenAI-compatible endpoint)
+    if provider == "openrouter" and settings.openrouter_api_key:
+        logger.info("embeddings_init", provider="openrouter", model=model)
+        return OpenAIEmbeddings(
+            model=model,
+            api_key=settings.openrouter_api_key,
+            base_url="https://openrouter.ai/api/v1"
+        )
+
     # HuggingFace embeddings - local, no API key required
-    # Also used as fallback when OpenRouter is selected (OpenRouter doesn't support embeddings)
+    if provider == "huggingface":
+        try:
+            from langchain_huggingface import HuggingFaceEmbeddings
+            hf_model = model if model != "text-embedding-3-small" else "sentence-transformers/all-MiniLM-L6-v2"
+            logger.info("embeddings_init", provider="huggingface", model=hf_model)
+            return HuggingFaceEmbeddings(model_name=hf_model)
+        except ImportError:
+            logger.error("embeddings_init_failed", error="langchain-huggingface not installed")
+
+    # Fallback chain: try OpenRouter → OpenAI → HuggingFace
+    if settings.openrouter_api_key:
+        logger.info("embeddings_fallback", provider="openrouter", model=model)
+        return OpenAIEmbeddings(
+            model=model,
+            api_key=settings.openrouter_api_key,
+            base_url="https://openrouter.ai/api/v1"
+        )
+
+    if settings.openai_api_key:
+        logger.info("embeddings_fallback", provider="openai", model=model)
+        return OpenAIEmbeddings(
+            model=model,
+            api_key=settings.openai_api_key
+        )
+
     try:
         from langchain_huggingface import HuggingFaceEmbeddings
-
         hf_model = "sentence-transformers/all-MiniLM-L6-v2"
-
-        if provider == "openrouter":
-            logger.warning(
-                "embeddings_fallback",
-                reason="OpenRouter does not support embeddings API",
-                fallback_provider="huggingface",
-                fallback_model=hf_model
-            )
-        else:
-            logger.info("embeddings_init", provider="huggingface", model=hf_model)
-
+        logger.info("embeddings_fallback", provider="huggingface", model=hf_model)
         return HuggingFaceEmbeddings(model_name=hf_model)
-
     except ImportError:
-        logger.error(
-            "embeddings_init_failed",
-            error="langchain-huggingface not installed. Install with: pip install langchain-huggingface"
-        )
-        # Last resort: try OpenAI with whatever key is available
-        if settings.openai_api_key:
-            return OpenAIEmbeddings(
-                model="text-embedding-3-large",
-                api_key=settings.openai_api_key
-            )
-        raise ValueError(
-            "No embedding provider available. Either set OPENAI_API_KEY for OpenAI embeddings, "
-            "or install langchain-huggingface for local embeddings: pip install langchain-huggingface"
-        )
+        pass
+
+    raise ValueError(
+        "No embedding provider available. Set one of:\n"
+        "- EMBEDDING_PROVIDER=openrouter + OPENROUTER_API_KEY\n"
+        "- EMBEDDING_PROVIDER=openai + OPENAI_API_KEY\n"
+        "- EMBEDDING_PROVIDER=huggingface (local, install langchain-huggingface)"
+    )
 
 
 def get_vectorstore() -> Optional[Chroma]:

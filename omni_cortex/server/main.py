@@ -62,7 +62,12 @@ from app.collection_manager import get_collection_manager
 from app.core.router import HyperRouter
 
 # Import MCP sampling and orchestrators
-from app.core.sampling import ClientSampler, SamplingNotSupportedError
+from app.core.sampling import (
+    ClientSampler,
+    SamplingNotSupportedError,
+    call_llm_with_fallback,
+    LANGCHAIN_LLM_ENABLED,
+)
 from app.orchestrators import FRAMEWORK_ORCHESTRATORS
 
 logger = logging.getLogger("omni-cortex")
@@ -1347,8 +1352,37 @@ def create_server() -> Server:
                     return [TextContent(type="text", text=output)]
 
                 except SamplingNotSupportedError as e:
-                    # Client doesn't support sampling, fall through to template mode
-                    logger.info(f"Sampling not supported, using template mode: {e}")
+                    # Client doesn't support sampling, try LangChain fallback
+                    logger.info(f"Sampling not supported: {e}")
+
+            # LangChain direct API fallback (if USE_LANGCHAIN_LLM=true)
+            if LANGCHAIN_LLM_ENABLED and fw_name in FRAMEWORKS:
+                try:
+                    fw = FRAMEWORKS[fw_name]
+                    prompt = fw["prompt"].format(query=query, context=context or "None provided")
+
+                    logger.info(f"Using LangChain LLM for {fw_name}")
+                    response = await call_llm_with_fallback(
+                        prompt=prompt,
+                        sampler=None,  # Skip sampling, go straight to LangChain
+                        max_tokens=4000,
+                        temperature=0.7
+                    )
+
+                    # Save to memory if thread_id provided
+                    if thread_id:
+                        await save_to_langchain_memory(thread_id, query, response, fw_name)
+
+                    output = f"# Framework: {fw_name} (via LangChain)\n"
+                    output += f"Category: {fw.get('category', 'unknown')}\n"
+                    output += f"Best for: {', '.join(fw.get('best_for', []))}\n\n"
+                    output += "---\n\n"
+                    output += response
+
+                    return [TextContent(type="text", text=output)]
+
+                except Exception as e:
+                    logger.warning(f"LangChain fallback failed: {e}, using template mode")
 
             # Template mode: return structured prompt for client to execute
             if fw_name in FRAMEWORKS:

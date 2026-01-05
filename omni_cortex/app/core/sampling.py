@@ -10,8 +10,10 @@ Note: Sampling requires the client to support the sampling capability.
 Claude Code CLI support is tracked at: https://github.com/anthropics/claude-code/issues/1785
 
 Configuration:
-    Set ENABLE_MCP_SAMPLING=true to attempt MCP sampling.
-    Default is false (use template mode for Claude Code compatibility).
+    ENABLE_MCP_SAMPLING=true  - Attempt MCP sampling (default: false)
+    USE_LANGCHAIN_LLM=true    - Fall back to LangChain direct API calls (default: false)
+
+When both are false, template mode is used (server returns prompts, client executes).
 """
 
 import os
@@ -24,6 +26,11 @@ logger = structlog.get_logger("sampling")
 # Check if MCP sampling is explicitly enabled
 # Default to False since Claude Code doesn't support it yet
 SAMPLING_ENABLED = os.getenv("ENABLE_MCP_SAMPLING", "false").lower() == "true"
+
+# Check if LangChain LLM fallback is enabled
+# When true, uses direct API calls via LangChain when sampling fails
+# Requires API key (ANTHROPIC_API_KEY, OPENAI_API_KEY, or OPENROUTER_API_KEY)
+LANGCHAIN_LLM_ENABLED = os.getenv("USE_LANGCHAIN_LLM", "false").lower() == "true"
 
 
 class SamplingNotSupportedError(Exception):
@@ -237,3 +244,84 @@ def extract_json_object(text: str) -> Optional[dict]:
             continue
 
     return None
+
+
+# =============================================================================
+# LangChain LLM Fallback
+# =============================================================================
+
+async def call_llm_with_fallback(
+    prompt: str,
+    sampler: Optional[ClientSampler] = None,
+    max_tokens: int = 4000,
+    temperature: float = 0.7
+) -> str:
+    """
+    Try MCP sampling first, fall back to LangChain direct API if enabled.
+
+    Priority:
+    1. MCP Sampling (if ENABLE_MCP_SAMPLING=true and client supports it)
+    2. LangChain direct API (if USE_LANGCHAIN_LLM=true)
+    3. Raise SamplingNotSupportedError (caller should use template mode)
+
+    Args:
+        prompt: The prompt to send
+        sampler: Optional ClientSampler instance for MCP sampling
+        max_tokens: Maximum tokens for response
+        temperature: Sampling temperature
+
+    Returns:
+        LLM response text
+
+    Raises:
+        SamplingNotSupportedError: If neither sampling nor LangChain fallback available
+    """
+    # Try MCP sampling first (if enabled and sampler provided)
+    if SAMPLING_ENABLED and sampler:
+        try:
+            return await sampler.request_sample(
+                prompt=prompt,
+                max_tokens=max_tokens,
+                temperature=temperature
+            )
+        except SamplingNotSupportedError:
+            logger.info("mcp_sampling_failed_trying_fallback")
+            # Fall through to LangChain fallback
+
+    # Try LangChain direct API (if enabled)
+    if LANGCHAIN_LLM_ENABLED:
+        try:
+            logger.info("using_langchain_llm_fallback")
+            from ..nodes.common import call_deep_reasoner
+
+            # Create minimal state for the LLM call
+            state = {
+                "tokens_used": 0,
+                "working_memory": {},
+                "quiet_thoughts": []
+            }
+
+            response, tokens = await call_deep_reasoner(
+                prompt=prompt,
+                state=state,
+                max_tokens=max_tokens,
+                temperature=temperature
+            )
+
+            logger.info("langchain_llm_response", tokens=tokens)
+            return response
+
+        except Exception as e:
+            logger.error("langchain_llm_fallback_failed", error=str(e))
+            raise SamplingNotSupportedError(
+                f"LangChain LLM fallback failed: {e}. "
+                "Check that LLM_PROVIDER and API key are configured."
+            )
+
+    # Neither sampling nor LangChain available
+    raise SamplingNotSupportedError(
+        "No LLM backend available. Options:\n"
+        "1. Set ENABLE_MCP_SAMPLING=true (requires client support)\n"
+        "2. Set USE_LANGCHAIN_LLM=true + API key (direct API calls)\n"
+        "3. Use template mode (default - server returns prompts)"
+    )
