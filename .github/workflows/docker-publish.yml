@@ -3,7 +3,7 @@ name: Docker Build and Push
 on:
   push:
     branches:
-      - claude/initial-release
+      - claude/docker-hub-build-setup-V1Iw3
   workflow_dispatch:
 
 env:
