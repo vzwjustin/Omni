@@ -38,10 +38,10 @@ class Settings(BaseSettings):
     embedding_provider: str = Field(default="openrouter", alias="EMBEDDING_PROVIDER")  # openrouter, openai, huggingface
     embedding_model: str = Field(default="text-embedding-3-small", alias="EMBEDDING_MODEL")
 
-    # LLM settings (for reference only - calling LLM does the reasoning)
+    # LLM settings (used when USE_LANGCHAIN_LLM=true)
     llm_provider: str = Field(default="pass-through", alias="LLM_PROVIDER")
-    deep_reasoning_model: str = Field(default="anthropic/claude-3-opus", alias="DEEP_REASONING_MODEL")
-    fast_synthesis_model: str = Field(default="anthropic/claude-3-sonnet", alias="FAST_SYNTHESIS_MODEL")
+    deep_reasoning_model: str = Field(default="google/gemini-3-flash-preview", alias="DEEP_REASONING_MODEL")
+    fast_synthesis_model: str = Field(default="google/gemini-3-flash-preview", alias="FAST_SYNTHESIS_MODEL")
 
     class Config:
         env_file = ".env"
