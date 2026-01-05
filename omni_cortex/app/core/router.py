@@ -738,8 +738,10 @@ class HyperRouter:
             if learnings:
                 state["episodic_memory"] = learnings
         except Exception as e:
-            # Don't fail routing if memory search fails
-            pass
+            # Log but don't fail routing if memory search fails
+            import structlog
+            logger = structlog.get_logger("router")
+            logger.warning("episodic_memory_search_failed", error=str(e), query=state["query"][:100])
             
         state["reasoning_steps"].append({
             "step": "routing",
