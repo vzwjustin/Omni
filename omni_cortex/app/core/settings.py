@@ -90,7 +90,7 @@ class OmniCortexSettings(BaseSettings):
     @classmethod
     def validate_embedding_provider(cls, v: str) -> str:
         """Ensure embedding provider is valid."""
-        valid_providers = {"openrouter", "openai", "huggingface"}
+        valid_providers = {"openrouter", "openai", "huggingface", "gemini", "google"}
         if v.lower() not in valid_providers:
             raise ValueError(f"embedding_provider must be one of {valid_providers}")
         return v.lower()
