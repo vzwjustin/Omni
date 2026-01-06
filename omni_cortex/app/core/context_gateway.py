@@ -18,11 +18,23 @@ import asyncio
 import json
 import os
 import re
+import subprocess
 import structlog
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, List, Dict, Any, Tuple
 from .settings import get_settings
+from .context_utils import count_tokens
+
+# Import RAG and memory systems
+try:
+    from ..collection_manager import get_collection_manager
+    from ..langchain_integration import get_memory
+    CHROMA_AVAILABLE = True
+except ImportError:
+    CHROMA_AVAILABLE = False
+    get_collection_manager = None
+    get_memory = None
 
 logger = structlog.get_logger("context_gateway")
 
@@ -56,6 +68,35 @@ class DocumentationContext:
 
 
 @dataclass
+class CodeSearchContext:
+    """Context from code search (grep/git)."""
+    search_type: str  # grep, git_log, git_blame
+    query: str
+    results: str  # Command output
+    file_count: int = 0
+    match_count: int = 0
+
+
+@dataclass
+class LibraryDocContext:
+    """Context from library documentation (Context7)."""
+    library: str
+    library_id: str
+    snippet: str
+    source: str
+
+
+@dataclass
+class RepoContext:
+    """Context from repository analysis (Greptile)."""
+    context_type: str  # search, pr, review, custom
+    title: str
+    summary: str
+    relevance_score: float
+    source: str
+
+
+@dataclass
 class StructuredContext:
     """
     Rich, structured context packet for Claude.
@@ -74,6 +115,9 @@ class StructuredContext:
 
     # Documentation (pre-fetched snippets)
     documentation: List[DocumentationContext] = field(default_factory=list)
+    
+    # Code Search Results (grep/git)
+    code_search: List[CodeSearchContext] = field(default_factory=list)
 
     # Framework Recommendation
     recommended_framework: str = "reason_flux"
@@ -88,6 +132,10 @@ class StructuredContext:
     # Additional Context
     related_patterns: List[str] = field(default_factory=list)  # Similar code patterns
     dependencies: List[str] = field(default_factory=list)  # External deps to consider
+    
+    # Token Budget (Gemini optimizes to stay under this)
+    token_budget: int = 50000  # Max tokens for Claude prompt
+    actual_tokens: int = 0  # Actual token count after generation
 
     def to_claude_prompt(self) -> str:
         """Format as rich context prompt for Claude."""
@@ -118,6 +166,16 @@ class StructuredContext:
                 doc_lines.append(f"*Source: {doc.source}*")
                 doc_lines.append(f"```\n{doc.snippet}\n```")
             sections.append("\n".join(doc_lines))
+        
+        # Code Search Section
+        if self.code_search:
+            search_lines = ["## Code Search Results"]
+            for search in self.code_search[:3]:
+                search_lines.append(f"### {search.search_type.upper()}: {search.query}")
+                search_lines.append(f"*Files: {search.file_count} | Matches: {search.match_count}*")
+                search_lines.append(f"```\n{search.results[:2000]}\n```")
+            sections.append("\n".join(search_lines))
+        
 
         # Framework Section
         sections.append(f"""## Recommended Approach
@@ -289,13 +347,28 @@ class ContextGateway:
 
         if search_docs:
             tasks.append(self._search_documentation(query))
+        
+        # Add code search if workspace is provided
+        if workspace_path:
+            tasks.append(self._search_codebase(query, workspace_path))
 
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         # Parse results
         query_analysis = results[0] if not isinstance(results[0], Exception) else {}
         file_contexts = results[1] if not isinstance(results[1], Exception) else []
-        doc_contexts = results[2] if len(results) > 2 and not isinstance(results[2], Exception) else []
+        
+        # Documentation and code search are optional
+        next_idx = 2
+        doc_contexts = []
+        code_search_results = []
+        
+        if search_docs:
+            doc_contexts = results[next_idx] if not isinstance(results[next_idx], Exception) else []
+            next_idx += 1
+        
+        if workspace_path and next_idx < len(results):
+            code_search_results = results[next_idx] if not isinstance(results[next_idx], Exception) else []
 
         # Handle exceptions
         for i, result in enumerate(results):
@@ -310,6 +383,7 @@ class ContextGateway:
             relevant_files=file_contexts,
             entry_point=query_analysis.get("entry_point"),
             documentation=doc_contexts,
+            code_search=code_search_results,
             recommended_framework=query_analysis.get("framework", "reason_flux"),
             framework_reason=query_analysis.get("framework_reason", "General-purpose reasoning"),
             chain_suggestion=query_analysis.get("chain"),
@@ -325,6 +399,7 @@ class ContextGateway:
             task_type=context.task_type,
             files=len(context.relevant_files),
             docs=len(context.documentation),
+            code_searches=len(context.code_search),
             framework=context.recommended_framework,
         )
 
@@ -527,6 +602,237 @@ Focus on actionable, technical content."""
         except Exception as e:
             logger.warning("doc_search_failed", error=str(e))
             return []
+
+    async def _search_knowledge_base(self, query: str, task_type: str) -> List[DocumentationContext]:
+        """
+        Search ChromaDB collections for relevant framework docs, learnings, and patterns.
+        
+        Args:
+            query: User's query
+            task_type: Type of task (debug, implement, refactor, etc.)
+            
+        Returns:
+            List of relevant documentation from ChromaDB
+        """
+        if not CHROMA_AVAILABLE:
+            logger.debug("chroma_unavailable", reason="import_failed")
+            return []
+        
+        try:
+            manager = get_collection_manager()
+            results = []
+            
+            # Search learnings for similar past solutions
+            try:
+                learnings = await asyncio.to_thread(
+                    manager.search_learnings,
+                    query,
+                    k=3,
+                    min_rating=0.7
+                )
+                for learning in learnings:
+                    if 'solution' in learning and 'problem' in learning:
+                        results.append(DocumentationContext(
+                            source=f"Past Learning (Framework: {learning.get('framework', 'unknown')})",
+                            title=learning.get('problem', '')[:100],
+                            snippet=learning.get('solution', '')[:1500],
+                            relevance_score=learning.get('rating', 0.8)
+                        ))
+            except Exception as e:
+                logger.debug("learnings_search_failed", error=str(e))
+            
+            # For debug tasks, search debugging knowledge
+            if task_type == "debug":
+                try:
+                    debug_docs = await asyncio.to_thread(
+                        manager.search_debugging_knowledge,
+                        query,
+                        k=3
+                    )
+                    for doc in debug_docs:
+                        if hasattr(doc, 'page_content'):
+                            results.append(DocumentationContext(
+                                source="Debugging Knowledge Base",
+                                title="Similar Bug Fix",
+                                snippet=doc.page_content[:1500],
+                                relevance_score=0.75
+                            ))
+                except Exception as e:
+                    logger.debug("debug_knowledge_search_failed", error=str(e))
+            
+            # Search framework documentation
+            try:
+                framework_docs = await asyncio.to_thread(
+                    manager.search_frameworks,query,
+                    k=3
+                )
+                for doc in framework_docs:
+                    if hasattr(doc, 'page_content'):
+                        metadata = doc.metadata or {}
+                        results.append(DocumentationContext(
+                            source=f"Framework Docs: {metadata.get('framework_name', 'unknown')}",
+                            title=metadata.get('function', metadata.get('class', 'Documentation')),
+                            snippet=doc.page_content[:1500],
+                            relevance_score=0.7
+                        ))
+            except Exception as e:
+                logger.debug("framework_docs_search_failed", error=str(e))
+            
+            logger.info("knowledge_base_search_complete", results=len(results))
+            return results[:5]  # Cap at 5 results
+            
+        except Exception as e:
+            logger.error("knowledge_base_search_failed", error=str(e))
+            return []
+
+    async def _search_codebase(
+        self,
+        query: str,
+        workspace_path: Optional[str],
+        search_queries: Optional[List[str]] = None
+    ) -> List[CodeSearchContext]:
+        """
+        Search codebase using grep/ripgrep or git commands.
+        
+        Args:
+            query: User's original query
+            workspace_path: Path to workspace
+            search_queries: Specific search queries extracted by Gemini
+            
+        Returns:
+            List of code search results
+        """
+        if not workspace_path or not os.path.exists(workspace_path):
+            return []
+        
+        results = []
+        
+        # If no specific queries, let Gemini extract them from the query
+        if not search_queries:
+            model = self._get_model()
+            prompt = f"""Extract 1-3 specific code search queries from this task:
+
+{query}
+
+Return ONLY the search terms, one per line. Focus on:
+- Function/class names mentioned
+- Error messages or strings
+- Technical keywords
+- File patterns
+
+Example output:
+authenticate
+login_required
+JWT"""
+
+            try:
+                response = await asyncio.to_thread(
+                    model.generate_content,
+                    prompt,
+                    generation_config={"temperature": 0.2}
+                )
+                search_queries = [line.strip() for line in response.text.split('\n') if line.strip()][:3]
+            except Exception as e:
+                logger.warning("search_query_extraction_failed", error=str(e))
+                search_queries = []
+        
+        # Try ripgrep first (faster), fall back to grep
+        search_cmd = None
+        if os.system("which rg > /dev/null 2>&1") == 0:
+            search_cmd = "rg"
+        elif os.system("which grep > /dev/null 2>&1") == 0:
+            search_cmd = "grep"
+        
+        if not search_cmd or not search_queries:
+            return []
+        
+        for search_term in search_queries[:3]:
+            try:
+                if search_cmd == "rg":
+                    cmd = [
+                        "rg",
+                        "--no-heading",
+                        "--line-number",
+                        "--context", "2",
+                        "--max-count", "10",
+                        "--type-not", "lock",
+                        search_term,
+                        workspace_path
+                    ]
+                else:
+                    cmd = [
+                        "grep",
+                        "-r",
+                        "-n",
+                        "-C", "2",
+                        "--exclude=*.lock",
+                        "--exclude-dir=node_modules",
+                        "--exclude-dir=.git",
+                        search_term,
+                        workspace_path
+                    ]
+                
+                proc = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+                stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=5.0)
+                
+                if proc.returncode == 0 and stdout:
+                    output = stdout.decode('utf-8', errors='ignore')
+                    lines = output.split('\n')
+                    file_count = len(set(line.split(':')[0] for line in lines if ':' in line))
+                    
+                    results.append(CodeSearchContext(
+                        search_type="grep",
+                        query=search_term,
+                        results=output[:3000],  # Cap output
+                        file_count=file_count,
+                        match_count=len([l for l in lines if search_term in l])
+                    ))
+                    
+            except asyncio.TimeoutError:
+                logger.warning("code_search_timeout", query=search_term)
+            except Exception as e:
+                logger.error("code_search_failed", query=search_term, error=str(e))
+        
+        # Also try git log if this is a git repo
+        git_dir = os.path.join(workspace_path, ".git")
+        if os.path.exists(git_dir) and search_queries:
+            try:
+                cmd = [
+                    "git",
+                    "-C", workspace_path,
+                    "log",
+                    "--all",
+                    "--oneline",
+                    "--grep", query[:100],
+                    "-10"
+                ]
+                proc = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+                stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=3.0)
+                
+                if stdout:
+                    output = stdout.decode('utf-8', errors='ignore')
+                    if output.strip():
+                        results.append(CodeSearchContext(
+                            search_type="git_log",
+                            query=query[:100],
+                            results=output,
+                            file_count=0,
+                            match_count=len(output.split('\n'))
+                        ))
+            except Exception as e:
+                logger.debug("git_log_search_skipped", error=str(e))
+        
+        logger.info("code_search_complete", queries=len(search_queries), results=len(results))
+        return results
+
 
     async def quick_analyze(self, query: str) -> Dict[str, Any]:
         """
