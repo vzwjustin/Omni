@@ -62,6 +62,11 @@ from app.collection_manager import get_collection_manager
 from app.core.router import HyperRouter
 from app.core.vibe_dictionary import VIBE_DICTIONARY
 
+import os
+# LEAN_MODE: Only expose essential tools (reason + utilities) to reduce MCP token overhead
+# Set LEAN_MODE=false to expose all 55+ think_* tools individually
+LEAN_MODE = os.environ.get("LEAN_MODE", "true").lower() in ("true", "1", "yes")
+
 # Import MCP sampling and orchestrators
 from app.core.sampling import (
     ClientSampler,
@@ -1063,25 +1068,29 @@ def create_server() -> Server:
     async def list_tools() -> list[Tool]:
         tools = []
 
-        # 62 Framework tools (think_*) - LLM selects based on task
-        for name, fw in FRAMEWORKS.items():
-            # Build vibes from router for better LLM selection
-            vibes = VIBE_DICTIONARY.get(name, [])[:4]
-            vibe_str = f" Vibes: {', '.join(vibes)}" if vibes else ""
+        # In LEAN_MODE (default), only expose 'reason' tool - HyperRouter handles framework selection
+        # This reduces MCP tool overhead from ~60k tokens to ~5k tokens
+        # Set LEAN_MODE=false to expose all 55+ think_* tools individually
+        if not LEAN_MODE:
+            # 62 Framework tools (think_*) - LLM selects based on task
+            for name, fw in FRAMEWORKS.items():
+                # Build vibes from router for better LLM selection
+                vibes = VIBE_DICTIONARY.get(name, [])[:4]
+                vibe_str = f" Vibes: {', '.join(vibes)}" if vibes else ""
 
-            tools.append(Tool(
-                name=f"think_{name}",
-                description=f"[{fw['category'].upper()}] {fw['description']}. Best for: {', '.join(fw['best_for'])}.{vibe_str}",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "query": {"type": "string", "description": "Your task or problem"},
-                        "context": {"type": "string", "description": "Code snippet or additional context"},
-                        "thread_id": {"type": "string", "description": "Thread ID for memory persistence across turns"}
-                    },
-                    "required": ["query"]
-                }
-            ))
+                tools.append(Tool(
+                    name=f"think_{name}",
+                    description=f"[{fw['category'].upper()}] {fw['description']}. Best for: {', '.join(fw['best_for'])}.{vibe_str}",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "query": {"type": "string", "description": "Your task or problem"},
+                            "context": {"type": "string", "description": "Code snippet or additional context"},
+                            "thread_id": {"type": "string", "description": "Thread ID for memory persistence across turns"}
+                        },
+                        "required": ["query"]
+                    }
+                ))
 
         # Smart routing tool (uses HyperRouter)
         tools.append(Tool(
@@ -1595,13 +1604,16 @@ def create_server() -> Server:
                                # search_documentation, search_frameworks_by_name, search_by_category,
                                # search_function, search_class, search_docs_only, search_framework_category,
                                # execute_code, health
+            exposed_tools = utility_tools if LEAN_MODE else len(FRAMEWORKS) + utility_tools
             return [TextContent(type="text", text=json.dumps({
                 "status": "healthy",
-                "frameworks": len(FRAMEWORKS),
-                "tools": len(FRAMEWORKS) + utility_tools,
+                "lean_mode": LEAN_MODE,
+                "frameworks_available": len(FRAMEWORKS),
+                "tools_exposed": exposed_tools,
                 "collections": collections,
                 "memory_enabled": True,
-                "rag_enabled": True
+                "rag_enabled": True,
+                "note": "LEAN_MODE=true: Only 'reason' tool exposed. HyperRouter handles framework selection internally." if LEAN_MODE else "All think_* tools exposed"
             }, indent=2))]
 
         return [TextContent(type="text", text=f"Unknown tool: {name}")]
@@ -1618,7 +1630,12 @@ async def main():
     logger.info("Memory: LangChain ConversationBufferMemory")
     logger.info("RAG: ChromaDB with 6 collections")
     utility_tools = 14
-    logger.info(f"Tools: {len(FRAMEWORKS)} think_* + {utility_tools} utility = {len(FRAMEWORKS) + utility_tools} total")
+    if LEAN_MODE:
+        logger.info(f"LEAN_MODE: ON - Exposing {utility_tools} tools (reason + utilities)")
+        logger.info("  -> Framework selection handled by HyperRouter internally")
+        logger.info("  -> Set LEAN_MODE=false to expose all think_* tools")
+    else:
+        logger.info(f"Tools: {len(FRAMEWORKS)} think_* + {utility_tools} utility = {len(FRAMEWORKS) + utility_tools} total")
     logger.info("=" * 60)
 
     server = create_server()
