@@ -2,6 +2,91 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+---
+
+## ENFORCED RULES
+
+**These rules are MANDATORY. Violations will break the system.**
+
+### Critical Synchronization (ENFORCED)
+```
+VIOLATION = SYSTEM FAILURE
+```
+- **NEVER** modify `FRAMEWORK_NODES` in `app/graph.py` without ALSO updating:
+  1. `FRAMEWORKS` dict in `app/core/router.py`
+  2. `VIBE_DICTIONARY` in `app/core/vibe_dictionary.py`
+  3. `get_framework_info()` in `app/core/router.py`
+- All four locations MUST have matching framework names - no exceptions
+
+### Async/Await (ENFORCED)
+```
+MISSING AWAIT = SILENT FAILURE
+```
+- ALL LangGraph nodes are async: `async def node(state: GraphState) -> GraphState`
+- ALL MCP tool handlers are async
+- ALWAYS use `await` for async calls - missing awaits cause silent failures
+- Use `asyncio.Lock()` for shared mutable state
+
+### State Access (ENFORCED)
+```
+DIRECT ACCESS = KEYERROR CRASH
+```
+- ALWAYS use `state.get("key", default)` - NEVER `state["key"]` directly
+- ALL framework nodes must accept `GraphState` and return `GraphState`
+- ALWAYS track tokens: `state["tokens_used"] += tokens`
+- ALWAYS set `state["confidence_score"]` (0-1) before returning
+
+### Error Handling (ENFORCED)
+```
+GENERIC EXCEPTIONS = HIDDEN BUGS
+```
+- ALWAYS use `OmniCortexError` hierarchy from `app/core/errors.py`
+- `RoutingError`, `FrameworkNotFoundError` for routing
+- `SandboxSecurityError`, `SandboxTimeoutError` for code execution
+- `MemoryError`, `ThreadNotFoundError` for memory
+- `RAGError`, `EmbeddingError` for vector store
+- `LLMError`, `ProviderNotConfiguredError` for LLM calls
+
+### Security (ENFORCED)
+```
+BYPASS = VULNERABILITY
+```
+- NEVER bypass sandbox checks - use `ALLOWED_IMPORTS` whitelist only
+- NEVER include API keys, passwords, or secrets in code
+- ALWAYS validate user input in MCP tool handlers
+- ALWAYS sanitize output to prevent injection
+
+### Testing (ENFORCED)
+```
+UNTESTED = UNSHIPPED
+```
+- ALWAYS test with both `LEAN_MODE=true` AND `LEAN_MODE=false`
+- ALWAYS verify changes in Docker container before committing
+- ALWAYS run `pytest tests/` before pushing
+- Test edge cases and error conditions
+
+### Code Quality (ENFORCED)
+```
+SLOPPY CODE = REJECTED
+```
+- Keep functions under 50 lines
+- Avoid deep nesting (max 3 levels)
+- Remove dead code and unused imports
+- Use type hints for all function signatures
+- Use meaningful names for variables and functions
+
+### Context Optimization (ENFORCED)
+```
+WASTED TOKENS = WASTED MONEY
+```
+- Use specific file paths instead of broad searches
+- Read only necessary portions of large files
+- Use `/compact` when context grows large
+- Prefer `grep` with `files_with_matches` mode
+- Start new sessions for unrelated tasks
+
+---
+
 ## Overview
 
 Omni-Cortex is a headless MCP (Model Context Protocol) server that routes coding tasks to 62 specialized AI reasoning frameworks. It acts as a "Brain" for IDE agents, using LangGraph for workflow orchestration and LangChain for memory/tools.
@@ -33,91 +118,39 @@ python -m server.main
 }
 ```
 
-Or for local development:
-```json
-{
-  "mcpServers": {
-    "omni-cortex": {
-      "command": "python",
-      "args": ["-m", "server.main"],
-      "cwd": "/path/to/omni_cortex"
-    }
-  }
-}
-```
-
----
-
-## Critical Rules
-
-### Synchronization Requirements
-- **NEVER** modify `FRAMEWORK_NODES` in `app/graph.py` without also updating:
-  - `FRAMEWORKS` dict in `app/core/router.py`
-  - `VIBE_DICTIONARY` in `app/core/vibe_dictionary.py`
-  - `get_framework_info()` in `app/core/router.py`
-- All three locations must have matching framework names
-
-### Async Patterns
-- All LangGraph nodes are async: `async def node(state: GraphState) -> GraphState`
-- Use `await` for all async calls - missing awaits cause silent failures
-- Use `asyncio.Lock()` for shared mutable state (see `app/langchain_integration.py`)
-
-### State Management
-- All framework nodes must accept `GraphState` and return `GraphState`
-- Use `state.get("key", default)` pattern - never direct dict access
-- Track tokens: `state["tokens_used"] += tokens`
-- Set `state["confidence_score"]` (0-1) before returning
-
-### Error Handling
-- Use `OmniCortexError` hierarchy from `app/core/errors.py`:
-  - `RoutingError`, `FrameworkNotFoundError` for routing issues
-  - `SandboxSecurityError`, `SandboxTimeoutError` for code execution
-  - `MemoryError`, `ThreadNotFoundError` for memory issues
-  - `RAGError`, `EmbeddingError` for vector store issues
-  - `LLMError`, `ProviderNotConfiguredError` for LLM calls
-
-### Security
-- Code sandbox uses AST-based validation (`_SafetyValidator` class)
-- Never bypass sandbox checks - use `ALLOWED_IMPORTS` whitelist
-- Never include API keys in code - use environment variables
-- Validate all user input in MCP tool handlers
-
 ---
 
 ## Project Structure
 
 ```
 omni_cortex/
-├── server/main.py          # MCP server entry point (LEAN_MODE controls tool exposure)
+├── server/main.py              # MCP entry (LEAN_MODE controls tools)
 ├── app/
-│   ├── graph.py            # LangGraph workflow (FRAMEWORK_NODES dict)
-│   ├── state.py            # GraphState TypedDict
-│   ├── langchain_integration.py  # Memory, RAG, callbacks
-│   ├── collection_manager.py     # ChromaDB collections
+│   ├── graph.py                # LangGraph (FRAMEWORK_NODES) ⚠️ SYNC REQUIRED
+│   ├── state.py                # GraphState TypedDict
+│   ├── langchain_integration.py
+│   ├── collection_manager.py   # ChromaDB
 │   ├── core/
-│   │   ├── router.py       # HyperRouter (FRAMEWORKS dict)
-│   │   ├── vibe_dictionary.py   # VIBE_DICTIONARY + match_vibes()
-│   │   ├── settings.py     # OmniCortexSettings (Pydantic)
-│   │   ├── errors.py       # Exception hierarchy
-│   │   └── config.py       # Legacy settings
-│   ├── frameworks/         # Framework registry (single source of truth)
-│   │   ├── registry.py     # FrameworkSpec, register(), get_framework()
-│   │   └── definitions.py  # Framework metadata definitions
-│   └── nodes/              # Framework implementations
-│       ├── common.py       # Shared utilities (@quiet_star, LLM wrappers)
-│       ├── strategy/       # Architecture, patterns (reason_flux, self_discover)
-│       ├── search/         # Tree/graph search (mcts, tot, got, eot)
-│       ├── iterative/      # Refinement loops (active_inference, debate)
-│       ├── context/        # Context enhancement (chain_of_note, step_back)
-│       ├── fast/           # Quick responses (system1, skeleton_of_thought)
-│       └── verification/   # Validation (chain_of_verification, critic)
+│   │   ├── router.py           # HyperRouter (FRAMEWORKS) ⚠️ SYNC REQUIRED
+│   │   ├── vibe_dictionary.py  # VIBE_DICTIONARY ⚠️ SYNC REQUIRED
+│   │   ├── settings.py         # OmniCortexSettings (Pydantic)
+│   │   ├── errors.py           # Exception hierarchy
+│   │   └── config.py           # Legacy settings
+│   ├── frameworks/             # Registry (single source of truth)
+│   └── nodes/                  # Framework implementations
+│       ├── common.py           # @quiet_star, LLM wrappers
+│       ├── strategy/           # reason_flux, self_discover
+│       ├── search/             # mcts, tot, got, eot
+│       ├── iterative/          # active_inference, debate
+│       ├── context/            # chain_of_note, step_back
+│       ├── fast/               # system1, skeleton_of_thought
+│       └── verification/       # chain_of_verification
 ├── tests/
-│   ├── conftest.py         # Pytest fixtures
-│   ├── unit/               # Unit tests (state, memory, sandbox)
-│   └── integration/        # MCP tool tests
+│   ├── unit/                   # State, memory, sandbox tests
+│   └── integration/            # MCP tool tests
 └── docs/
-    ├── API_REFERENCE.md    # Full MCP API documentation
-    └── FRAMEWORK_GUIDE.md  # Framework selection guide
+    ├── API_REFERENCE.md
+    └── FRAMEWORK_GUIDE.md
 ```
 
 ---
@@ -127,19 +160,9 @@ omni_cortex/
 ### LEAN_MODE (Token Optimization)
 
 ```bash
-# .env
-LEAN_MODE=true   # Default: Only expose 14 tools (reason + utilities)
-LEAN_MODE=false  # Expose all 76 tools (62 think_* + 14 utilities)
+LEAN_MODE=true   # Default: 14 tools (reason + utilities) - saves ~55k tokens
+LEAN_MODE=false  # All 76 tools (62 think_* + 14 utilities)
 ```
-
-**LEAN_MODE=true (default):**
-- Reduces MCP tool definitions from ~60k to ~5k tokens
-- HyperRouter handles framework selection internally
-- Use `reason` tool - it auto-selects the best framework
-
-**LEAN_MODE=false:**
-- Exposes all `think_*` tools for direct framework access
-- Useful for testing specific frameworks
 
 ### Environment Variables
 
@@ -148,18 +171,14 @@ LEAN_MODE=false  # Expose all 76 tools (62 think_* + 14 utilities)
 | `LEAN_MODE` | `true` | Token-optimized tool exposure |
 | `LLM_PROVIDER` | `pass-through` | `pass-through`, `openrouter`, `anthropic`, `openai`, `google` |
 | `EMBEDDING_PROVIDER` | `openrouter` | `openrouter`, `openai`, `huggingface` |
-| `EMBEDDING_MODEL` | `text-embedding-3-small` | Embedding model name |
-| `ENABLE_AUTO_INGEST` | `true` | Auto-index codebase on startup |
-| `ENABLE_DSPY_OPTIMIZATION` | `true` | DSPy prompt optimization |
-| `ENABLE_PRM_SCORING` | `true` | Process reward model for search |
-| `MAX_MEMORY_THREADS` | `100` | LRU memory thread limit |
-| `SANDBOX_TIMEOUT` | `5.0` | Code execution timeout (seconds) |
+| `EMBEDDING_MODEL` | `text-embedding-3-small` | Embedding model |
+| `ENABLE_AUTO_INGEST` | `true` | Auto-index codebase |
+| `MAX_MEMORY_THREADS` | `100` | LRU memory limit |
+| `SANDBOX_TIMEOUT` | `5.0` | Code execution timeout |
 
 ---
 
 ## Architecture
-
-### Request Flow (MCP → Response)
 
 ```
 MCP call_tool("reason", {query, context})
@@ -173,7 +192,7 @@ get_memory(thread_id) → OmniCortexMemory
 graph.ainvoke(state) → LangGraph workflow
     ├── route_node: HyperRouter.route()
     │   ├── match_vibes(query) → quick pattern match
-    │   └── LLM selection → complex/ambiguous tasks
+    │   └── LLM selection → complex tasks
     ↓
     └── execute_node: framework_node(state)
         ├── enhance_state_with_langchain()
@@ -188,12 +207,12 @@ format_reasoning_response() → MCP response
 | Component | File | Purpose |
 |-----------|------|---------|
 | MCP Server | `server/main.py` | Tool registration, LEAN_MODE |
-| HyperRouter | `app/core/router.py` | Framework selection (vibe + LLM) |
-| VIBE_DICTIONARY | `app/core/vibe_dictionary.py` | Fast pattern matching |
+| HyperRouter | `app/core/router.py` | Framework selection |
+| VIBE_DICTIONARY | `app/core/vibe_dictionary.py` | Pattern matching |
 | LangGraph | `app/graph.py` | Workflow orchestration |
-| Memory | `app/langchain_integration.py` | Thread-based conversation memory |
-| RAG | `app/collection_manager.py` | ChromaDB vector store |
-| Settings | `app/core/settings.py` | Pydantic configuration |
+| Memory | `app/langchain_integration.py` | Conversation memory |
+| RAG | `app/collection_manager.py` | ChromaDB |
+| Settings | `app/core/settings.py` | Pydantic config |
 | Errors | `app/core/errors.py` | Exception hierarchy |
 
 ### Memory System
@@ -202,60 +221,41 @@ format_reasoning_response() → MCP response
 |-------|---------|----------|
 | Short-term | `GraphState` | Single request |
 | Medium-term | `ConversationBufferMemory` | Same `thread_id` |
-| Long-term | ChromaDB | Persists across threads |
+| Long-term | ChromaDB | Persists globally |
 
 ---
 
 ## Adding a New Framework
 
+**⚠️ ALL FOUR LOCATIONS MUST BE UPDATED - NO EXCEPTIONS**
+
 1. **Create node** in `app/nodes/{category}/my_framework.py`:
    ```python
    from app.state import GraphState
-   from app.nodes.common import quiet_star, add_reasoning_step
+   from app.nodes.common import quiet_star
 
    @quiet_star
    async def my_framework_node(state: GraphState) -> GraphState:
-       # Implementation
        state["final_answer"] = "..."
        state["confidence_score"] = 0.85
        return state
    ```
 
-2. **Export** from `app/nodes/{category}/__init__.py`:
-   ```python
-   from .my_framework import my_framework_node
-   __all__ = [..., "my_framework_node"]
-   ```
+2. **Export** from `app/nodes/{category}/__init__.py`
 
 3. **Register in graph** (`app/graph.py`):
    ```python
-   FRAMEWORK_NODES = {
-       ...,
-       "my_framework": my_framework_node,
-   }
+   FRAMEWORK_NODES["my_framework"] = my_framework_node
    ```
 
 4. **Add router metadata** (`app/core/router.py`):
    ```python
-   FRAMEWORKS = {
-       ...,
-       "my_framework": {
-           "category": "strategy",
-           "description": "...",
-           "best_for": ["use case 1", "use case 2"],
-       },
-   }
+   FRAMEWORKS["my_framework"] = {"category": "...", "description": "...", "best_for": [...]}
    ```
 
 5. **Add vibe patterns** (`app/core/vibe_dictionary.py`):
    ```python
-   VIBE_DICTIONARY = {
-       ...,
-       "my_framework": [
-           "casual phrase 1",
-           "another vibe pattern",
-       ],
-   }
+   VIBE_DICTIONARY["my_framework"] = ["casual phrase", "another vibe"]
    ```
 
 ---
@@ -263,54 +263,13 @@ format_reasoning_response() → MCP response
 ## Testing
 
 ```bash
-# Run all tests
+# REQUIRED before any commit
 docker-compose exec omni-cortex pytest tests/ -v
 
-# Unit tests only
-docker-compose exec omni-cortex pytest tests/unit/ -v
-
-# Integration tests
-docker-compose exec omni-cortex pytest tests/integration/ -v
-
-# With coverage
-docker-compose exec omni-cortex pytest tests/ --cov=app --cov-report=term-missing
+# Test both LEAN modes
+LEAN_MODE=true docker-compose up -d
+LEAN_MODE=false docker-compose up -d
 ```
-
-### Test with both LEAN modes:
-```bash
-# Test LEAN_MODE=true (default)
-LEAN_MODE=true docker-compose up -d && docker-compose logs -f
-
-# Test LEAN_MODE=false (all tools)
-LEAN_MODE=false docker-compose up -d && docker-compose logs -f
-```
-
----
-
-## Code Quality Rules
-
-### Python Style
-- Follow PEP 8
-- Use type hints for all function signatures
-- Docstrings for public functions (Google style)
-- Keep functions under 50 lines
-- Avoid deep nesting (max 3 levels)
-
-### Async Best Practices
-- Use `asyncio.gather()` for parallel operations
-- Never block the event loop with sync I/O
-- Use `async with` for context managers
-
-### Performance
-- Use LRU eviction for memory (`MAX_MEMORY_THREADS`)
-- Lazy load heavy resources (embeddings, models)
-- Profile before optimizing
-
-### Context Optimization (for Claude Code)
-- Use specific file paths instead of broad searches
-- Read only necessary portions of large files
-- Use `/compact` when context grows large
-- Prefer `grep` with `files_with_matches` mode
 
 ---
 
@@ -321,60 +280,39 @@ LEAN_MODE=false docker-compose up -d && docker-compose logs -f
 query: str                  # Natural language request
 code_snippet: Optional[str] # Code context
 file_list: List[str]        # Relevant files
-thread_id: str              # Memory persistence key
+thread_id: str              # Memory key
 
 # Routing
 task_type: str              # 'debug', 'refactor', 'architect'
 complexity_estimate: float  # 0.0-1.0
-selected_framework: str     # Chosen framework name
+selected_framework: str     # Chosen framework
 
 # Output
 reasoning_steps: List[Dict] # Thought/Action/Observation
-final_answer: str           # Response text
+final_answer: str           # Response
 final_code: str             # Generated code
-confidence_score: float     # 0.0-1.0
-tokens_used: int            # Token count
+confidence_score: float     # 0.0-1.0 (REQUIRED)
+tokens_used: int            # Token count (REQUIRED)
 ```
-
----
-
-## Troubleshooting
-
-### Common Issues
-
-**"No embedding provider available"**
-- Set `OPENAI_API_KEY` or `OPENROUTER_API_KEY` in `.env`
-- Or use `EMBEDDING_PROVIDER=huggingface` for local embeddings
-
-**Framework not found**
-- Check all three locations: `graph.py`, `router.py`, `vibe_dictionary.py`
-- Names must match exactly (case-sensitive)
-
-**Memory not persisting**
-- Ensure same `thread_id` is passed across calls
-- Check `MAX_MEMORY_THREADS` limit (default: 100)
-
-**Sandbox timeout**
-- Increase `SANDBOX_TIMEOUT` in `.env`
-- Check for infinite loops in user code
 
 ---
 
 ## Docker Commands
 
 ```bash
-# Build and start
-docker-compose up -d --build
-
-# View logs
-docker-compose logs -f omni-cortex
-
-# Restart after changes
-docker-compose restart omni-cortex
-
-# Run tests in container
-docker-compose exec omni-cortex pytest tests/ -v
-
-# Check health
-docker-compose exec omni-cortex python -c "from server.main import FRAMEWORKS; print(f'{len(FRAMEWORKS)} frameworks')"
+docker-compose up -d --build      # Build and start
+docker-compose logs -f omni-cortex # View logs
+docker-compose restart omni-cortex # Restart
+docker-compose exec omni-cortex pytest tests/ -v  # Run tests
 ```
+
+---
+
+## Troubleshooting
+
+| Error | Fix |
+|-------|-----|
+| "No embedding provider" | Set `OPENAI_API_KEY` or use `EMBEDDING_PROVIDER=huggingface` |
+| Framework not found | Check all 4 sync locations match exactly |
+| Memory not persisting | Use same `thread_id` across calls |
+| Sandbox timeout | Increase `SANDBOX_TIMEOUT` or check for infinite loops |
