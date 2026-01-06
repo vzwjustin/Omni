@@ -61,6 +61,21 @@ from app.langchain_integration import (
 from app.collection_manager import get_collection_manager
 from app.core.router import HyperRouter
 from app.core.vibe_dictionary import VIBE_DICTIONARY
+from app.core.context_gateway import get_context_gateway, StructuredContext
+from app.core.context_utils import (
+    count_tokens,
+    compress_content,
+    detect_truncation,
+    analyze_claude_md,
+    generate_claude_md_template,
+    inject_rules,
+    RULE_PRESETS,
+)
+
+import os
+# LEAN_MODE: Only expose essential tools (reason + utilities) to reduce MCP token overhead
+# Set LEAN_MODE=false to expose all 55+ think_* tools individually
+LEAN_MODE = os.environ.get("LEAN_MODE", "true").lower() in ("true", "1", "yes")
 
 # Import MCP sampling and orchestrators
 from app.core.sampling import (
@@ -1063,9 +1078,140 @@ def create_server() -> Server:
     async def list_tools() -> list[Tool]:
         tools = []
 
-        # 62 Framework tools (think_*) - LLM selects based on task
+        # =======================================================================
+        # LEAN_MODE (default): Ultra-lean - only 4 essential tools
+        # Gemini handles context prep, file discovery, RAG, and framework selection
+        # All 62 frameworks + full feature set available internally
+        # =======================================================================
+        # Set LEAN_MODE=false to expose all 77 tools (62 think_* + 15 utilities)
+        # =======================================================================
+
+        if LEAN_MODE:
+            # ULTRA-LEAN: 4 tools - Gemini does the heavy lifting
+            # Full feature set (62 frameworks, RAG, memory) available internally
+
+            # 1. Context Gateway - Gemini prepares everything
+            tools.append(Tool(
+                name="prepare_context",
+                description="Gemini 3 Flash prepares rich, structured context for Claude. Analyzes query, discovers relevant files (with relevance scoring), fetches documentation, generates execution plan. Returns organized brief so Claude can focus on deep reasoning instead of searching.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "The task or problem to prepare context for"},
+                        "workspace_path": {"type": "string", "description": "Path to workspace/project directory"},
+                        "code_context": {"type": "string", "description": "Any code snippets to consider"},
+                        "file_list": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Pre-specified files to analyze"
+                        },
+                        "search_docs": {"type": "boolean", "description": "Search web for documentation (default: true)"},
+                        "output_format": {"type": "string", "enum": ["prompt", "json"], "description": "Output format (default: prompt)"}
+                    },
+                    "required": ["query"]
+                }
+            ))
+
+            # 2. Smart reasoning - executes with auto-selected framework
+            tools.append(Tool(
+                name="reason",
+                description="Execute reasoning with auto-selected framework. Uses 62 thinking frameworks internally. Pass context from prepare_context for best results.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "Your task or question"},
+                        "context": {"type": "string", "description": "Context from prepare_context or code snippets"},
+                        "thread_id": {"type": "string", "description": "Thread ID for memory persistence"}
+                    },
+                    "required": ["query"]
+                }
+            ))
+
+            # 3. Code execution - run and test code
+            tools.append(Tool(
+                name="execute_code",
+                description="Execute Python code in sandboxed environment. Use for testing, validation, and verification.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "code": {"type": "string", "description": "Python code to execute"},
+                        "language": {"type": "string", "description": "Language (only 'python' supported)"}
+                    },
+                    "required": ["code"]
+                }
+            ))
+
+            # 4. Health check
+            tools.append(Tool(
+                name="health",
+                description="Check server health, available frameworks, and capabilities",
+                inputSchema={"type": "object", "properties": {}}
+            ))
+
+            # 5-9. Context optimization tools (merged from context-optimizer)
+            tools.append(Tool(
+                name="count_tokens",
+                description="Count tokens in text using Claude's tokenizer",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "text": {"type": "string", "description": "Text to count tokens for"}
+                    },
+                    "required": ["text"]
+                }
+            ))
+
+            tools.append(Tool(
+                name="compress_content",
+                description="Compress file content by removing comments/whitespace. Achieves 30-70% token reduction.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "content": {"type": "string", "description": "Content to compress"},
+                        "target_reduction": {"type": "number", "description": "Target reduction 0.0-1.0 (default: 0.3)"}
+                    },
+                    "required": ["content"]
+                }
+            ))
+
+            tools.append(Tool(
+                name="detect_truncation",
+                description="Detect if text is truncated (unclosed blocks, incomplete sentences)",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "text": {"type": "string", "description": "Text to check"}
+                    },
+                    "required": ["text"]
+                }
+            ))
+
+            tools.append(Tool(
+                name="manage_claude_md",
+                description="Analyze, generate, or inject rules into CLAUDE.md files",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "action": {"type": "string", "enum": ["analyze", "generate", "inject", "list_presets"], "description": "Action to perform"},
+                        "directory": {"type": "string", "description": "Project directory (for analyze)"},
+                        "project_type": {"type": "string", "enum": ["general", "python", "typescript", "react", "rust"], "description": "Project type (for generate)"},
+                        "rules": {"type": "array", "items": {"type": "string"}, "description": "Custom rules to add"},
+                        "presets": {"type": "array", "items": {"type": "string"}, "description": "Presets: security, performance, testing, documentation, code_quality, git, context_optimization"},
+                        "existing_content": {"type": "string", "description": "Existing CLAUDE.md content (for inject)"},
+                        "section": {"type": "string", "description": "Section name for injection (default: Rules)"}
+                    },
+                    "required": ["action"]
+                }
+            ))
+
+            return tools
+
+        # =======================================================================
+        # FULL MODE: All 77 tools exposed (62 think_* + 15 utilities)
+        # =======================================================================
+
+        # 62 Framework tools (think_*) - direct access to each framework
         for name, fw in FRAMEWORKS.items():
-            # Build vibes from router for better LLM selection
             vibes = VIBE_DICTIONARY.get(name, [])[:4]
             vibe_str = f" Vibes: {', '.join(vibes)}" if vibes else ""
 
@@ -1101,7 +1247,7 @@ def create_server() -> Server:
         # Framework discovery tools
         tools.append(Tool(
             name="list_frameworks",
-            description="List all 60 thinking frameworks by category",
+            description="List all 62 thinking frameworks by category",
             inputSchema={"type": "object", "properties": {}}
         ))
 
@@ -1257,6 +1403,28 @@ def create_server() -> Server:
             name="health",
             description="Check server health and available capabilities",
             inputSchema={"type": "object", "properties": {}}
+        ))
+
+        # Context Gateway - Gemini-powered context preparation for Claude
+        tools.append(Tool(
+            name="prepare_context",
+            description="Gemini prepares rich, structured context for Claude. Does the heavy lifting: analyzes query, discovers relevant files, fetches documentation, ranks by relevance. Returns organized context packet so Claude can focus on deep reasoning instead of egg-hunting.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "The task or problem to prepare context for"},
+                    "workspace_path": {"type": "string", "description": "Path to workspace/project directory"},
+                    "code_context": {"type": "string", "description": "Any code snippets to consider"},
+                    "file_list": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Pre-specified files to analyze"
+                    },
+                    "search_docs": {"type": "boolean", "description": "Whether to search web for documentation (default: true)"},
+                    "output_format": {"type": "string", "enum": ["prompt", "json"], "description": "Output as Claude prompt or raw JSON (default: prompt)"}
+                },
+                "required": ["query"]
+            }
         ))
 
         return tools
@@ -1591,18 +1759,105 @@ def create_server() -> Server:
         # Health check
         if name == "health":
             collections = list(manager.COLLECTIONS.keys())
-            utility_tools = 14  # reason, list_frameworks, recommend, get_context, save_context,
-                               # search_documentation, search_frameworks_by_name, search_by_category,
-                               # search_function, search_class, search_docs_only, search_framework_category,
-                               # execute_code, health
+            if LEAN_MODE:
+                # Ultra-lean: 8 tools (4 core + 4 context utils)
+                exposed_tools = 8
+                note = "ULTRA-LEAN MODE: 8 tools exposed (prepare_context, reason, execute_code, health + count_tokens, compress_content, detect_truncation, manage_claude_md). Gemini handles context prep, 62 frameworks available internally."
+            else:
+                # Full mode: 62 think_* + 19 utilities = 81 tools
+                exposed_tools = len(FRAMEWORKS) + 19
+                note = "FULL MODE: All 81 tools exposed (62 think_* + 19 utilities)"
             return [TextContent(type="text", text=json.dumps({
                 "status": "healthy",
-                "frameworks": len(FRAMEWORKS),
-                "tools": len(FRAMEWORKS) + utility_tools,
+                "mode": "ultra-lean" if LEAN_MODE else "full",
+                "tools_exposed": exposed_tools,
+                "frameworks_available": len(FRAMEWORKS),
+                "gemini_context_gateway": LEAN_MODE,
                 "collections": collections,
                 "memory_enabled": True,
-                "rag_enabled": True
+                "rag_enabled": True,
+                "note": note
             }, indent=2))]
+
+        # Context Gateway - Gemini-powered context preparation
+        if name == "prepare_context":
+            query = arguments.get("query", "")
+            workspace_path = arguments.get("workspace_path")
+            code_context = arguments.get("code_context")
+            file_list = arguments.get("file_list")
+            search_docs = arguments.get("search_docs", True)
+            output_format = arguments.get("output_format", "prompt")
+
+            try:
+                gateway = get_context_gateway()
+                context = await gateway.prepare_context(
+                    query=query,
+                    workspace_path=workspace_path,
+                    code_context=code_context,
+                    file_list=file_list,
+                    search_docs=search_docs,
+                )
+
+                if output_format == "json":
+                    return [TextContent(type="text", text=json.dumps(context.to_dict(), indent=2))]
+                else:
+                    # Return rich, structured prompt ready for Claude
+                    output = "# Context Prepared by Gemini\n\n"
+                    output += context.to_claude_prompt()
+                    return [TextContent(type="text", text=output)]
+
+            except Exception as e:
+                logger.error(f"Context gateway failed: {e}")
+                return [TextContent(type="text", text=json.dumps({
+                    "error": str(e),
+                    "hint": "Ensure GOOGLE_API_KEY is set for Gemini-powered context preparation"
+                }, indent=2))]
+
+        # Context optimization tools (merged from context-optimizer)
+        if name == "count_tokens":
+            text = arguments.get("text", "")
+            tokens = count_tokens(text)
+            return [TextContent(type="text", text=json.dumps({"tokens": tokens, "characters": len(text)}))]
+
+        if name == "compress_content":
+            content = arguments.get("content", "")
+            target = arguments.get("target_reduction", 0.3)
+            result = compress_content(content, target)
+            return [TextContent(type="text", text=json.dumps(result, indent=2))]
+
+        if name == "detect_truncation":
+            text = arguments.get("text", "")
+            result = detect_truncation(text)
+            return [TextContent(type="text", text=json.dumps(result, indent=2))]
+
+        if name == "manage_claude_md":
+            action = arguments.get("action", "analyze")
+
+            if action == "analyze":
+                directory = arguments.get("directory", os.getcwd())
+                result = analyze_claude_md(directory)
+                return [TextContent(type="text", text=json.dumps(result, indent=2))]
+
+            elif action == "generate":
+                project_type = arguments.get("project_type", "general")
+                rules = arguments.get("rules", [])
+                presets = arguments.get("presets", [])
+                result = generate_claude_md_template(project_type, rules, presets)
+                return [TextContent(type="text", text=result)]
+
+            elif action == "inject":
+                existing = arguments.get("existing_content", "")
+                rules = arguments.get("rules", [])
+                presets = arguments.get("presets", [])
+                section = arguments.get("section", "Rules")
+                result = inject_rules(existing, rules, section, presets)
+                return [TextContent(type="text", text=result)]
+
+            elif action == "list_presets":
+                result = {name: {"rules": rules, "count": len(rules)} for name, rules in RULE_PRESETS.items()}
+                return [TextContent(type="text", text=json.dumps(result, indent=2))]
+
+            return [TextContent(type="text", text=f"Unknown action: {action}")]
 
         return [TextContent(type="text", text=f"Unknown tool: {name}")]
 
@@ -1613,12 +1868,20 @@ async def main():
     logger.info("=" * 60)
     logger.info("Omni-Cortex MCP - Operating System for Vibe Coders")
     logger.info("=" * 60)
-    logger.info(f"Frameworks: {len(FRAMEWORKS)} thinking frameworks")
+    logger.info(f"Frameworks: {len(FRAMEWORKS)} thinking frameworks (internal)")
     logger.info(f"Graph nodes: {len(FRAMEWORK_NODES)} LangGraph nodes")
     logger.info("Memory: LangChain ConversationBufferMemory")
     logger.info("RAG: ChromaDB with 6 collections")
-    utility_tools = 14
-    logger.info(f"Tools: {len(FRAMEWORKS)} think_* + {utility_tools} utility = {len(FRAMEWORKS) + utility_tools} total")
+    if LEAN_MODE:
+        logger.info("Mode: ULTRA-LEAN (8 tools)")
+        logger.info("  Core: prepare_context, reason, execute_code, health")
+        logger.info("  Context: count_tokens, compress_content, detect_truncation, manage_claude_md")
+        logger.info("  Gemini 3 Flash: Context prep, file discovery, doc search")
+        logger.info("  62 frameworks available internally via HyperRouter")
+        logger.info("  Set LEAN_MODE=false for full 81-tool access")
+    else:
+        logger.info(f"Mode: FULL ({len(FRAMEWORKS) + 19} tools)")
+        logger.info(f"  {len(FRAMEWORKS)} think_* tools + 19 utilities")
     logger.info("=" * 60)
 
     server = create_server()

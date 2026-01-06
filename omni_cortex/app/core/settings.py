@@ -24,13 +24,13 @@ class OmniCortexSettings(BaseSettings):
     mcp_server_port: int = Field(default=8000, alias="MCP_SERVER_PORT")
 
     # Routing
-    routing_model: str = Field(default="gemini-2.0-flash", alias="ROUTING_MODEL")
+    routing_model: str = Field(default="gemini-3-flash-preview", alias="ROUTING_MODEL")
     routing_temperature: float = Field(default=0.7, ge=0.0, le=2.0, alias="ROUTING_TEMPERATURE")
 
     # LLM
-    llm_provider: str = Field(default="pass-through", alias="LLM_PROVIDER")
-    deep_reasoning_model: str = Field(default="anthropic/claude-sonnet-4", alias="DEEP_REASONING_MODEL")
-    fast_synthesis_model: str = Field(default="google/gemini-2.0-flash", alias="FAST_SYNTHESIS_MODEL")
+    llm_provider: str = Field(default="google", alias="LLM_PROVIDER")
+    deep_reasoning_model: str = Field(default="gemini-3-flash-preview", alias="DEEP_REASONING_MODEL")
+    fast_synthesis_model: str = Field(default="gemini-3-flash-preview", alias="FAST_SYNTHESIS_MODEL")
     openrouter_base_url: str = Field(default="https://openrouter.ai/api/v1", alias="OPENROUTER_BASE_URL")
 
     # Memory
@@ -90,7 +90,7 @@ class OmniCortexSettings(BaseSettings):
     @classmethod
     def validate_embedding_provider(cls, v: str) -> str:
         """Ensure embedding provider is valid."""
-        valid_providers = {"openrouter", "openai", "huggingface"}
+        valid_providers = {"openrouter", "openai", "huggingface", "gemini", "google"}
         if v.lower() not in valid_providers:
             raise ValueError(f"embedding_provider must be one of {valid_providers}")
         return v.lower()

@@ -5,8 +5,8 @@ services:
     build: .
     image: vzwjustin/omni-cortex:latest
     container_name: omni-cortex
-    stdin_open: true  # Keep stdin open for MCP stdio
-    tty: true         # Allocate pseudo-TTY for interactive mode
+    stdin_open: true # Keep stdin open for MCP stdio
+    tty: true # Allocate pseudo-TTY for interactive mode
     env_file:
       - .env
     environment:
@@ -20,7 +20,7 @@ services:
       - FAST_SYNTHESIS_MODEL=${FAST_SYNTHESIS_MODEL:-gemini-3-flash-preview}
 
       # Embeddings for RAG (ChromaDB) - loaded from .env
-      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-openai}
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-gemini}
       - EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-3-small}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
 
@@ -28,6 +28,7 @@ services:
       - CHROMA_PERSIST_DIR=/app/data/chroma
 
       # Feature Flags
+      - LEAN_MODE=${LEAN_MODE:-true}
       - ENABLE_DSPY_OPTIMIZATION=${ENABLE_DSPY_OPTIMIZATION:-true}
       - ENABLE_PRM_SCORING=${ENABLE_PRM_SCORING:-true}
       - ENABLE_AUTO_INGEST=${ENABLE_AUTO_INGEST:-true}

@@ -289,6 +289,56 @@ def _get_embeddings() -> Any:
 
     model = getattr(settings, 'embedding_model', 'text-embedding-3-small')
 
+    # Gemini embeddings (FREE up to 1500 req/day)
+    if provider in ("google", "gemini"):
+        if settings.google_api_key:
+            try:
+                import google.generativeai as genai
+                
+                # Custom wrapper for Gemini embeddings
+                class GeminiEmbeddings:
+                    """LangChain-compatible wrapper for Gemini embeddings."""
+                    
+                    def __init__(self, api_key: str):
+                        genai.configure(api_key=api_key)
+                        self.model = "models/text-embedding-004"
+                    
+                    def embed_documents(self, texts: list) -> list:
+                        """Embed a list of documents."""
+                        if not texts:
+                            return []
+                        results = []
+                        # Batch in groups of 100 (Gemini API limit)
+                        for i in range(0, len(texts), 100):
+                            batch = texts[i:i+100]
+                            result = genai.embed_content(
+                                model=self.model,
+                                content=batch,
+                                task_type="retrieval_document"
+                            )
+                            if isinstance(result['embedding'][0], list):
+                                results.extend(result['embedding'])
+                            else:
+                                results.append(result['embedding'])
+                        return results
+                    
+                    def embed_query(self, text: str) -> list:
+                        """Embed a single query."""
+                        result = genai.embed_content(
+                            model=self.model,
+                            content=text,
+                            task_type="retrieval_query"
+                        )
+                        return result['embedding']
+                
+                logger.info("embeddings_init", provider="gemini", model="text-embedding-004")
+                return GeminiEmbeddings(api_key=settings.google_api_key)
+                
+            except ImportError:
+                logger.warning("gemini_embeddings_failed", error="google-generativeai not installed")
+        else:
+            logger.debug("gemini_embeddings_skipped", reason="GOOGLE_API_KEY not set")
+
     # OpenAI embeddings
     if provider == "openai" and settings.openai_api_key:
         logger.info("embeddings_init", provider="openai", model=model)
