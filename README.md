@@ -337,9 +337,9 @@ LLM_PROVIDER=google              # google, anthropic, openrouter
 DEEP_REASONING_MODEL=gemini-3-flash-preview
 ROUTING_MODEL=gemini-3-flash-preview
 
-# Embedding Provider (defaults to Google/Gemini - FREE)
-EMBEDDING_PROVIDER=google        # google, openai, openrouter
-EMBEDDING_MODEL=text-embedding-004
+# Embedding Provider (defaults to openrouter, set to google for FREE tier)
+EMBEDDING_PROVIDER=google        # google (FREE), openai, openrouter
+EMBEDDING_MODEL=text-embedding-004  # For Google: text-embedding-004
 
 # Mode
 LEAN_MODE=true                   # true = 8 tools, false = 77 tools
@@ -454,7 +454,7 @@ Omni contains the world's largest collection of formalized cognitive architectur
 </details>
 
 <details>
-<summary><h3>✅ Verification & Claim Integrity (8) — NEW</h3></summary>
+<summary><h3>✅ Verification & Claim Integrity (8)</h3></summary>
 
 | Framework | Best For |
 |:---|:---|
@@ -469,7 +469,7 @@ Omni contains the world's largest collection of formalized cognitive architectur
 </details>
 
 <details>
-<summary><h3>🤖 Agent Orchestration (5) — NEW</h3></summary>
+<summary><h3>🤖 Agent Orchestration (5)</h3></summary>
 
 | Framework | Best For |
 |:---|:---|
@@ -481,7 +481,7 @@ Omni contains the world's largest collection of formalized cognitive architectur
 </details>
 
 <details>
-<summary><h3>📚 RAG & Retrieval Grounding (5) — NEW</h3></summary>
+<summary><h3>📚 RAG & Retrieval Grounding (5)</h3></summary>
 
 | Framework | Best For |
 |:---|:---|
@@ -534,16 +534,21 @@ Omni-Cortex uses a **two-tier intelligence architecture**:
 7. **Memory System**: Episodic memory for cross-session learning
 8. **Context Optimization**: Token counting, compression, truncation detection
 
-### Example: Tree of Thoughts
+### Example: Multi-Turn Framework Orchestration
 
-When you use Tree of Thoughts, the server:
-1. Requests 3 solution branches from client (temp=0.8)
-2. Requests evaluation of each branch (temp=0.2)
-3. Selects best based on extracted scores
-4. Requests expansion of winner (temp=0.3)
-5. Returns final solution + metadata
+When frameworks execute (e.g., Tree of Thoughts), the server:
+1. **Branches**: Generates multiple solution paths via MCP sampling
+2. **Evaluates**: Scores each branch for quality/correctness
+3. **Selects**: Picks best candidate based on evaluation
+4. **Expands**: Continues development of winning path
+5. **Returns**: Final solution with reasoning trace and metadata
 
-**No API keys needed** - all inference happens in your local Claude Desktop client.
+**How MCP Sampling Works**:
+- Server orchestrates the reasoning algorithm (branching, voting, iteration)
+- Each LLM call goes through configured provider (Gemini, Claude, or OpenRouter)
+- For Claude Desktop: Inference happens in your local client (via MCP)
+- For Gemini: Uses Google AI API (requires free API key)
+- Result: Server coordinates, client/API executes
 
 ---
 
