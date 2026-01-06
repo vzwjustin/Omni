@@ -62,6 +62,15 @@ from app.collection_manager import get_collection_manager
 from app.core.router import HyperRouter
 from app.core.vibe_dictionary import VIBE_DICTIONARY
 from app.core.context_gateway import get_context_gateway, StructuredContext
+from app.core.context_utils import (
+    count_tokens,
+    compress_content,
+    detect_truncation,
+    analyze_claude_md,
+    generate_claude_md_template,
+    inject_rules,
+    RULE_PRESETS,
+)
 
 import os
 # LEAN_MODE: Only expose essential tools (reason + utilities) to reduce MCP token overhead
@@ -1139,6 +1148,62 @@ def create_server() -> Server:
                 inputSchema={"type": "object", "properties": {}}
             ))
 
+            # 5-9. Context optimization tools (merged from context-optimizer)
+            tools.append(Tool(
+                name="count_tokens",
+                description="Count tokens in text using Claude's tokenizer",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "text": {"type": "string", "description": "Text to count tokens for"}
+                    },
+                    "required": ["text"]
+                }
+            ))
+
+            tools.append(Tool(
+                name="compress_content",
+                description="Compress file content by removing comments/whitespace. Achieves 30-70% token reduction.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "content": {"type": "string", "description": "Content to compress"},
+                        "target_reduction": {"type": "number", "description": "Target reduction 0.0-1.0 (default: 0.3)"}
+                    },
+                    "required": ["content"]
+                }
+            ))
+
+            tools.append(Tool(
+                name="detect_truncation",
+                description="Detect if text is truncated (unclosed blocks, incomplete sentences)",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "text": {"type": "string", "description": "Text to check"}
+                    },
+                    "required": ["text"]
+                }
+            ))
+
+            tools.append(Tool(
+                name="manage_claude_md",
+                description="Analyze, generate, or inject rules into CLAUDE.md files",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "action": {"type": "string", "enum": ["analyze", "generate", "inject", "list_presets"], "description": "Action to perform"},
+                        "directory": {"type": "string", "description": "Project directory (for analyze)"},
+                        "project_type": {"type": "string", "enum": ["general", "python", "typescript", "react", "rust"], "description": "Project type (for generate)"},
+                        "rules": {"type": "array", "items": {"type": "string"}, "description": "Custom rules to add"},
+                        "presets": {"type": "array", "items": {"type": "string"}, "description": "Presets: security, performance, testing, documentation, code_quality, git, context_optimization"},
+                        "existing_content": {"type": "string", "description": "Existing CLAUDE.md content (for inject)"},
+                        "section": {"type": "string", "description": "Section name for injection (default: Rules)"}
+                    },
+                    "required": ["action"]
+                }
+            ))
+
             return tools
 
         # =======================================================================
@@ -1695,13 +1760,13 @@ def create_server() -> Server:
         if name == "health":
             collections = list(manager.COLLECTIONS.keys())
             if LEAN_MODE:
-                # Ultra-lean: 4 tools (prepare_context, reason, execute_code, health)
-                exposed_tools = 4
-                note = "ULTRA-LEAN MODE: 4 tools exposed (prepare_context, reason, execute_code, health). Gemini handles context prep, 62 frameworks available internally."
+                # Ultra-lean: 8 tools (4 core + 4 context utils)
+                exposed_tools = 8
+                note = "ULTRA-LEAN MODE: 8 tools exposed (prepare_context, reason, execute_code, health + count_tokens, compress_content, detect_truncation, manage_claude_md). Gemini handles context prep, 62 frameworks available internally."
             else:
-                # Full mode: 62 think_* + 15 utilities = 77 tools
-                exposed_tools = len(FRAMEWORKS) + 15
-                note = "FULL MODE: All 77 tools exposed (62 think_* + 15 utilities)"
+                # Full mode: 62 think_* + 19 utilities = 81 tools
+                exposed_tools = len(FRAMEWORKS) + 19
+                note = "FULL MODE: All 81 tools exposed (62 think_* + 19 utilities)"
             return [TextContent(type="text", text=json.dumps({
                 "status": "healthy",
                 "mode": "ultra-lean" if LEAN_MODE else "full",
@@ -1748,6 +1813,52 @@ def create_server() -> Server:
                     "hint": "Ensure GOOGLE_API_KEY is set for Gemini-powered context preparation"
                 }, indent=2))]
 
+        # Context optimization tools (merged from context-optimizer)
+        if name == "count_tokens":
+            text = arguments.get("text", "")
+            tokens = count_tokens(text)
+            return [TextContent(type="text", text=json.dumps({"tokens": tokens, "characters": len(text)}))]
+
+        if name == "compress_content":
+            content = arguments.get("content", "")
+            target = arguments.get("target_reduction", 0.3)
+            result = compress_content(content, target)
+            return [TextContent(type="text", text=json.dumps(result, indent=2))]
+
+        if name == "detect_truncation":
+            text = arguments.get("text", "")
+            result = detect_truncation(text)
+            return [TextContent(type="text", text=json.dumps(result, indent=2))]
+
+        if name == "manage_claude_md":
+            action = arguments.get("action", "analyze")
+
+            if action == "analyze":
+                directory = arguments.get("directory", os.getcwd())
+                result = analyze_claude_md(directory)
+                return [TextContent(type="text", text=json.dumps(result, indent=2))]
+
+            elif action == "generate":
+                project_type = arguments.get("project_type", "general")
+                rules = arguments.get("rules", [])
+                presets = arguments.get("presets", [])
+                result = generate_claude_md_template(project_type, rules, presets)
+                return [TextContent(type="text", text=result)]
+
+            elif action == "inject":
+                existing = arguments.get("existing_content", "")
+                rules = arguments.get("rules", [])
+                presets = arguments.get("presets", [])
+                section = arguments.get("section", "Rules")
+                result = inject_rules(existing, rules, section, presets)
+                return [TextContent(type="text", text=result)]
+
+            elif action == "list_presets":
+                result = {name: {"rules": rules, "count": len(rules)} for name, rules in RULE_PRESETS.items()}
+                return [TextContent(type="text", text=json.dumps(result, indent=2))]
+
+            return [TextContent(type="text", text=f"Unknown action: {action}")]
+
         return [TextContent(type="text", text=f"Unknown tool: {name}")]
 
     return server
@@ -1762,14 +1873,15 @@ async def main():
     logger.info("Memory: LangChain ConversationBufferMemory")
     logger.info("RAG: ChromaDB with 6 collections")
     if LEAN_MODE:
-        logger.info("Mode: ULTRA-LEAN (4 tools)")
-        logger.info("  Tools: prepare_context, reason, execute_code, health")
+        logger.info("Mode: ULTRA-LEAN (8 tools)")
+        logger.info("  Core: prepare_context, reason, execute_code, health")
+        logger.info("  Context: count_tokens, compress_content, detect_truncation, manage_claude_md")
         logger.info("  Gemini 3 Flash: Context prep, file discovery, doc search")
         logger.info("  62 frameworks available internally via HyperRouter")
-        logger.info("  Set LEAN_MODE=false for full 77-tool access")
+        logger.info("  Set LEAN_MODE=false for full 81-tool access")
     else:
-        logger.info(f"Mode: FULL ({len(FRAMEWORKS) + 15} tools)")
-        logger.info(f"  {len(FRAMEWORKS)} think_* tools + 15 utilities")
+        logger.info(f"Mode: FULL ({len(FRAMEWORKS) + 19} tools)")
+        logger.info(f"  {len(FRAMEWORKS)} think_* tools + 19 utilities")
     logger.info("=" * 60)
 
     server = create_server()
