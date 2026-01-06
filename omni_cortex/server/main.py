@@ -61,6 +61,7 @@ from app.langchain_integration import (
 from app.collection_manager import get_collection_manager
 from app.core.router import HyperRouter
 from app.core.vibe_dictionary import VIBE_DICTIONARY
+from app.core.context_gateway import get_context_gateway, StructuredContext
 
 import os
 # LEAN_MODE: Only expose essential tools (reason + utilities) to reduce MCP token overhead
@@ -1268,6 +1269,28 @@ def create_server() -> Server:
             inputSchema={"type": "object", "properties": {}}
         ))
 
+        # Context Gateway - Gemini-powered context preparation for Claude
+        tools.append(Tool(
+            name="prepare_context",
+            description="Gemini prepares rich, structured context for Claude. Does the heavy lifting: analyzes query, discovers relevant files, fetches documentation, ranks by relevance. Returns organized context packet so Claude can focus on deep reasoning instead of egg-hunting.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "The task or problem to prepare context for"},
+                    "workspace_path": {"type": "string", "description": "Path to workspace/project directory"},
+                    "code_context": {"type": "string", "description": "Any code snippets to consider"},
+                    "file_list": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Pre-specified files to analyze"
+                    },
+                    "search_docs": {"type": "boolean", "description": "Whether to search web for documentation (default: true)"},
+                    "output_format": {"type": "string", "enum": ["prompt", "json"], "description": "Output as Claude prompt or raw JSON (default: prompt)"}
+                },
+                "required": ["query"]
+            }
+        ))
+
         return tools
 
     @server.call_tool()
@@ -1600,10 +1623,10 @@ def create_server() -> Server:
         # Health check
         if name == "health":
             collections = list(manager.COLLECTIONS.keys())
-            utility_tools = 14  # reason, list_frameworks, recommend, get_context, save_context,
+            utility_tools = 15  # reason, list_frameworks, recommend, get_context, save_context,
                                # search_documentation, search_frameworks_by_name, search_by_category,
                                # search_function, search_class, search_docs_only, search_framework_category,
-                               # execute_code, health
+                               # execute_code, health, prepare_context
             exposed_tools = utility_tools if LEAN_MODE else len(FRAMEWORKS) + utility_tools
             return [TextContent(type="text", text=json.dumps({
                 "status": "healthy",
@@ -1615,6 +1638,40 @@ def create_server() -> Server:
                 "rag_enabled": True,
                 "note": "LEAN_MODE=true: Only 'reason' tool exposed. HyperRouter handles framework selection internally." if LEAN_MODE else "All think_* tools exposed"
             }, indent=2))]
+
+        # Context Gateway - Gemini-powered context preparation
+        if name == "prepare_context":
+            query = arguments.get("query", "")
+            workspace_path = arguments.get("workspace_path")
+            code_context = arguments.get("code_context")
+            file_list = arguments.get("file_list")
+            search_docs = arguments.get("search_docs", True)
+            output_format = arguments.get("output_format", "prompt")
+
+            try:
+                gateway = get_context_gateway()
+                context = await gateway.prepare_context(
+                    query=query,
+                    workspace_path=workspace_path,
+                    code_context=code_context,
+                    file_list=file_list,
+                    search_docs=search_docs,
+                )
+
+                if output_format == "json":
+                    return [TextContent(type="text", text=json.dumps(context.to_dict(), indent=2))]
+                else:
+                    # Return rich, structured prompt ready for Claude
+                    output = "# Context Prepared by Gemini\n\n"
+                    output += context.to_claude_prompt()
+                    return [TextContent(type="text", text=output)]
+
+            except Exception as e:
+                logger.error(f"Context gateway failed: {e}")
+                return [TextContent(type="text", text=json.dumps({
+                    "error": str(e),
+                    "hint": "Ensure GOOGLE_API_KEY is set for Gemini-powered context preparation"
+                }, indent=2))]
 
         return [TextContent(type="text", text=f"Unknown tool: {name}")]
 
@@ -1629,10 +1686,12 @@ async def main():
     logger.info(f"Graph nodes: {len(FRAMEWORK_NODES)} LangGraph nodes")
     logger.info("Memory: LangChain ConversationBufferMemory")
     logger.info("RAG: ChromaDB with 6 collections")
-    utility_tools = 14
+    logger.info("Context Gateway: Gemini-powered context preparation")
+    utility_tools = 15
     if LEAN_MODE:
-        logger.info(f"LEAN_MODE: ON - Exposing {utility_tools} tools (reason + utilities)")
+        logger.info(f"LEAN_MODE: ON - Exposing {utility_tools} tools (reason + utilities + prepare_context)")
         logger.info("  -> Framework selection handled by HyperRouter internally")
+        logger.info("  -> Context preparation handled by Gemini Flash")
         logger.info("  -> Set LEAN_MODE=false to expose all think_* tools")
     else:
         logger.info(f"Tools: {len(FRAMEWORKS)} think_* + {utility_tools} utility = {len(FRAMEWORKS) + utility_tools} total")

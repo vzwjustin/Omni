@@ -24,7 +24,7 @@ class OmniCortexSettings(BaseSettings):
     mcp_server_port: int = Field(default=8000, alias="MCP_SERVER_PORT")
 
     # Routing
-    routing_model: str = Field(default="gemini-2.0-flash", alias="ROUTING_MODEL")
+    routing_model: str = Field(default="gemini-3-flash-preview", alias="ROUTING_MODEL")
     routing_temperature: float = Field(default=0.7, ge=0.0, le=2.0, alias="ROUTING_TEMPERATURE")
 
     # LLM
