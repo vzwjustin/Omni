@@ -1,14 +1,190 @@
 # 🧠 Omni Cortex
-### The Headless Strategy Engine for AI Coding Agents
+### The Gemini-Powered Context Gateway & Reasoning Engine for Claude
 
 [![Docker](https://img.shields.io/badge/docker-latest-blue?style=for-the-badge&logo=docker&logoColor=white)](https://hub.docker.com/r/vzwjustin/omni-cortex)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge&logo=github)](LICENSE)
 [![MCP Compatible](https://img.shields.io/badge/MCP-Compatible-green?style=for-the-badge)](https://modelcontextprotocol.io)
 [![Frameworks](https://img.shields.io/badge/Frameworks-62-purple?style=for-the-badge)](omni_cortex/FRAMEWORKS.md)
 
-**Omni Cortex** is an MCP server that gives your IDE's AI access to **62 fully implemented reasoning frameworks**. Each framework executes as a real multi-turn orchestration - not just prompt templates, but actual algorithmic reasoning flows.
+**Omni Cortex** is an MCP server that supercharges Claude with:
+- 🎯 **Gemini-Powered Context Gateway**: Gemini 3 Flash does the "egg hunting" - analyzing queries, discovering relevant files, searching code/docs, and structuring rich context so Claude can focus on deep reasoning
+- 🧠 **62 Real Reasoning Frameworks**: Multi-turn orchestrations (not templates) with actual algorithmic flows - branching, voting, iteration, evaluation
+- 🗜️ **Context Optimization Tools**: Token counting, 30-70% content compression, truncation detection, CLAUDE.md rule management
+- 📚 **16K+ Training Examples**: ChromaDB knowledge base with bug-fix patterns, reasoning chains, and code examples
+- ⚡ **Ultra-Lean Mode**: Just 8 tools exposed - full power, zero bloat
 
-> **"Don't memorize complex prompt engineering. Just tell Omni how you feel about the code, and it orchestrates multi-turn reasoning using the perfect framework."**
+> **"Gemini finds the needles in the haystack. Claude does the deep thinking."**
+
+---
+
+## 🚀 Quick Start
+
+### 1. Get Gemini API Key (Free)
+Visit https://aistudio.google.com/apikey and grab a free API key (1500 embedding requests/day).
+
+### 2. Add to Claude Desktop / Cursor
+
+Edit your MCP config (`~/Library/Application Support/Claude/claude_desktop_config.json` on Mac):
+
+```json
+{
+  "mcpServers": {
+    "omni-cortex": {
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "-v", "/path/to/your/code:/code",
+        "-e", "GOOGLE_API_KEY=your_gemini_key_here",
+        "vzwjustin/omni-cortex:latest"
+      ]
+    }
+  }
+}
+```
+
+### 3. Restart Your IDE
+
+Claude now has access to:
+- **prepare_context**: Gemini analyzes your codebase, finds relevant files, searches docs
+- **reason**: Auto-selects best framework from 62 options
+- **compress_content**: Reduce token usage by 30-70%
+- **count_tokens**: Know exactly how many tokens you're using
+- **execute_code**: Run Python in sandbox for validation
+
+### 4. Usage Example
+
+In Claude Desktop:
+
+```
+You: "This async handler crashes under load. Find the bug."
+
+Claude uses:
+1. prepare_context → Gemini discovers handlers, searches git history, finds similar bugs in knowledge base
+2. reason → Auto-selects Debug Detective chain (self_ask → active_inference → verify_and_edit)
+3. Returns fix with detailed reasoning trace
+```
+
+**That's it!** No need to manually select frameworks or specify which files to read. Gemini does the prep, Claude does the reasoning.
+
+---
+
+## 🎯 Context Gateway: Gemini → Claude Intelligence Pipeline
+
+**The Problem**: Claude wastes tokens searching files, grepping code, fetching docs - burning context on "egg hunting" instead of deep reasoning.
+
+**The Solution**: Gemini 3 Flash (cheap, fast) does the prep work and hands Claude a perfectly organized brief.
+
+### How It Works
+
+```
+User Query → Gemini Context Gateway → Structured Context → Claude Deep Reasoning
+                    ↓
+        1. Analyze intent & extract keywords
+        2. Discover relevant files (with scoring)
+        3. Search code (grep/ripgrep/git)
+        4. Fetch documentation from web
+        5. Query ChromaDB knowledge base (16K+ examples)
+        6. Structure everything into organized brief
+```
+
+### What You Get
+
+- **File Discovery**: Gemini scores files by relevance (0-1), extracts key elements (functions, classes), summarizes content
+- **Code Search**: Automated grep/ripgrep/git searches with match counts and context
+- **Documentation**: Fetches relevant docs from web with snippets and relevance scores
+- **Knowledge Base**: Pulls from 16K+ bug-fixes, reasoning patterns, and code examples in ChromaDB
+- **Structured Output**: Organized brief with execution plan, relevant files, and context - ready for Claude
+
+### Example
+
+```json
+{
+  "query": "Fix the async handler that crashes under load",
+  "files": [
+    {
+      "path": "src/handlers/async.py",
+      "relevance": 0.95,
+      "summary": "Main async request handler with connection pooling",
+      "key_elements": ["handle_request", "ConnectionPool", "async_timeout"]
+    }
+  ],
+  "code_search": {
+    "type": "grep",
+    "query": "async.*handler.*crash",
+    "matches": 12,
+    "context": "..."
+  },
+  "knowledge_base_insights": [
+    "Similar async race condition in PyResBugs #4231",
+    "Common pattern: missing await in error handler"
+  ],
+  "plan": "1. Check error handler for missing awaits\n2. Verify connection pool cleanup\n3. Add timeout guards"
+}
+```
+
+**Cost Savings**: Gemini 3 Flash is **15x cheaper** than Claude Opus 4.5 for context prep. Let the cheap model do the grunt work.
+
+---
+
+## 🗜️ Context Optimization Tools
+
+Four specialized tools to manage token budgets and optimize context:
+
+### 1. **count_tokens**
+Uses Claude's tokenizer (tiktoken cl100k_base) to accurately count tokens before sending to Claude.
+
+```python
+count_tokens(text="your code here")
+# Returns: {"tokens": 1234, "characters": 5678}
+```
+
+### 2. **compress_content**
+Intelligently removes comments, whitespace, and redundant formatting while preserving code structure.
+
+- **30-70% token reduction** on typical codebases
+- Preserves function signatures, class definitions, and logic
+- Configurable target reduction (default: 30%)
+
+```python
+compress_content(content="...", target_reduction=0.5)
+# Returns compressed code with ~50% fewer tokens
+```
+
+### 3. **detect_truncation**
+Identifies incomplete code blocks, unclosed syntax, and truncated content with confidence scoring.
+
+```python
+detect_truncation(text="def foo():\n    return...")
+# Returns: {
+#   "is_truncated": true,
+#   "confidence": 0.85,
+#   "issues": ["Incomplete function body", "Missing closing brace"],
+#   "last_complete_line": 1
+# }
+```
+
+### 4. **manage_claude_md**
+Analyze, generate, or inject rules into CLAUDE.md files for consistent agent behavior.
+
+**Actions**:
+- `analyze`: Scan project and suggest rules
+- `generate`: Create CLAUDE.md template for project type (Python, TypeScript, React, Rust)
+- `inject`: Add rules to existing CLAUDE.md
+- `list_presets`: Show available rule categories
+
+**Rule Presets**: security, performance, testing, documentation, code_quality, git, context_optimization
+
+```python
+manage_claude_md(
+  action="generate",
+  project_type="python",
+  presets=["security", "testing", "performance"]
+)
+```
+
+**Why This Matters**: Stay within Claude's context limits, reduce API costs, and maintain code integrity when working with large codebases.
+
+---
 
 ## 🔥 Real Orchestrations, Not Templates
 
@@ -86,14 +262,15 @@ Each framework passes its output to the next. The final answer incorporates insi
 
 ## ⚡ Installation
 
-### Option 1: The One-Liner (Docker)
-The easiest way to perform a "Headless Transformation" on your IDE.
+### Option 1: Docker (Recommended)
+
 ```bash
 docker pull vzwjustin/omni-cortex:latest
 ```
 
 ### Option 2: Add to MCP Config
-Add this to your IDE's MCP settings file (e.g., `claude_desktop_config.json` or Cursor settings):
+
+Add to your IDE's MCP settings file (`claude_desktop_config.json`, Cursor settings, etc.):
 
 ```json
 {
@@ -105,14 +282,83 @@ Add this to your IDE's MCP settings file (e.g., `claude_desktop_config.json` or 
         "--rm",
         "-i",
         "-v", "/path/to/your/code:/code",
+        "-e", "GOOGLE_API_KEY=your_gemini_key_here",
         "vzwjustin/omni-cortex:latest"
       ]
     }
   }
 }
 ```
-*(Replace `/path/to/your/code` with your actual project directory)*
-*(Note: Mounting your code volume allows Omni to read your codebase for context-aware strategies.)*
+
+**Important**:
+- Replace `/path/to/your/code` with your project directory
+- Get a **free Gemini API key** at https://aistudio.google.com/apikey
+- Gemini 3 Flash is **free** with generous limits (1500 requests/day for embeddings)
+- Code volume mounting enables Context Gateway to discover and analyze your files
+
+### Configuration
+
+Set these environment variables (optional, sensible defaults provided):
+
+```bash
+# API Keys (Gemini recommended for cost-effectiveness)
+GOOGLE_API_KEY=your_key          # For Context Gateway + embeddings (FREE)
+ANTHROPIC_API_KEY=your_key       # Optional: if using Anthropic models
+OPENAI_API_KEY=your_key          # Optional: for OpenAI embeddings
+OPENROUTER_API_KEY=your_key      # Optional: for OpenRouter models
+
+# Models (defaults to Gemini 3 Flash)
+LLM_PROVIDER=google              # google, anthropic, openrouter
+DEEP_REASONING_MODEL=gemini-3-flash-preview
+ROUTING_MODEL=gemini-3-flash-preview
+
+# Embedding Provider (defaults to Google/Gemini - FREE)
+EMBEDDING_PROVIDER=google        # google, openai, openrouter
+EMBEDDING_MODEL=text-embedding-004
+
+# Mode
+LEAN_MODE=true                   # true = 8 tools, false = 77 tools
+```
+
+See [omni_cortex/.env.example](omni_cortex/.env.example) for complete configuration options.
+
+---
+
+## 🎛️ Operating Modes
+
+### Ultra-Lean Mode (Default) - 8 Tools, Full Power
+
+**The Problem**: Exposing 62+ framework tools bloats Claude's context window with tool descriptions, leaving less room for your code.
+
+**The Solution**: Expose only 8 essential tools. All 62 frameworks available internally via smart routing.
+
+**Tools Exposed**:
+1. **prepare_context** - Gemini-powered context gateway
+2. **reason** - Auto-selects best framework(s) from all 62
+3. **execute_code** - Sandboxed Python execution
+4. **health** - Server status check
+5. **count_tokens** - Claude tokenizer
+6. **compress_content** - 30-70% token reduction
+7. **detect_truncation** - Find incomplete code blocks
+8. **manage_claude_md** - CLAUDE.md rule management
+
+**Benefits**:
+- ✅ **Minimal context overhead** - only 8 tool descriptions vs 77
+- ✅ **Full framework access** - all 62 frameworks available via routing
+- ✅ **Smart selection** - HyperRouter picks optimal framework(s)
+- ✅ **Automatic chaining** - complex tasks get 2-4 frameworks in sequence
+
+**When to Use**: Default for most users. Let the router do the thinking.
+
+### Full Mode - 77 Tools Exposed
+
+Set `LEAN_MODE=false` to expose all tools individually:
+- 62 `think_*` framework tools (direct access to each framework)
+- 15 utility tools (memory, RAG, search, execution, etc.)
+
+**When to Use**: When you want explicit control over which framework to use, or for testing/debugging specific frameworks.
+
+**Trade-off**: More context overhead from tool descriptions, but direct framework selection.
 
 ---
 
@@ -223,28 +469,45 @@ Omni contains the world's largest collection of formalized cognitive architectur
 
 ---
 
-## 🧠 Architecture: Multi-Turn Orchestration
+## 🧠 Architecture: Gemini + Multi-Turn Orchestration
 
-Omni-Cortex **executes real reasoning algorithms** using MCP client sampling.
+Omni-Cortex uses a **two-tier intelligence architecture**:
 
 ```
-User Query → Category Router → Specialist Agent → Framework Chain → Multi-Turn Executor
-                  ↓                   ↓                  ↓                    ↓
-            "debug"           Debug Detective      [fw1, fw2, fw3]    Server orchestrates
-            "code_gen"        Code Architect           ↓              multiple client calls
-            "refactor"        Refactor Surgeon    Each framework     per framework
-                ...                               runs its algorithm  (branch, evaluate, etc.)
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    TIER 1: GEMINI CONTEXT GATEWAY                       │
+│  (Cheap, Fast - Egg Hunting & Prep Work)                                │
+├─────────────────────────────────────────────────────────────────────────┤
+│  Query Analysis → File Discovery → Code Search → Doc Fetch → ChromaDB  │
+│       ↓               ↓                ↓             ↓           ↓       │
+│   Intent +      Relevance        grep/git       Web Docs    16K+ KB     │
+│   Keywords      Scoring 0-1      matches        snippets    patterns    │
+└───────────────────────────────┬─────────────────────────────────────────┘
+                                │
+                         Structured Context
+                                │
+                                ↓
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    TIER 2: CLAUDE REASONING ENGINE                      │
+│  (Expensive, Powerful - Deep Reasoning)                                 │
+├─────────────────────────────────────────────────────────────────────────┤
+│  HyperRouter → Specialist Agent → Framework Chain → Multi-Turn Exec    │
+│       ↓              ↓                   ↓                    ↓          │
+│  Category    Domain Expert        [fw1→fw2→fw3]      Branching,        │
+│  Detection   Picks Chain          Sequence Exec      Voting, Iteration │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
-### How It Works
+### System Components
 
-1.  **Hierarchical Router**: Two-stage routing—fast category match, then specialist selection
-2.  **Specialist Agents**: 9 domain experts that understand their framework toolbox
-3.  **Framework Chaining**: Complex tasks get 2-4 frameworks run in sequence
-4.  **Multi-Turn Executor**: Each framework makes multiple calls to client for its algorithm
-5.  **MCP Sampling**: Server requests completions from client (no external APIs)
-6.  **Memory**: Episodic memory + RAG for cross-session learning
-7.  **Training Data Knowledge Base**: 16K+ examples (debugging, reasoning, instructions) with embeddings
+1. **Context Gateway (Gemini)**: Preprocessing layer that discovers files, searches code, fetches docs, queries knowledge base
+2. **HyperRouter**: Two-stage routing - category detection → specialist selection
+3. **Specialist Agents**: 9 domain experts (Debug Detective, Code Architect, etc.)
+4. **Framework Chaining**: Complex tasks get 2-4 frameworks in sequence
+5. **Multi-Turn Orchestration**: Each framework executes its algorithm via MCP sampling
+6. **ChromaDB Knowledge Base**: 16K+ training examples across debugging, reasoning, and instruction datasets
+7. **Memory System**: Episodic memory for cross-session learning
+8. **Context Optimization**: Token counting, compression, truncation detection
 
 ### Example: Tree of Thoughts
 
@@ -278,51 +541,70 @@ See [FRAMEWORKS.md](omni_cortex/FRAMEWORKS.md) for complete documentation.
 
 ---
 
-## 📊 Recent Updates (2026-01-05)
+## 📊 Recent Updates (2026-01-06)
 
-**🔥 All 62 Frameworks Now Real Multi-Turn Orchestrations**
-- ✅ Converted all frameworks from prompt templates to actual implementations
-- ✅ Each framework executes its specific algorithm (branching, voting, iteration)
-- ✅ Multi-turn orchestration via MCP client sampling (no external APIs)
-- ✅ Structured results with metadata (iterations, scores, reasoning traces)
-- ✅ Server-side coordination, client-side inference
-- ✅ LangChain/LangGraph utilities preserved for memory and RAG
+### 🎯 NEW: Gemini-Powered Context Gateway
+The biggest update yet - a complete intelligence pipeline redesign:
 
-**🐛 NEW: LLM Training Data Knowledge Base**
-- 🎯 Integrated **16,000+ curated training examples** across three categories
-- 📊 **Debugging** (10K examples) - Six specialized datasets:
-  - **PyResBugs** (5K pairs) - Production bugs from real Python projects
-  - **HaPy-Bug** (793 pairs) - Expert-annotated bug-fix commits
-  - **Learning-Fixes** - Line-aligned bug-fix patterns
-  - **Muennighoff/python-bugs** (1-10K) - Curated Python bug collection
-  - **alexjercan/bugnet** - CodeNet competition bugs with error messages
-  - **HuggingFaceH4/Code-Feedback** - Code review and feedback patterns
-- 🧠 **Reasoning** (6K examples) - Chain-of-thought datasets:
-  - **moremilk/General_Inquiry_Thinking-Chain-Of-Thought** (6K) - Step-by-step logic
-  - **AlekseyKorshuk/chain-of-thoughts-chatml** - Structured reasoning patterns
-- 📝 **Instructions** (12K examples, sampled) - Coding task datasets:
-  - **nampdn-ai/tiny-codes** (1.6M snippets, sampled to 10K) - High-quality commented code
-  - **HuggingFaceH4/helpful_instructions** - Instruction-completion pairs
-- 🔧 Vector embeddings stored in ChromaDB for instant semantic search
-- 🔍 Intelligent filtering by bug type, reasoning pattern, or instruction type
-- 💡 Auto-suggests fixes, reasoning patterns, and code examples
-- 🚀 **Quick start**: `python3 scripts/ingest_training_data.py --all`
-- 📦 Category-based ingestion: `--category debugging|reasoning|instruction`
-- ⚙️ **Requires API key**: Set `OPENAI_API_KEY` or `OPENROUTER_API_KEY` for embeddings
-- 📖 See [TRAINING_DATASETS.md](omni_cortex/scripts/TRAINING_DATASETS.md) for complete guide
+**Context Gateway (prepare_context tool)**:
+- ✅ Gemini 3 Flash analyzes queries and discovers relevant files with scoring
+- ✅ Automated code search via grep/ripgrep/git with match counts
+- ✅ Web documentation fetching with relevance scoring
+- ✅ ChromaDB knowledge base integration (16K+ training examples)
+- ✅ Structured output with execution plan ready for Claude
+- ✅ **15x cheaper** than using Claude for context prep
+- ✅ Gemini does the "egg hunting", Claude does deep reasoning
 
-**Architecture Highlights**:
-- 🎯 Sophisticated 3-stage hierarchical routing (category → specialist → framework chain)
-- 🧠 2,000+ vibe patterns for natural language matching
-- 🔗 24 pre-defined framework chains for complex tasks
-- 💾 Multi-collection RAG with 10 ChromaDB collections:
-  - Frameworks, documentation, configs, utilities, tests, integrations (codebase)
-  - Learnings (runtime solutions)
-  - **Debugging knowledge** (10K bug-fix pairs)
-  - **Reasoning knowledge** (6K chain-of-thought examples)
-  - **Instruction knowledge** (12K code examples)
-- 🏗️ Clean separation: 9 categories, 9 specialist agents, 62 frameworks
-- 🚀 Real algorithmic execution for every framework
+**Gemini Integration**:
+- ✅ Default LLM provider now Google/Gemini (free tier available)
+- ✅ Gemini 3 Flash Preview as default model
+- ✅ Gemini embeddings support (FREE, 1500 requests/day)
+- ✅ Get free API key at https://aistudio.google.com/apikey
+
+### 🗜️ NEW: Context Optimization Tools (4 Tools)
+Merged from context-optimizer project:
+
+- **count_tokens**: Claude tokenizer (tiktoken cl100k_base) for accurate token counting
+- **compress_content**: 30-70% token reduction while preserving code structure
+- **detect_truncation**: Identify incomplete code blocks with confidence scoring
+- **manage_claude_md**: Analyze, generate, inject rules into CLAUDE.md files
+  - 7 rule presets: security, performance, testing, documentation, code_quality, git, context_optimization
+
+### ⚡ Ultra-Lean Mode (Default)
+**The Problem**: 62+ tool descriptions bloat Claude's context window
+
+**The Solution**: Expose only 8 essential tools, all 62 frameworks available via auto-routing
+- ✅ 8 tools exposed (vs 77 in full mode)
+- ✅ Minimal context overhead
+- ✅ Full framework access via HyperRouter
+- ✅ Automatic framework chaining for complex tasks
+
+**Tool Counts**:
+- LEAN_MODE=true (default): **8 tools** exposed, 62 frameworks internal
+- LEAN_MODE=false: **77 tools** exposed (62 think_* + 15 utilities)
+
+### 📚 Knowledge Base (Existing, Now Enhanced)
+16K+ training examples across 3 categories:
+
+**Debugging** (10K examples):
+- PyResBugs, HaPy-Bug, Learning-Fixes, python-bugs, bugnet, Code-Feedback
+
+**Reasoning** (6K examples):
+- General_Inquiry_Thinking-Chain-Of-Thought, chain-of-thoughts-chatml
+
+**Instructions** (12K examples):
+- tiny-codes (sampled), helpful_instructions
+
+**Setup**: `python3 scripts/ingest_training_data.py --all`
+**Requirements**: API key for embeddings (Gemini FREE, OpenAI, or OpenRouter)
+
+### 🏗️ Architecture Updates
+- ✅ Two-tier intelligence: Gemini (context prep) → Claude (deep reasoning)
+- ✅ Sophisticated 2-stage hierarchical routing (category → specialist)
+- ✅ 9 specialist agents for domain expertise
+- ✅ 24 pre-defined framework chains
+- ✅ Multi-collection ChromaDB RAG (10 collections)
+- ✅ All 62 frameworks as real multi-turn orchestrations (not templates)
 
 ---
 
