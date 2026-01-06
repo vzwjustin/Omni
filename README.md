@@ -186,77 +186,102 @@ manage_claude_md(
 
 ---
 
-## 🔥 Real Orchestrations, Not Templates
+## 🔥 How It Works: The Two-Tier Workflow
 
-These aren't simple prompt templates. Each framework is a **full implementation** that:
-- ✅ **Orchestrates multi-turn reasoning** server-side via MCP sampling
-- ✅ **Executes actual algorithms** (branching, voting, iteration, evaluation)
-- ✅ **No external API calls** - all inference happens client-side (local Claude)
-- ✅ **Returns structured results** with metadata (iterations, scores, reasoning traces)
-- ✅ **Learns from 16K+ training examples** - bug-fixes, reasoning patterns, and instruction datasets (requires API key for embeddings)
+### Step 1: Context Preparation (Gemini)
+When you call **prepare_context**, Gemini 3 Flash:
+- Analyzes your query to understand intent
+- Discovers relevant files with relevance scoring
+- Searches your codebase (grep/ripgrep/git)
+- Fetches documentation from the web
+- Queries ChromaDB knowledge base (16K+ examples)
+- Structures everything into an organized brief
 
----
+**Cost**: ~$0.0001 per query (virtually free with Gemini's free tier)
 
-## 🔮 Vibe-Based Routing
-You don't need to ask for "Active Inference" or "Chain of Verification." Just speak naturally. The **Smart Router** analyzes your intent using a comprehensive "Vibe Dictionary."
+### Step 2: Deep Reasoning (Claude)
+When you call **reason** with the prepared context:
+- HyperRouter analyzes the task (2-stage routing: category → specialist)
+- Specialist agent selects best framework(s) from 62 options
+- Framework(s) execute as **real multi-turn orchestrations** (not templates):
+  - Tree of Thoughts: Branches, evaluates, selects winner
+  - Active Inference: Hypothesis loop with evidence gathering
+  - Chain of Verification: Generate → Verify → Revise cycle
+- Returns structured results with reasoning traces
 
-| You Say | Omni Hears | Selected Strategy |
+**Cost**: Standard Claude API pricing, but you're using it for deep reasoning (its strength) not file searching (waste)
+
+### The Intelligence Division
+
+| Task | Who Does It | Why |
 |:---|:---|:---|
-| *"WTF is wrong with this? It's failing randomly!"* | **Debugging Panic** | `active_inference` (Hypothesis Testing Loop) |
-| *"This code is spaghetti. Kill it with fire."* | **Refactoring Rage** | `graph_of_thoughts` (Dependency disentanglement) |
-| *"Is this actually secure? Check for hacks."* | **Security Anxiety** | `chain_of_verification` (Red Teaming & Auditing) |
-| *"I have no idea how to start this weird problem."* | **Novelty Confusion** | `self_discover` (First Principles exploration) |
-| *"Make it faster. It's too slow."* | **Performance Need** | `tree_of_thoughts` (Optimization Search) |
-| *"Prove it with evidence from the docs."* | **Verification Need** | `rarr` (Research, Augment, Revise) |
-| *"Make the tests pass, fix the CI."* | **Execution Mode** | `swe_agent` (Repo-first execution loop) |
-| *"How do these modules relate?"* | **Architecture Query** | `graphrag` (Entity-relation grounding) |
+| Find relevant files | Gemini (cheap) | Pattern matching, scoring |
+| Search git history | Gemini (cheap) | Grep/regex operations |
+| Fetch documentation | Gemini (cheap) | Web scraping, summarization |
+| Query knowledge base | Gemini (cheap) | Embedding search |
+| **Deep reasoning** | **Claude (expensive)** | **Complex logic, code generation** |
+| **Framework orchestration** | **Claude (expensive)** | **Multi-turn algorithms** |
+
+**Result**: 15x cost savings by using each model for what it does best.
 
 ---
 
-## 🔗 Framework Chaining — NEW
+## 🔗 Smart Routing & Framework Chaining
 
-For complex tasks, Omni doesn't just pick one framework—it **chains multiple frameworks** together in a pipeline, each building on the output of the last.
+The **reason** tool uses sophisticated 2-stage routing to select the optimal approach:
 
-### How It Works
+### Hierarchical Routing
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    HIERARCHICAL ROUTING                         │
-├─────────────────────────────────────────────────────────────────┤
-│  Stage 1: CATEGORY        Fast pattern match to 1 of 9 domains │
-│  Stage 2: SPECIALIST      Domain expert picks framework chain   │
-│  Stage 3: PIPELINE        Execute frameworks in sequence        │
-└─────────────────────────────────────────────────────────────────┘
+Query → Stage 1: Category Detection → Stage 2: Specialist Selection → Framework Chain
+         (9 categories)              (9 domain experts)              (1-4 frameworks)
 ```
+
+**Stage 1 - Category Detection**: Fast pattern matching to one of 9 domains
+- `debug`, `code_gen`, `refactor`, `architecture`, `verification`, `agent`, `retrieval`, `explore`, `fast`
+
+**Stage 2 - Specialist Selection**: Domain expert picks best framework(s)
+- Each specialist has deep knowledge of their domain's framework toolbox
+- Can select single framework or chain 2-4 frameworks for complex tasks
 
 ### The 9 Specialist Agents
 
 | Specialist | Domain | Example Chain |
 |:---|:---|:---|
-| **Debug Detective** | Bug hunting, root cause | `self_ask → active_inference → verify_and_edit` |
-| **Code Architect** | New implementations | `plan_and_solve → parsel → tdd_prompting → self_refine` |
-| **Refactor Surgeon** | Code cleanup | `plan_and_solve → graph_of_thoughts → verify_and_edit` |
-| **System Architect** | Design decisions | `reason_flux → multi_agent_debate → plan_and_solve` |
-| **Verification Expert** | Security, correctness | `red_team → chain_of_verification → verify_and_edit` |
-| **Agent Orchestrator** | Multi-step tasks | `swe_agent → tdd_prompting → verify_and_edit` |
-| **Retrieval Specialist** | Docs, knowledge | `hyde → rag_fusion → rarr` |
-| **Explorer** | Novel problems | `self_discover → analogical → self_refine` |
-| **Speed Demon** | Quick fixes | `system1` (single framework, no chain) |
+| **Debug Detective** | Bug hunting, root cause analysis | `self_ask → active_inference → verify_and_edit` |
+| **Code Architect** | New feature implementation | `plan_and_solve → parsel → tdd_prompting → self_refine` |
+| **Refactor Surgeon** | Code cleanup, restructuring | `plan_and_solve → graph_of_thoughts → verify_and_edit` |
+| **System Architect** | High-level design decisions | `reason_flux → multi_agent_debate → plan_and_solve` |
+| **Verification Expert** | Security, correctness audits | `red_team → chain_of_verification → verify_and_edit` |
+| **Agent Orchestrator** | Multi-step task execution | `swe_agent → tdd_prompting → verify_and_edit` |
+| **Retrieval Specialist** | Documentation research | `hyde → rag_fusion → rarr` |
+| **Explorer** | Novel problems, unknowns | `self_discover → analogical → self_refine` |
+| **Speed Demon** | Quick fixes, simple tasks | `system1` (single framework) |
 
-### Example: Complex Bug Fix
+### Example: Debugging Workflow
 
-When you say *"This async handler crashes randomly under load, I've tried everything"*:
+**Your query**: *"This async handler crashes randomly under load"*
 
-1. **Category Match** → `debug` (vibe: "crashes", "tried everything")
-2. **Specialist Decision** → Debug Detective selects `complex_bug` chain
-3. **Pipeline Execution**:
+**Omni's process**:
+1. **prepare_context** (Gemini):
+   - Finds `src/handlers/async.py` with 0.95 relevance
+   - Greps for async error patterns
+   - Searches knowledge base: "PyResBugs #4231 - similar race condition"
+   - Returns structured context
+
+2. **reason** (Claude + HyperRouter):
+   - Category: `debug` (detected from "crashes", "randomly")
+   - Specialist: **Debug Detective**
+   - Chain selected: `complex_bug` → `self_ask → active_inference → verify_and_edit`
+
+3. **Framework execution**:
    ```
-   self_ask          →  "What exactly are we debugging?"
-   active_inference  →  Hypothesis testing loop
-   verify_and_edit   →  Validate fix, patch only what's wrong
+   self_ask:          "What conditions trigger the crash? What's the async flow?"
+   active_inference:  Test hypotheses (race condition, timeout, pool exhaustion)
+   verify_and_edit:   Validate fix against test cases, apply minimal patch
    ```
 
-Each framework passes its output to the next. The final answer incorporates insights from all three.
+**Result**: Root cause identified with high-confidence fix, backed by knowledge base patterns.
 
 ---
 
