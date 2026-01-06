@@ -1069,29 +1069,100 @@ def create_server() -> Server:
     async def list_tools() -> list[Tool]:
         tools = []
 
-        # In LEAN_MODE (default), only expose 'reason' tool - HyperRouter handles framework selection
-        # This reduces MCP tool overhead from ~60k tokens to ~5k tokens
-        # Set LEAN_MODE=false to expose all 55+ think_* tools individually
-        if not LEAN_MODE:
-            # 62 Framework tools (think_*) - LLM selects based on task
-            for name, fw in FRAMEWORKS.items():
-                # Build vibes from router for better LLM selection
-                vibes = VIBE_DICTIONARY.get(name, [])[:4]
-                vibe_str = f" Vibes: {', '.join(vibes)}" if vibes else ""
+        # =======================================================================
+        # LEAN_MODE (default): Ultra-lean - only 4 essential tools
+        # Gemini handles context prep, file discovery, RAG, and framework selection
+        # All 62 frameworks + full feature set available internally
+        # =======================================================================
+        # Set LEAN_MODE=false to expose all 77 tools (62 think_* + 15 utilities)
+        # =======================================================================
 
-                tools.append(Tool(
-                    name=f"think_{name}",
-                    description=f"[{fw['category'].upper()}] {fw['description']}. Best for: {', '.join(fw['best_for'])}.{vibe_str}",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "query": {"type": "string", "description": "Your task or problem"},
-                            "context": {"type": "string", "description": "Code snippet or additional context"},
-                            "thread_id": {"type": "string", "description": "Thread ID for memory persistence across turns"}
+        if LEAN_MODE:
+            # ULTRA-LEAN: 4 tools - Gemini does the heavy lifting
+            # Full feature set (62 frameworks, RAG, memory) available internally
+
+            # 1. Context Gateway - Gemini prepares everything
+            tools.append(Tool(
+                name="prepare_context",
+                description="Gemini 3 Flash prepares rich, structured context for Claude. Analyzes query, discovers relevant files (with relevance scoring), fetches documentation, generates execution plan. Returns organized brief so Claude can focus on deep reasoning instead of searching.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "The task or problem to prepare context for"},
+                        "workspace_path": {"type": "string", "description": "Path to workspace/project directory"},
+                        "code_context": {"type": "string", "description": "Any code snippets to consider"},
+                        "file_list": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Pre-specified files to analyze"
                         },
-                        "required": ["query"]
-                    }
-                ))
+                        "search_docs": {"type": "boolean", "description": "Search web for documentation (default: true)"},
+                        "output_format": {"type": "string", "enum": ["prompt", "json"], "description": "Output format (default: prompt)"}
+                    },
+                    "required": ["query"]
+                }
+            ))
+
+            # 2. Smart reasoning - executes with auto-selected framework
+            tools.append(Tool(
+                name="reason",
+                description="Execute reasoning with auto-selected framework. Uses 62 thinking frameworks internally. Pass context from prepare_context for best results.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "Your task or question"},
+                        "context": {"type": "string", "description": "Context from prepare_context or code snippets"},
+                        "thread_id": {"type": "string", "description": "Thread ID for memory persistence"}
+                    },
+                    "required": ["query"]
+                }
+            ))
+
+            # 3. Code execution - run and test code
+            tools.append(Tool(
+                name="execute_code",
+                description="Execute Python code in sandboxed environment. Use for testing, validation, and verification.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "code": {"type": "string", "description": "Python code to execute"},
+                        "language": {"type": "string", "description": "Language (only 'python' supported)"}
+                    },
+                    "required": ["code"]
+                }
+            ))
+
+            # 4. Health check
+            tools.append(Tool(
+                name="health",
+                description="Check server health, available frameworks, and capabilities",
+                inputSchema={"type": "object", "properties": {}}
+            ))
+
+            return tools
+
+        # =======================================================================
+        # FULL MODE: All 77 tools exposed (62 think_* + 15 utilities)
+        # =======================================================================
+
+        # 62 Framework tools (think_*) - direct access to each framework
+        for name, fw in FRAMEWORKS.items():
+            vibes = VIBE_DICTIONARY.get(name, [])[:4]
+            vibe_str = f" Vibes: {', '.join(vibes)}" if vibes else ""
+
+            tools.append(Tool(
+                name=f"think_{name}",
+                description=f"[{fw['category'].upper()}] {fw['description']}. Best for: {', '.join(fw['best_for'])}.{vibe_str}",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "Your task or problem"},
+                        "context": {"type": "string", "description": "Code snippet or additional context"},
+                        "thread_id": {"type": "string", "description": "Thread ID for memory persistence across turns"}
+                    },
+                    "required": ["query"]
+                }
+            ))
 
         # Smart routing tool (uses HyperRouter)
         tools.append(Tool(
@@ -1111,7 +1182,7 @@ def create_server() -> Server:
         # Framework discovery tools
         tools.append(Tool(
             name="list_frameworks",
-            description="List all 60 thinking frameworks by category",
+            description="List all 62 thinking frameworks by category",
             inputSchema={"type": "object", "properties": {}}
         ))
 
@@ -1623,20 +1694,24 @@ def create_server() -> Server:
         # Health check
         if name == "health":
             collections = list(manager.COLLECTIONS.keys())
-            utility_tools = 15  # reason, list_frameworks, recommend, get_context, save_context,
-                               # search_documentation, search_frameworks_by_name, search_by_category,
-                               # search_function, search_class, search_docs_only, search_framework_category,
-                               # execute_code, health, prepare_context
-            exposed_tools = utility_tools if LEAN_MODE else len(FRAMEWORKS) + utility_tools
+            if LEAN_MODE:
+                # Ultra-lean: 4 tools (prepare_context, reason, execute_code, health)
+                exposed_tools = 4
+                note = "ULTRA-LEAN MODE: 4 tools exposed (prepare_context, reason, execute_code, health). Gemini handles context prep, 62 frameworks available internally."
+            else:
+                # Full mode: 62 think_* + 15 utilities = 77 tools
+                exposed_tools = len(FRAMEWORKS) + 15
+                note = "FULL MODE: All 77 tools exposed (62 think_* + 15 utilities)"
             return [TextContent(type="text", text=json.dumps({
                 "status": "healthy",
-                "lean_mode": LEAN_MODE,
-                "frameworks_available": len(FRAMEWORKS),
+                "mode": "ultra-lean" if LEAN_MODE else "full",
                 "tools_exposed": exposed_tools,
+                "frameworks_available": len(FRAMEWORKS),
+                "gemini_context_gateway": LEAN_MODE,
                 "collections": collections,
                 "memory_enabled": True,
                 "rag_enabled": True,
-                "note": "LEAN_MODE=true: Only 'reason' tool exposed. HyperRouter handles framework selection internally." if LEAN_MODE else "All think_* tools exposed"
+                "note": note
             }, indent=2))]
 
         # Context Gateway - Gemini-powered context preparation
@@ -1682,19 +1757,19 @@ async def main():
     logger.info("=" * 60)
     logger.info("Omni-Cortex MCP - Operating System for Vibe Coders")
     logger.info("=" * 60)
-    logger.info(f"Frameworks: {len(FRAMEWORKS)} thinking frameworks")
+    logger.info(f"Frameworks: {len(FRAMEWORKS)} thinking frameworks (internal)")
     logger.info(f"Graph nodes: {len(FRAMEWORK_NODES)} LangGraph nodes")
     logger.info("Memory: LangChain ConversationBufferMemory")
     logger.info("RAG: ChromaDB with 6 collections")
-    logger.info("Context Gateway: Gemini-powered context preparation")
-    utility_tools = 15
     if LEAN_MODE:
-        logger.info(f"LEAN_MODE: ON - Exposing {utility_tools} tools (reason + utilities + prepare_context)")
-        logger.info("  -> Framework selection handled by HyperRouter internally")
-        logger.info("  -> Context preparation handled by Gemini Flash")
-        logger.info("  -> Set LEAN_MODE=false to expose all think_* tools")
+        logger.info("Mode: ULTRA-LEAN (4 tools)")
+        logger.info("  Tools: prepare_context, reason, execute_code, health")
+        logger.info("  Gemini 3 Flash: Context prep, file discovery, doc search")
+        logger.info("  62 frameworks available internally via HyperRouter")
+        logger.info("  Set LEAN_MODE=false for full 77-tool access")
     else:
-        logger.info(f"Tools: {len(FRAMEWORKS)} think_* + {utility_tools} utility = {len(FRAMEWORKS) + utility_tools} total")
+        logger.info(f"Mode: FULL ({len(FRAMEWORKS) + 15} tools)")
+        logger.info(f"  {len(FRAMEWORKS)} think_* tools + 15 utilities")
     logger.info("=" * 60)
 
     server = create_server()
