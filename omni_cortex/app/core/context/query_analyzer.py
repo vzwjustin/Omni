@@ -145,9 +145,33 @@ Be specific and actionable. Focus on what Claude needs to execute effectively.""
         except (LLMError, ProviderNotConfiguredError):
             raise  # Re-raise custom LLM errors
         except Exception as e:
-            logger.error(
-                "query_analysis_failed",
-                error=str(e),
-                correlation_id=get_correlation_id()
-            )
-            raise LLMError(f"Query analysis failed: {e}") from e
+            error_msg = str(e).lower()
+            
+            # Detect specific API errors and provide helpful messages
+            if "insufficient" in error_msg or "quota" in error_msg or "billing" in error_msg:
+                logger.warning(
+                    "gemini_billing_issue",
+                    error="Insufficient funds or quota exceeded",
+                    hint="Add credits to your Google Cloud account for Gemini API access."
+                )
+                raise LLMError(
+                    "Gemini API billing issue: insufficient funds or quota exceeded. "
+                    "Context preparation requires a valid GOOGLE_API_KEY with credits."
+                ) from e
+            elif "api_key" in error_msg or "unauthorized" in error_msg or "invalid" in error_msg:
+                logger.warning(
+                    "gemini_auth_issue",
+                    error="API key invalid or unauthorized",
+                    hint="Check your GOOGLE_API_KEY is valid and has Gemini API enabled."
+                )
+                raise LLMError(
+                    "Gemini API auth issue: API key invalid or unauthorized. "
+                    "Set a valid GOOGLE_API_KEY with Gemini API enabled."
+                ) from e
+            else:
+                logger.error(
+                    "query_analysis_failed",
+                    error=str(e),
+                    correlation_id=get_correlation_id()
+                )
+                raise LLMError(f"Query analysis failed: {e}") from e

@@ -204,10 +204,32 @@ REASONING: Brief explanation of your choice
                     return selected, reasoning or f"Specialist selected: {frameworks_line}"
 
         except Exception as e:
-            logger.warning("specialist_selection_failed", error=str(e)[:CONTENT.QUERY_LOG], category=category)
+            error_msg = str(e).lower()
+            
+            # Detect specific Gemini API errors
+            if "insufficient" in error_msg or "quota" in error_msg or "billing" in error_msg:
+                logger.warning(
+                    "gemini_billing_issue",
+                    error="Insufficient funds or quota exceeded",
+                    category=category,
+                    hint="Using local pattern matching. Add GOOGLE_API_KEY with credits for AI routing."
+                )
+            elif "api_key" in error_msg or "unauthorized" in error_msg:
+                logger.warning(
+                    "gemini_auth_issue", 
+                    error="API key missing or invalid",
+                    hint="Set GOOGLE_API_KEY for Gemini-powered routing."
+                )
+            else:
+                logger.warning(
+                    "specialist_selection_failed",
+                    error=str(e)[:CONTENT.QUERY_LOG],
+                    category=category
+                )
 
-        # Default: pick first framework in category
-        return [frameworks[0]], f"Default selection for {category}"
+        # Default: pick first framework in category (graceful fallback)
+        fallback_reason = f"[Fallback] Local pattern match for {category}"
+        return [frameworks[0]], fallback_reason
 
     async def select_framework_chain(
         self,
