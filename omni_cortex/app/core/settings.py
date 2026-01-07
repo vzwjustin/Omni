@@ -66,6 +66,14 @@ class OmniCortexSettings(BaseSettings):
 
     # Logging
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
+    production_logging: bool = Field(default=False, alias="PRODUCTION_LOGGING")
+
+    # Rate Limiting (requests per minute)
+    rate_limit_llm_rpm: int = Field(default=30, ge=1, le=1000, alias="RATE_LIMIT_LLM_RPM")
+    rate_limit_search_rpm: int = Field(default=60, ge=1, le=1000, alias="RATE_LIMIT_SEARCH_RPM")
+    rate_limit_memory_rpm: int = Field(default=120, ge=1, le=1000, alias="RATE_LIMIT_MEMORY_RPM")
+    rate_limit_utility_rpm: int = Field(default=120, ge=1, le=1000, alias="RATE_LIMIT_UTILITY_RPM")
+    rate_limit_global_rpm: int = Field(default=200, ge=1, le=2000, alias="RATE_LIMIT_GLOBAL_RPM")
 
     @field_validator("chroma_persist_dir", mode="before")
     @classmethod

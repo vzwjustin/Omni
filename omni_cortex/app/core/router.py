@@ -207,31 +207,43 @@ REASONING: Brief explanation of your choice
             # INTENTIONAL BROAD CATCH: Routing must degrade gracefully to maintain system
             # availability. Any LLM/API failure should fall back to pattern matching rather
             # than crash the routing pipeline. This is a critical reliability boundary.
+            #
+            # We wrap known error types in our exception hierarchy for observability,
+            # then continue with fallback behavior.
+            from .errors import RateLimitError, ProviderNotConfiguredError, LLMError
+            
             error_msg = str(e).lower()
             error_type = type(e).__name__
 
-            # Detect specific Gemini API errors
+            # Categorize and log with structured exceptions
             if "insufficient" in error_msg or "quota" in error_msg or "billing" in error_msg:
+                wrapped_error = RateLimitError(
+                    "Gemini quota exceeded",
+                    details={"category": category, "original_error": error_type}
+                )
                 logger.warning(
                     "gemini_billing_issue",
-                    error="Insufficient funds or quota exceeded",
-                    error_type=error_type,
-                    category=category,
+                    error=repr(wrapped_error),
                     hint="Using local pattern matching. Add GOOGLE_API_KEY with credits for AI routing."
                 )
             elif "api_key" in error_msg or "unauthorized" in error_msg:
+                wrapped_error = ProviderNotConfiguredError(
+                    "Gemini API key missing or invalid",
+                    details={"category": category}
+                )
                 logger.warning(
                     "gemini_auth_issue",
-                    error="API key missing or invalid",
-                    error_type=error_type,
+                    error=repr(wrapped_error),
                     hint="Set GOOGLE_API_KEY for Gemini-powered routing."
                 )
             else:
+                wrapped_error = LLMError(
+                    f"Specialist selection failed: {str(e)[:100]}",
+                    details={"category": category, "original_error": error_type}
+                )
                 logger.warning(
                     "specialist_selection_failed",
-                    error=str(e)[:CONTENT.QUERY_LOG],
-                    error_type=error_type,
-                    category=category
+                    error=repr(wrapped_error)
                 )
 
         # Default: pick first framework in category (graceful fallback)

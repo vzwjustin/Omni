@@ -267,31 +267,71 @@ def create_reasoning_graph(checkpointer=None) -> StateGraph:
     return compiled_graph
 
 
-async def get_checkpointer():
+# =============================================================================
+# Checkpointer Lifecycle Management
+# =============================================================================
+
+_checkpointer: AsyncSqliteSaver | None = None
+_checkpointer_lock = None  # Lazy init to avoid event loop issues
+
+
+async def get_checkpointer() -> AsyncSqliteSaver:
     """
-    Get async SQLite checkpointer for LangGraph.
+    Get async SQLite checkpointer singleton for LangGraph.
 
-    IMPORTANT: Lifecycle Management
-    -------------------------------
-    The returned AsyncSqliteSaver maintains an internal connection pool.
-    Callers are responsible for cleanup when done:
+    This maintains a single checkpointer instance for the application lifetime.
+    Call cleanup_checkpointer() on shutdown to properly close connections.
+    """
+    global _checkpointer, _checkpointer_lock
+    import asyncio
+    
+    # Lazy init lock in async context
+    if _checkpointer_lock is None:
+        _checkpointer_lock = asyncio.Lock()
+    
+    if _checkpointer is not None:
+        return _checkpointer
+    
+    async with _checkpointer_lock:
+        if _checkpointer is None:
+            # Ensure directory exists
+            checkpoint_dir = os.path.dirname(CHECKPOINT_PATH)
+            os.makedirs(checkpoint_dir, exist_ok=True)
+            _checkpointer = await AsyncSqliteSaver.from_conn_string(CHECKPOINT_PATH)
+            logger.info("checkpointer_initialized", path=CHECKPOINT_PATH)
+    
+    return _checkpointer
 
-        checkpointer = await get_checkpointer()
+
+async def cleanup_checkpointer() -> None:
+    """
+    Clean up checkpointer resources on shutdown.
+    
+    Call this from your shutdown handler to properly close database connections.
+    """
+    global _checkpointer
+    if _checkpointer is not None:
         try:
-            graph = create_reasoning_graph(checkpointer=checkpointer)
-            # ... use graph ...
+            if hasattr(_checkpointer, 'conn') and _checkpointer.conn:
+                await _checkpointer.conn.close()
+            logger.info("checkpointer_cleaned_up")
+        except Exception as e:
+            logger.warning("checkpointer_cleanup_error", error=str(e))
         finally:
-            await checkpointer.conn.close()  # Close the underlying connection
+            _checkpointer = None
 
-    For long-running servers, consider using the checkpointer as a singleton
-    that persists for the application lifetime, closing only on shutdown.
+
+async def get_graph_with_memory() -> StateGraph:
     """
-    # Ensure directory exists
-    checkpoint_dir = os.path.dirname(CHECKPOINT_PATH)
-    os.makedirs(checkpoint_dir, exist_ok=True)
-    return AsyncSqliteSaver.from_conn_string(CHECKPOINT_PATH)
+    Get the reasoning graph with checkpointing enabled.
+    
+    Use this for operations that need memory persistence.
+    """
+    checkpointer = await get_checkpointer()
+    return create_reasoning_graph(checkpointer=checkpointer)
 
 
 # Create the global graph instance (without checkpointer for import-time initialization)
-# Checkpointer should be added at runtime when needed
+# For memory-enabled operations, use get_graph_with_memory() instead
 graph = create_reasoning_graph()
+

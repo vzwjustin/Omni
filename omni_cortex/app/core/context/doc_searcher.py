@@ -21,11 +21,20 @@ try:
     from google import genai
     from google.genai import types
     GOOGLE_AI_AVAILABLE = True
+    NEW_GENAI_PACKAGE = True
 except ImportError:
-    GOOGLE_AI_AVAILABLE = False
-    genai = None
-    GenerativeModel = None
-    Tool = None
+    NEW_GENAI_PACKAGE = False
+    # Fallback to deprecated package
+    try:
+        import google.generativeai as genai
+        from google.generativeai.types import Tool
+        GenerativeModel = genai.GenerativeModel
+        GOOGLE_AI_AVAILABLE = True
+    except ImportError:
+        GOOGLE_AI_AVAILABLE = False
+        genai = None
+        GenerativeModel = None
+        Tool = None
 
 # Import RAG systems
 try:
@@ -76,17 +85,23 @@ class DocumentationSearcher:
                     details={"provider": "google", "env_var": "GOOGLE_API_KEY"}
                 )
 
-            genai.configure(api_key=api_key)
+            if NEW_GENAI_PACKAGE:
+                # New google-genai package uses Client API
+                # Note: Google Search grounding may work differently in new package
+                self._search_model = genai.Client(api_key=api_key)
+            else:
+                # Legacy google.generativeai package
+                genai.configure(api_key=api_key)
 
-            # Google Search grounding tool
-            google_search_tool = Tool.from_google_search_retrieval(
-                google_search_retrieval={"disable_attribution": False}
-            )
+                # Google Search grounding tool (legacy API)
+                google_search_tool = Tool.from_google_search_retrieval(
+                    google_search_retrieval={"disable_attribution": False}
+                )
 
-            self._search_model = GenerativeModel(
-                model_name="gemini-3-flash-preview",
-                tools=[google_search_tool]
-            )
+                self._search_model = GenerativeModel(
+                    model_name="gemini-2.0-flash",
+                    tools=[google_search_tool]
+                )
         return self._search_model
 
     async def search_web(self, query: str) -> List[DocumentationContext]:
@@ -114,15 +129,27 @@ For each relevant source, provide:
 
 Focus on actionable, technical content."""
 
-            response = await asyncio.to_thread(
-                model.generate_content,
-                prompt,
-                generation_config={"temperature": 0.3}
-            )
+            if NEW_GENAI_PACKAGE:
+                # New google-genai package uses Client.models.generate_content
+                # Note: Grounding may require different configuration in new API
+                response = await asyncio.to_thread(
+                    model.models.generate_content,
+                    model=self.settings.routing_model or "gemini-2.0-flash",
+                    contents=prompt,
+                    config=types.GenerateContentConfig(temperature=0.3)
+                )
+                text = response.text if hasattr(response, 'text') else str(response)
+            else:
+                # Legacy google.generativeai package
+                response = await asyncio.to_thread(
+                    model.generate_content,
+                    prompt,
+                    generation_config={"temperature": 0.3}
+                )
+                text = response.text
 
             # Parse response into documentation contexts
             docs = []
-            text = response.text
 
             # For now, return as single context if there's content
             if text and len(text) > 50:

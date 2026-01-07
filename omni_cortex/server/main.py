@@ -25,6 +25,17 @@ logging.basicConfig(
 from app.core.correlation import set_correlation_id, clear_correlation_id
 from app.core.logging import add_correlation_id
 
+# Import settings early to determine logging mode
+from app.core.settings import get_settings
+
+_settings = get_settings()
+
+# Choose renderer based on production mode
+if _settings.production_logging:
+    _log_renderer = structlog.processors.JSONRenderer()
+else:
+    _log_renderer = structlog.dev.ConsoleRenderer()
+
 # Configure structlog to use stdlib logging (required for ChromaDB/LangChain compatibility)
 structlog.configure(
     processors=[
@@ -35,7 +46,7 @@ structlog.configure(
         structlog.processors.TimeStamper(fmt="iso"),
         structlog.processors.StackInfoRenderer(),
         structlog.processors.format_exc_info,
-        structlog.dev.ConsoleRenderer()
+        _log_renderer,
     ],
     wrapper_class=structlog.stdlib.BoundLogger,
     context_class=dict,
@@ -428,6 +439,21 @@ def create_server() -> Server:
 
         try:
             logger.info("call_tool_start", tool=name, args=list(arguments.keys()))
+
+            # Rate limiting check
+            from app.core.rate_limiter import get_rate_limiter
+            rate_limiter = await get_rate_limiter()
+            
+            allowed, error_msg = await rate_limiter.check_rate_limit(name)
+            if not allowed:
+                logger.warning("rate_limit_rejected", tool=name, error=error_msg)
+                return [TextContent(type="text", text=f"Rate limit exceeded: {error_msg}")]
+            
+            # Input size validation
+            valid, size_error = rate_limiter.validate_input_size(arguments, name)
+            if not valid:
+                logger.warning("input_size_rejected", tool=name, error=size_error)
+                return [TextContent(type="text", text=f"Input validation failed: {size_error}")]
 
             manager = get_collection_manager()
 
