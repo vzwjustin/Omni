@@ -164,25 +164,63 @@ Add to your IDE's MCP settings (e.g., `claude_desktop_config.json`):
 
 ---
 
-## 🧩 Framework Registry (Consolidated)
+## 🧩 Framework Architecture (Modular)
 
-**NEW:** All 62 frameworks are now defined in a single source of truth:
+The 62 frameworks are organized into a clean, modular structure:
 
+### Single Source of Truth
 ```
-app/frameworks/registry.py  ← Single Source of Truth
-       ↓
-  FrameworkDefinition dataclass:
-  - name, display_name, category
-  - description, best_for, vibes
-  - steps (reasoning template)
-  - complexity, task_type
+app/frameworks/
+├── __init__.py         # Exposes FRAMEWORKS dict
+└── registry.py         # ALL 62 framework definitions (76KB)
 ```
 
-Previously synced across 4 locations (now deprecated):
-- ~~FRAMEWORK_NODES in graph.py~~
-- ~~FRAMEWORKS dict in routing/framework_registry.py~~
-- ~~VIBE_DICTIONARY in vibe_dictionary.py~~
-- ~~get_framework_info() scattered throughout~~
+Each framework is defined as a `FrameworkDefinition` dataclass:
+```python
+FrameworkDefinition(
+    name="active_inference",
+    display_name="Active Inference",
+    category=FrameworkCategory.ITERATIVE,
+    description="Debugging loop: hypothesis → predict → compare → update",
+    best_for=["debugging", "error analysis", "root cause investigation"],
+    vibes=["why is this broken", "wtf is wrong", "find the bug", ...],
+    steps=["HYPOTHESIS: Form hypothesis", "PREDICT: Expected behavior", ...],
+    complexity="medium",
+    task_type="debug",
+)
+```
+
+### Node Implementations (By Category)
+```
+app/nodes/
+├── common.py           # Shared logic for all nodes
+├── generator.py        # Dynamic prompt generator (uses registry)
+│
+├── strategy/           # ReasonFlux, Self-Discover, Plan-and-Solve...
+├── search/             # Tree of Thoughts, Graph of Thoughts, MCTS...
+├── iterative/          # Active Inference, Reflexion, Self-Refine...
+├── code/               # Program of Thoughts, Chain of Code, TDD...
+├── context/            # Chain of Note, Step-Back, Buffer of Thoughts...
+├── fast/               # System1, Scaffolding (quick responses)
+├── verification/       # Chain of Verification, Self-Consistency...
+├── agent/              # SWE-Agent, ReWOO, LATS...
+└── rag/                # HyDE, RAG-Fusion, RAPTOR, GraphRAG...
+```
+
+### How It Works
+```
+1. User query → HyperRouter matches vibes in registry.py
+2. Category identified → Specialist selects framework(s)
+3. Framework chain selected → generator.py builds prompts from steps
+4. Node executes → Category-specific logic in nodes/{category}/
+5. Result returned → Formatted as ClaudeCodeBrief
+```
+
+### Why This Structure?
+- **Single Source of Truth**: Add/modify frameworks in ONE file
+- **Vibe Matching**: Natural language → framework selection
+- **Modular Nodes**: Category-specific execution logic
+- **Prompt Generation**: Steps are templates, generator fills in context
 
 ### Categories
 
