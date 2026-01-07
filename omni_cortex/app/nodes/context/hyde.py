@@ -128,7 +128,7 @@ RELEVANCE: [0.0-1.0]
         match = re.search(r'(\d+\.?\d*)', response)
         if match:
             return max(0.0, min(1.0, float(match.group(1))))
-    except:
+    except Exception:
         pass
     
     return 0.7
@@ -228,7 +228,7 @@ async def hyde_node(state: GraphState) -> GraphState:
             relevance_score=score
         ))
     
-    best_score = max(d.relevance_score for d in hypo_docs)
+    best_score = max((d.relevance_score for d in hypo_docs), default=0.7)
     
     add_reasoning_step(
         state=state,

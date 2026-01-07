@@ -162,7 +162,7 @@ Be specific and actionable. Focus on what Claude needs to execute effectively.""
                 
                 async def _stream():
                     nonlocal full_response, thinking_blocks
-                    for chunk in client.models.generate_content_stream(
+                    async for chunk in client.models.generate_content_stream(
                         model=model,
                         contents=contents,
                         config=config,

@@ -123,7 +123,7 @@ REL_2: [entity_id] [relation] [entity_id] - [description]
                         relation_type=rel_type,
                         description=desc
                     ))
-            except:
+            except Exception:
                 pass
     
     return relationships
@@ -151,7 +151,7 @@ RELEVANT_IDS: [comma-separated IDs]
         import re
         ids = [int(x) for x in re.findall(r'\d+', response)]
         return ids[:5]
-    except:
+    except Exception:
         return [1, 2, 3]
 
 
