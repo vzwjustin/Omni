@@ -118,7 +118,12 @@ async def handle_think_framework(
             return [TextContent(type="text", text=output)]
 
         except Exception as e:
-            logger.warning(f"LangChain fallback failed: {e}, using template mode")
+            # Graceful degradation: LangChain failure is non-fatal, fall through to template mode
+            logger.warning(
+                "LangChain fallback failed, using template mode",
+                error_type=type(e).__name__,
+                error=str(e),
+            )
 
     # Template mode: return structured prompt for client to execute
     if fw_name in FRAMEWORKS:

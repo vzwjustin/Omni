@@ -113,7 +113,10 @@ async def handle_save_context(arguments: dict) -> list[TextContent]:
         await save_to_langchain_memory(thread_id, query, answer, framework)
         return [TextContent(type="text", text="Context saved successfully")]
     except Exception as e:
-        logger.error("save_context_failed", error=str(e))
+        # Catch-all for unexpected memory/storage failures (e.g., database connection issues,
+        # serialization errors). We log the error type for debugging and return a user-friendly
+        # message rather than crashing the handler.
+        logger.error("save_context_failed", error=str(e), error_type=type(e).__name__)
         return [TextContent(type="text", text=f"Failed to save context: {str(e)}")]
 
 
@@ -207,7 +210,10 @@ async def handle_prepare_context(arguments: dict) -> list[TextContent]:
             return [TextContent(type="text", text=output)]
 
     except Exception as e:
-        logger.error(f"Context gateway failed: {e}")
+        # Catch-all for context gateway failures (e.g., API errors, network issues,
+        # missing credentials). We log with error_type for diagnostics and provide
+        # a hint about common configuration issues rather than exposing raw errors.
+        logger.error("context_gateway_failed", error=str(e), error_type=type(e).__name__)
         return [TextContent(type="text", text=json.dumps({
             "error": str(e),
             "hint": "Ensure GOOGLE_API_KEY is set for Gemini-powered context preparation"

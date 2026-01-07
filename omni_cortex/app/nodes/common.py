@@ -6,6 +6,7 @@ Shared components used across all framework nodes:
 - process_reward_model: PRM scoring for search algorithms
 - optimize_prompt: DSPy-style prompt optimization
 - LLM client wrappers
+- ContextGateway integration for Gemini preprocessing
 """
 
 import asyncio
@@ -16,6 +17,7 @@ from typing import Callable, Optional, Any
 from ..core.settings import get_settings
 from ..core.constants import CONTENT
 from ..core.errors import LLMError, ProviderNotConfiguredError
+from ..core.context_gateway import ContextGateway, StructuredContext
 from ..state import GraphState
 from ..nodes.langchain_tools import (
     call_langchain_tool,
@@ -180,8 +182,10 @@ Respond with ONLY a single decimal number between 0.0 and 1.0."""
         logger.error("prm_scoring_failed", error=str(e), error_type=type(e).__name__)
         return 0.5  # Default on error
     except Exception as e:
-        # Unknown error - wrap in LLMError
-        logger.error("prm_scoring_failed", error=str(e))
+        # Broad catch intentional: LLM calls can fail with unpredictable errors
+        # (network issues, provider-specific exceptions, serialization errors, etc.)
+        # We log and wrap in LLMError to provide consistent error handling upstream.
+        logger.error("prm_scoring_failed", error=str(e), error_type=type(e).__name__)
         raise LLMError(f"PRM scoring failed: {e}") from e
 
 
@@ -264,8 +268,10 @@ Return ONLY the optimized prompt, no explanations."""
         logger.warning("prompt_optimization_failed", error=str(e), error_type=type(e).__name__, task=task_description[:CONTENT.QUERY_PREVIEW])
         return base_prompt
     except Exception as e:
-        # Unknown error during optimization; log and fall back to original
-        logger.warning("prompt_optimization_failed", error=str(e), task=task_description[:CONTENT.QUERY_PREVIEW])
+        # Broad catch intentional: LLM calls can fail with unpredictable errors
+        # (network issues, provider-specific exceptions, serialization errors, etc.)
+        # Optimization failure is non-critical - we gracefully fall back to base_prompt.
+        logger.warning("prompt_optimization_failed", error=str(e), error_type=type(e).__name__, task=task_description[:CONTENT.QUERY_PREVIEW])
         return base_prompt
 
 
@@ -430,7 +436,9 @@ async def call_deep_reasoner(
         try:
             callback.on_llm_start({"name": "call_deep_reasoner"}, [prompt])
         except Exception as e:
-            logger.warning("callback_on_llm_start_failed", error=str(e))
+            # Broad catch intentional: Callback failures should not crash the LLM call.
+            # Third-party callbacks may raise any exception; we log and continue.
+            logger.warning("callback_on_llm_start_failed", error=str(e), error_type=type(e).__name__)
 
     # Check if Quiet-STaR is enabled
     if state and state.get("working_memory", {}).get("quiet_star_enabled"):
@@ -476,7 +484,9 @@ async def call_deep_reasoner(
         try:
             callback.on_llm_end({"llm_output": {"token_usage": {"total_tokens": tokens}}})
         except Exception as e:
-            logger.warning("callback_on_llm_end_failed", error=str(e))
+            # Broad catch intentional: Callback failures should not crash the LLM call.
+            # Third-party callbacks may raise any exception; we log and continue.
+            logger.warning("callback_on_llm_end_failed", error=str(e), error_type=type(e).__name__)
 
     return text, tokens
 
@@ -500,7 +510,9 @@ async def call_fast_synthesizer(
             try:
                 callback.on_llm_start({"name": "call_fast_synthesizer"}, [prompt])
             except Exception as e:
-                logger.warning("callback_on_llm_start_failed", error=str(e))
+                # Broad catch intentional: Callback failures should not crash the LLM call.
+                # Third-party callbacks may raise any exception; we log and continue.
+                logger.warning("callback_on_llm_start_failed", error=str(e), error_type=type(e).__name__)
 
     # Get the LLM client using the centralized helper
     client = _get_llm_client(
@@ -529,7 +541,9 @@ async def call_fast_synthesizer(
         try:
             callback.on_llm_end({"llm_output": {"token_usage": {"total_tokens": tokens}}})
         except Exception as e:
-            logger.warning("callback_on_llm_end_failed", error=str(e))
+            # Broad catch intentional: Callback failures should not crash the LLM call.
+            # Third-party callbacks may raise any exception; we log and continue.
+            logger.warning("callback_on_llm_end_failed", error=str(e), error_type=type(e).__name__)
 
     return text, tokens
 
@@ -572,13 +586,45 @@ def extract_code_blocks(text: str) -> list[str]:
 CODE_BLOCK_PATTERN = r"```(?:\w+)?\n(.*?)```"
 
 
+async def prepare_context_with_gemini(
+    query: str,
+    state: GraphState
+) -> str:
+    """
+    Use Gemini (via ContextGateway) to preprocess and structure context for Claude.
+    
+    This is the proper Gemini→Claude flow:
+    1. Gemini analyzes query, discovers files, fetches docs
+    2. Returns StructuredContext with rich preprocessing
+    3. Claude uses this context for deep reasoning
+    """
+    # Initialize gateway
+    gateway = ContextGateway()
+    
+    # Prepare structured context via Gemini
+    structured_context = await gateway.prepare_context(
+        query=query,
+        code_context=state.get("code_snippet"),
+        file_list=state.get("file_list"),
+        search_docs=True,
+        max_files=15
+    )
+    
+    # Convert to Claude-ready prompt
+    return structured_context.to_claude_prompt()
+
+
 def format_code_context(
     code_snippet: Optional[str],
     file_list: Optional[list[str]],
     ide_context: Optional[str],
     state: Optional[GraphState] = None
 ) -> str:
-    """Format code context for LLM prompts, including RAG-retrieved context."""
+    """
+    DEPRECATED: Use prepare_context_with_gemini() instead for proper Gemini→Claude flow.
+    
+    This is a fallback for simple context formatting without Gemini preprocessing.
+    """
     parts = []
 
     # Include RAG context if available (auto-fetched during routing)

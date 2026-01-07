@@ -81,7 +81,9 @@ def _search_examples(query: str, example_type: str) -> str:
             if examples:
                 return f"## Similar Code Examples\n\n{examples}"
     except Exception as e:
-        logger.debug("example_search_failed", error=str(e), example_type=example_type)
+        # Graceful degradation: example search failures should not block framework execution.
+        # Examples are optional enhancements; the framework can proceed without them.
+        logger.debug("example_search_failed", error=str(e), error_type=type(e).__name__, example_type=example_type)
 
     return ""
 
@@ -170,13 +172,86 @@ def create_framework_node(definition: FrameworkDefinition) -> Callable:
 
 
 # =============================================================================
-# Special Nodes (kept separate due to custom logic)
+# Special Nodes (Real Implementations with actual LLM execution)
 # =============================================================================
 
-# These frameworks have custom logic beyond simple prompt generation
+# ALL 62 frameworks now have REAL implementations with multi-turn LLM calls
 SPECIAL_NODES: Dict[str, str] = {
-    # pot.py has the sandbox execution logic
+    # Iterative frameworks
+    "active_inference": "app.nodes.iterative.active_inference",
+    "self_refine": "app.nodes.iterative.self_refine",
+    "reflexion": "app.nodes.iterative.reflexion",
+    
+    # Search frameworks
+    "tree_of_thoughts": "app.nodes.search.tree_of_thoughts",
+    "mcts_rstar": "app.nodes.search.mcts",
+    
+    # Strategy frameworks (multi-agent)
+    "multi_agent_debate": "app.nodes.strategy.debate",
+    "step_back": "app.nodes.strategy.step_back",
+    "analogical": "app.nodes.strategy.analogical",
+    "least_to_most": "app.nodes.strategy.decomposition",
+    "critic": "app.nodes.strategy.mixture_of_experts",
+    "self_consistency": "app.nodes.strategy.ensemble",
+    "self_ask": "app.nodes.strategy.socratic",
+    "system1": "app.nodes.strategy.society_of_mind",
+    "comparative_arch": "app.nodes.strategy.multi_persona",
+    
+    # Verification frameworks
+    "chain_of_verification": "app.nodes.verification.chain_of_verification",
+    "self_debugging": "app.nodes.verification.self_debugging",
+    "verify_and_edit": "app.nodes.verification.verify_and_edit",
+    "red_team": "app.nodes.verification.red_team",
+    "selfcheckgpt": "app.nodes.verification.selfcheckgpt",
+    
+    # Code frameworks
     "program_of_thoughts": "app.nodes.code.pot",
+    "chain_of_code": "app.nodes.code.chain_of_code",
+    "alphacodium": "app.nodes.code.alphacodium",
+    "pal": "app.nodes.code.pal",
+    "swe_agent": "app.nodes.code.swe_agent",
+    "codechain": "app.nodes.code.codechain",
+    "parsel": "app.nodes.code.parsel",
+    "procoder": "app.nodes.code.procoder",
+    "recode": "app.nodes.code.recode",
+    
+    # Context/RAG frameworks
+    "rag_fusion": "app.nodes.context.rag_fusion",
+    "self_rag": "app.nodes.context.self_rag",
+    "graphrag": "app.nodes.context.graphrag",
+    "hyde": "app.nodes.context.hyde",
+    "rar": "app.nodes.context.rar",
+    "rarr": "app.nodes.context.rarr",
+    "ragas": "app.nodes.context.ragas",
+    "raptor": "app.nodes.context.raptor",
+    
+    # Fast/reasoning frameworks
+    "react": "app.nodes.fast.react",
+    "chain_of_thought": "app.nodes.fast.chain_of_thought",
+    "graph_of_thoughts": "app.nodes.fast.graph_of_thoughts",
+    "buffer_of_thoughts": "app.nodes.fast.buffer_of_thoughts",
+    "skeleton_of_thought": "app.nodes.fast.skeleton_of_thought",
+    "lats": "app.nodes.fast.lats",
+    "rewoo": "app.nodes.fast.rewoo",
+    "plan_and_solve": "app.nodes.fast.plan_and_solve",
+    "rubber_duck": "app.nodes.fast.rubber_duck",
+    "adaptive_injection": "app.nodes.fast.adaptive_injection",
+    "chain_of_note": "app.nodes.fast.chain_of_note",
+    "coala": "app.nodes.fast.coala",
+    "docprompting": "app.nodes.fast.docprompting",
+    "everything_of_thought": "app.nodes.fast.everything_of_thought",
+    "evol_instruct": "app.nodes.fast.evol_instruct",
+    "llmloop": "app.nodes.fast.llmloop",
+    "metaqa": "app.nodes.fast.metaqa",
+    "mrkl": "app.nodes.fast.mrkl",
+    "re2": "app.nodes.fast.re2",
+    "reason_flux": "app.nodes.fast.reason_flux",
+    "reverse_cot": "app.nodes.fast.reverse_cot",
+    "scratchpads": "app.nodes.fast.scratchpads",
+    "self_discover": "app.nodes.fast.self_discover",
+    "state_machine": "app.nodes.fast.state_machine",
+    "tdd_prompting": "app.nodes.fast.tdd_prompting",
+    "toolformer": "app.nodes.fast.toolformer",
 }
 
 
@@ -188,7 +263,10 @@ def _load_special_node(name: str, module_path: str) -> Optional[Callable]:
         node_name = f"{name}_node"
         return getattr(module, node_name, None)
     except Exception as e:
-        logger.warning("special_node_load_failed", name=name, error=str(e))
+        # Graceful degradation: if a special node fails to load, return None so the caller
+        # can fall back to a generated node. This ensures the system remains functional
+        # even when optional custom node implementations are unavailable.
+        logger.warning("special_node_load_failed", name=name, error=str(e), error_type=type(e).__name__)
         return None
 
 

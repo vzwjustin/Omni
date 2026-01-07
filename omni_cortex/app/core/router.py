@@ -204,26 +204,33 @@ REASONING: Brief explanation of your choice
                     return selected, reasoning or f"Specialist selected: {frameworks_line}"
 
         except Exception as e:
+            # INTENTIONAL BROAD CATCH: Routing must degrade gracefully to maintain system
+            # availability. Any LLM/API failure should fall back to pattern matching rather
+            # than crash the routing pipeline. This is a critical reliability boundary.
             error_msg = str(e).lower()
-            
+            error_type = type(e).__name__
+
             # Detect specific Gemini API errors
             if "insufficient" in error_msg or "quota" in error_msg or "billing" in error_msg:
                 logger.warning(
                     "gemini_billing_issue",
                     error="Insufficient funds or quota exceeded",
+                    error_type=error_type,
                     category=category,
                     hint="Using local pattern matching. Add GOOGLE_API_KEY with credits for AI routing."
                 )
             elif "api_key" in error_msg or "unauthorized" in error_msg:
                 logger.warning(
-                    "gemini_auth_issue", 
+                    "gemini_auth_issue",
                     error="API key missing or invalid",
+                    error_type=error_type,
                     hint="Set GOOGLE_API_KEY for Gemini-powered routing."
                 )
             else:
                 logger.warning(
                     "specialist_selection_failed",
                     error=str(e)[:CONTENT.QUERY_LOG],
+                    error_type=error_type,
                     category=category
                 )
 
@@ -300,7 +307,14 @@ REASONING: Brief explanation of your choice
                     reasoning = f"[Chain: {' -> '.join(chain)}] {reasoning}"
                 return chain[0], reasoning
         except Exception as e:
-            logger.warning("framework_chain_selection_failed", error=str(e)[:CONTENT.QUERY_LOG])
+            # INTENTIONAL BROAD CATCH: Framework selection must not fail the entire request.
+            # Graceful degradation to vibe matching ensures the system remains operational
+            # even when hierarchical routing encounters unexpected errors.
+            logger.warning(
+                "framework_chain_selection_failed",
+                error=str(e)[:CONTENT.QUERY_LOG],
+                error_type=type(e).__name__
+            )
 
         # Legacy fallback: direct vibe matching
         vibe_match = self._check_vibe_dictionary(query)
@@ -394,6 +408,15 @@ REASONING: Brief explanation of your choice
                 )
                 framework_chain = chain
             except Exception as e:
+                # INTENTIONAL BROAD CATCH: Chain selection failure should not block routing.
+                # Fallback to auto_select_framework provides a simpler but functional path.
+                # This ensures observability while maintaining system availability.
+                logger.warning(
+                    "framework_chain_in_route_failed",
+                    error=str(e)[:CONTENT.QUERY_LOG],
+                    error_type=type(e).__name__,
+                    query=query[:CONTENT.QUERY_LOG] if query else ""
+                )
                 # Fallback to single framework
                 framework, reason = await self.auto_select_framework(
                     query, code_snippet, ide_context
@@ -422,9 +445,13 @@ REASONING: Brief explanation of your choice
             if learnings:
                 state["episodic_memory"] = learnings
         except Exception as e:
+            # INTENTIONAL BROAD CATCH: Episodic memory is an enhancement, not a requirement.
+            # Routing should succeed even if memory retrieval fails (e.g., ChromaDB unavailable,
+            # embedding service down). The core routing logic must remain operational.
             logger.warning(
                 "episodic_memory_search_failed",
                 error=str(e)[:CONTENT.QUERY_LOG],
+                error_type=type(e).__name__,
                 query=query[:CONTENT.QUERY_LOG] if query else ""
             )
 

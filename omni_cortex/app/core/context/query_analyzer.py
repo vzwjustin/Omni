@@ -19,13 +19,21 @@ from ..constants import CONTENT
 from ..errors import LLMError, ProviderNotConfiguredError
 from ..correlation import get_correlation_id
 
-# Try to import Google AI
+# Try to import Google AI (new package with thinking mode)
 try:
-    import google.generativeai as genai
+    from google import genai
+    from google.genai import types
     GOOGLE_AI_AVAILABLE = True
 except ImportError:
-    GOOGLE_AI_AVAILABLE = False
-    genai = None
+    # Fallback to deprecated package
+    try:
+        import google.generativeai as genai
+        types = None
+        GOOGLE_AI_AVAILABLE = True
+    except ImportError:
+        GOOGLE_AI_AVAILABLE = False
+        genai = None
+        types = None
 
 logger = structlog.get_logger("context.query_analyzer")
 
@@ -48,13 +56,13 @@ class QueryAnalyzer:
         self.settings = get_settings()
         self._model = None
 
-    def _get_model(self):
-        """Get or create Gemini model for analysis."""
+    def _get_client(self):
+        """Get or create Gemini client for analysis with thinking mode."""
         if self._model is None:
             if not GOOGLE_AI_AVAILABLE:
                 raise ProviderNotConfiguredError(
-                    "google-generativeai not installed",
-                    details={"provider": "google", "package": "google-generativeai"}
+                    "google-genai not installed",
+                    details={"provider": "google", "package": "google-genai"}
                 )
 
             api_key = self.settings.google_api_key
@@ -64,10 +72,14 @@ class QueryAnalyzer:
                     details={"provider": "google", "env_var": "GOOGLE_API_KEY"}
                 )
 
-            genai.configure(api_key=api_key)
-            self._model = genai.GenerativeModel(
-                self.settings.routing_model or "gemini-2.0-flash"
-            )
+            # Use new client API with thinking support
+            if types:  # New package
+                self._model = genai.Client(api_key=api_key)
+            else:  # Fallback to old package
+                genai.configure(api_key=api_key)
+                self._model = genai.GenerativeModel(
+                    self.settings.routing_model or "gemini-2.0-flash"
+                )
         return self._model
 
     async def analyze(
@@ -97,7 +109,7 @@ class QueryAnalyzer:
             - patterns: Code patterns to look for
             - dependencies: External dependencies
         """
-        model = self._get_model()
+        client = self._get_client()
 
         prompt = f"""Analyze this coding task and provide structured analysis.
 
@@ -124,14 +136,58 @@ Respond in JSON format:
 Be specific and actionable. Focus on what Claude needs to execute effectively."""
 
         try:
-            response = await asyncio.to_thread(
-                model.generate_content,
-                prompt,
-                generation_config={"temperature": 0.3}
-            )
+            # Use new API with thinking mode if available
+            if types:  # New google-genai package
+                model = self.settings.routing_model or "gemini-2.0-flash-thinking-exp-01-21"
+                
+                contents = [
+                    types.Content(
+                        role="user",
+                        parts=[types.Part.from_text(text=prompt)],
+                    ),
+                ]
+                
+                # Enable HIGH thinking mode for deep analysis
+                config = types.GenerateContentConfig(
+                    thinking_config=types.ThinkingConfig(
+                        thinking_level="HIGH",
+                    ),
+                    temperature=0.3,
+                    response_mime_type="application/json"
+                )
+                
+                # Stream response to capture thinking
+                full_response = ""
+                thinking_blocks = []
+                
+                async def _stream():
+                    nonlocal full_response, thinking_blocks
+                    for chunk in client.models.generate_content_stream(
+                        model=model,
+                        contents=contents,
+                        config=config,
+                    ):
+                        if hasattr(chunk, 'thinking'):
+                            thinking_blocks.append(chunk.thinking)
+                        if hasattr(chunk, 'text'):
+                            full_response += chunk.text
+                
+                await _stream()
+                
+                # Log thinking process
+                if thinking_blocks:
+                    logger.debug("gemini_thinking", thoughts=len(thinking_blocks))
+                
+                text = full_response
+            else:  # Fallback to old package
+                response = await asyncio.to_thread(
+                    client.generate_content,
+                    prompt,
+                    generation_config={"temperature": 0.3}
+                )
+                text = response.text
 
             # Extract JSON from response
-            text = response.text
             json_match = re.search(r'\{[\s\S]*\}', text)
             if json_match:
                 result = json.loads(json_match.group())
@@ -145,13 +201,17 @@ Be specific and actionable. Focus on what Claude needs to execute effectively.""
         except (LLMError, ProviderNotConfiguredError):
             raise  # Re-raise custom LLM errors
         except Exception as e:
+            # Graceful degradation: Query analysis failures should not block the
+            # overall workflow. We convert errors to LLMError with helpful context
+            # so callers can decide whether to proceed with reduced functionality.
             error_msg = str(e).lower()
-            
+
             # Detect specific API errors and provide helpful messages
             if "insufficient" in error_msg or "quota" in error_msg or "billing" in error_msg:
                 logger.warning(
                     "gemini_billing_issue",
                     error="Insufficient funds or quota exceeded",
+                    error_type=type(e).__name__,
                     hint="Add credits to your Google Cloud account for Gemini API access."
                 )
                 raise LLMError(
@@ -162,6 +222,7 @@ Be specific and actionable. Focus on what Claude needs to execute effectively.""
                 logger.warning(
                     "gemini_auth_issue",
                     error="API key invalid or unauthorized",
+                    error_type=type(e).__name__,
                     hint="Check your GOOGLE_API_KEY is valid and has Gemini API enabled."
                 )
                 raise LLMError(
@@ -172,6 +233,7 @@ Be specific and actionable. Focus on what Claude needs to execute effectively.""
                 logger.error(
                     "query_analysis_failed",
                     error=str(e),
+                    error_type=type(e).__name__,
                     correlation_id=get_correlation_id()
                 )
                 raise LLMError(f"Query analysis failed: {e}") from e

@@ -94,9 +94,12 @@ async def search_documentation(query: str) -> str:
         )
         return f"Search failed: {exc}"
     except Exception as exc:
+        # Graceful degradation: catch-all for unexpected errors to prevent tool crashes
+        # while still propagating as RAGError for proper error handling upstream
         logger.error(
             "search_documentation_failed",
             error=str(exc),
+            error_type=type(exc).__name__,
             correlation_id=get_correlation_id()
         )
         raise RAGError(f"Documentation search failed: {exc}") from exc
@@ -180,9 +183,12 @@ async def save_learning(
         )
         return f"Failed to save learning: {exc}"
     except Exception as exc:
+        # Graceful degradation: catch-all for unexpected errors to prevent tool crashes
+        # while still propagating as RAGError for proper error handling upstream
         logger.error(
             "save_learning_failed",
             error=str(exc),
+            error_type=type(exc).__name__,
             correlation_id=get_correlation_id()
         )
         raise RAGError(f"Failed to save learning: {exc}") from exc
@@ -310,9 +316,12 @@ async def enhance_state_with_langchain(state: GraphState, thread_id: str) -> Gra
                 correlation_id=get_correlation_id()
             )
         except Exception as e:
+            # Graceful degradation: RAG prefetch is non-critical; log and continue
+            # so the request can proceed without context enrichment if needed
             logger.warning(
                 "rag_prefetch_query_failed",
                 error=str(e),
+                error_type=type(e).__name__,
                 correlation_id=get_correlation_id()
             )
 
@@ -347,9 +356,12 @@ async def enhance_state_with_langchain(state: GraphState, thread_id: str) -> Gra
                 correlation_id=get_correlation_id()
             )
         except Exception as e:
+            # Graceful degradation: RAG prefetch is non-critical; log and continue
+            # so the request can proceed without context enrichment if needed
             logger.warning(
                 "rag_prefetch_code_failed",
                 error=str(e),
+                error_type=type(e).__name__,
                 correlation_id=get_correlation_id()
             )
 

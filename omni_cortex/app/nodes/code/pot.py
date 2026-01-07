@@ -18,6 +18,7 @@ from ...state import GraphState
 from ..common import (
     quiet_star,
     format_code_context,
+    prepare_context_with_gemini,
     add_reasoning_step,
 )
 from ..example_utilities import search_code_examples
@@ -43,7 +44,7 @@ ALLOWED_IMPORTS = frozenset([
 # - isinstance/issubclass: type introspection can leak info
 # - getattr/setattr/delattr/hasattr: attribute manipulation
 # - eval/exec/compile: code execution
-# - open/__import__: file/module access
+# - open/__import__: file/module access (raw __import__ excluded, wrapped version added below)
 SAFE_BUILTINS = {
     # Math/logic
     'abs': abs, 'all': all, 'any': any, 'divmod': divmod, 'pow': pow,
@@ -64,7 +65,27 @@ SAFE_BUILTINS = {
     'print': print,
     # Constants
     'True': True, 'False': False, 'None': None,
+    # Internal Python builtins needed for exec()
+    # __build_class__ is required for 'class' keyword to work
+    '__build_class__': builtins.__build_class__,
 }
+
+
+def _safe_import(name, globals=None, locals=None, fromlist=(), level=0):
+    """
+    Safe import wrapper that only allows imports from ALLOWED_IMPORTS.
+
+    This is needed because exec() uses __import__ internally when it encounters
+    'import' statements in the code being executed.
+    """
+    # Get the root module name (e.g., 'math' from 'math.sin')
+    root_module = name.split('.')[0]
+
+    if root_module not in ALLOWED_IMPORTS:
+        raise ImportError(f"Import of '{name}' is not allowed. Allowed imports: {', '.join(sorted(ALLOWED_IMPORTS))}")
+
+    # Use the real __import__ for allowed modules
+    return builtins.__import__(name, globals, locals, fromlist, level)
 
 # exec() for sandboxed code execution
 # NOTE: This is intentionally using exec() - the sandbox security comes from:
@@ -77,7 +98,8 @@ _python_code_runner = exec
 # Dangerous functions to block
 _DANGEROUS_FUNCS = {'eval', 'compile', 'open', 'input', '__import__',
                     'globals', 'locals', 'vars', 'dir', 'getattr', 'setattr',
-                    'delattr', 'hasattr', 'breakpoint', 'exit', 'quit'}
+                    'delattr', 'hasattr', 'breakpoint', 'exit', 'quit',
+                    'type'}  # type() allows dynamic class creation - sandbox escape vector
 
 # Dangerous method names to block (shell/process/introspection related)
 _DANGEROUS_METHODS = {
@@ -170,8 +192,11 @@ async def _safe_execute(code: str, timeout: float = 5.0) -> Dict[str, Any]:
         logger.warning("unsafe_code_blocked", error=error_msg)
         return {"success": False, "output": "", "error": f"Security validation failed: {error_msg}"}
 
-    # Prepare restricted environment
-    safe_globals = {"__builtins__": SAFE_BUILTINS.copy()}
+    # Prepare restricted environment with safe builtins
+    restricted_builtins = SAFE_BUILTINS.copy()
+    # Add the safe import wrapper so 'import' statements work for allowed modules
+    restricted_builtins['__import__'] = _safe_import
+    safe_globals = {"__builtins__": restricted_builtins}
 
     # Add allowed imports (skip if not available on system - not all are required)
     for module_name in ALLOWED_IMPORTS:
@@ -179,7 +204,7 @@ async def _safe_execute(code: str, timeout: float = 5.0) -> Dict[str, Any]:
             safe_globals[module_name] = __import__(module_name)
         except ImportError as e:
             # Module not installed - acceptable, not all modules required
-            logger.debug("optional_sandbox_module_unavailable", module=module_name)
+            logger.debug("optional_sandbox_module_unavailable", module=module_name, error=str(e))
 
     stdout_capture = io.StringIO()
     stderr_capture = io.StringIO()
@@ -212,11 +237,14 @@ async def program_of_thoughts_node(state: GraphState) -> GraphState:
     Framework: Program of Thoughts (PoT): Code-Based Reasoning
     """
     query = state["query"]
-    code_context = format_code_context(
-        state.get("code_snippet"),
-        state.get("file_list"),
-        state.get("ide_context"),
+    # Use Gemini to preprocess context via ContextGateway
+
+    code_context = await prepare_context_with_gemini(
+
+        query=query,
+
         state=state
+
     )
 
     # Search for similar code examples

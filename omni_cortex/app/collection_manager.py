@@ -72,9 +72,12 @@ class CollectionManager:
             except EmbeddingError:
                 raise  # Re-raise custom errors as-is
             except Exception as e:
+                # Intentional broad catch: embedding init can fail from various providers
+                # (OpenAI, HuggingFace, etc.) - wrap all as EmbeddingError for consistent handling
                 logger.error(
                     "embedding_init_failed",
                     error=str(e),
+                    error_type=type(e).__name__,
                     correlation_id=get_correlation_id()
                 )
                 raise EmbeddingError(f"Failed to initialize embeddings: {e}") from e
@@ -119,10 +122,13 @@ class CollectionManager:
             except EmbeddingError:
                 raise  # Re-raise embedding errors
             except Exception as e:
+                # Intentional broad catch: Chroma/vector store errors should be recoverable
+                # in RAG context - log and return None for graceful degradation
                 logger.error(
                     "collection_load_failed",
                     name=collection_name,
                     error=str(e),
+                    error_type=type(e).__name__,
                     correlation_id=get_correlation_id()
                 )
                 if raise_on_error:
@@ -177,14 +183,18 @@ class CollectionManager:
                     "search_failed",
                     collection=coll_name,
                     error=str(e),
+                    error_type=type(e).__name__,
                     correlation_id=get_correlation_id()
                 )
                 errors.append(f"{coll_name}: {e}")
             except Exception as e:
+                # Intentional broad catch: search failures in one collection should not
+                # block searching other collections - graceful degradation for RAG
                 logger.error(
                     "search_failed",
                     collection=coll_name,
                     error=str(e),
+                    error_type=type(e).__name__,
                     correlation_id=get_correlation_id()
                 )
                 errors.append(f"{coll_name}: {e}")
@@ -257,10 +267,13 @@ class CollectionManager:
         except EmbeddingError:
             raise  # Re-raise embedding errors
         except Exception as e:
+            # Intentional broad catch: document ingestion errors from Chroma should be
+            # wrapped as RAGError for consistent error handling upstream
             logger.error(
                 "add_documents_failed",
                 collection=collection_name,
                 error=str(e),
+                error_type=type(e).__name__,
                 correlation_id=get_correlation_id()
             )
             raise RAGError(f"Failed to add documents to {collection_name}: {e}") from e
@@ -342,9 +355,12 @@ class CollectionManager:
         except RAGError:
             raise  # Re-raise RAG errors
         except Exception as e:
+            # Intentional broad catch: learning storage errors should be wrapped
+            # as RAGError for consistent error handling in the learning system
             logger.error(
                 "learning_save_failed",
                 error=str(e),
+                error_type=type(e).__name__,
                 correlation_id=get_correlation_id()
             )
             raise RAGError(f"Failed to save learning: {e}") from e
@@ -400,9 +416,12 @@ class CollectionManager:
         except RAGError:
             raise  # Re-raise RAG errors
         except Exception as e:
+            # Intentional broad catch: learning search failures should be wrapped
+            # as RAGError for consistent error handling in the learning system
             logger.error(
                 "learning_search_failed",
                 error=str(e),
+                error_type=type(e).__name__,
                 correlation_id=get_correlation_id()
             )
             raise RAGError(f"Failed to search learnings: {e}") from e
@@ -446,9 +465,12 @@ class CollectionManager:
         except RAGError:
             raise  # Re-raise RAG errors
         except Exception as e:
+            # Intentional broad catch: debugging knowledge search failures should be
+            # wrapped as RAGError for consistent error handling in knowledge retrieval
             logger.error(
                 "debugging_knowledge_search_failed",
                 error=str(e),
+                error_type=type(e).__name__,
                 correlation_id=get_correlation_id()
             )
             raise RAGError(f"Failed to search debugging knowledge: {e}") from e
@@ -490,9 +512,12 @@ class CollectionManager:
         except RAGError:
             raise  # Re-raise RAG errors
         except Exception as e:
+            # Intentional broad catch: reasoning knowledge search failures should be
+            # wrapped as RAGError for consistent error handling in knowledge retrieval
             logger.error(
                 "reasoning_knowledge_search_failed",
                 error=str(e),
+                error_type=type(e).__name__,
                 correlation_id=get_correlation_id()
             )
             raise RAGError(f"Failed to search reasoning knowledge: {e}") from e
@@ -536,9 +561,12 @@ class CollectionManager:
         except RAGError:
             raise  # Re-raise RAG errors
         except Exception as e:
+            # Intentional broad catch: instruction knowledge search failures should be
+            # wrapped as RAGError for consistent error handling in knowledge retrieval
             logger.error(
                 "instruction_knowledge_search_failed",
                 error=str(e),
+                error_type=type(e).__name__,
                 correlation_id=get_correlation_id()
             )
             raise RAGError(f"Failed to search instruction knowledge: {e}") from e

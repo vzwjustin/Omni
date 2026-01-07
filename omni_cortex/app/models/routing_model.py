@@ -60,7 +60,8 @@ class GeminiResponse:
         try:
             c = self.content
             preview = (c[:50] + "...") if len(c) > 50 else c
-        except Exception:
+        except Exception as e:
+            logger.debug("gemini_response_repr_fallback", error=str(e))
             preview = "<unavailable>"
         return f"GeminiResponse({preview!r})"
 

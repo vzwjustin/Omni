@@ -19,13 +19,21 @@ from ..constants import CONTENT, WORKSPACE
 from ..errors import LLMError, ProviderNotConfiguredError, OmniCortexError
 from ..correlation import get_correlation_id
 
-# Try to import Google AI
+# Try to import Google AI (new package with thinking mode)
 try:
-    import google.generativeai as genai
+    from google import genai
+    from google.genai import types
     GOOGLE_AI_AVAILABLE = True
 except ImportError:
-    GOOGLE_AI_AVAILABLE = False
-    genai = None
+    # Fallback to deprecated package
+    try:
+        import google.generativeai as genai
+        types = None
+        GOOGLE_AI_AVAILABLE = True
+    except ImportError:
+        GOOGLE_AI_AVAILABLE = False
+        genai = None
+        types = None
 
 logger = structlog.get_logger("context.file_discoverer")
 
@@ -170,9 +178,13 @@ Maximum {max_files} files."""
         except (LLMError, ProviderNotConfiguredError):
             raise  # Re-raise custom LLM errors
         except Exception as e:
+            # Graceful degradation: File discovery is best-effort. If parsing fails
+            # or an unexpected error occurs, we log and raise a structured LLMError
+            # rather than crashing, allowing callers to handle discovery failures.
             logger.error(
                 "file_discovery_failed",
                 error=str(e),
+                error_type=type(e).__name__,
                 correlation_id=get_correlation_id()
             )
             raise LLMError(f"File discovery failed: {e}") from e
@@ -207,9 +219,14 @@ Maximum {max_files} files."""
         except OmniCortexError:
             raise  # Re-raise custom errors
         except Exception as e:
+            # Graceful degradation: File listing is best-effort for discovery.
+            # Filesystem errors (permissions, broken symlinks, etc.) should not
+            # crash the entire discovery process - we return whatever files we
+            # successfully collected before the error occurred.
             logger.error(
                 "workspace_listing_failed",
                 error=str(e),
+                error_type=type(e).__name__,
                 correlation_id=get_correlation_id()
             )
             # File system errors are not fatal - return what we have

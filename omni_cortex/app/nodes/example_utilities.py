@@ -73,10 +73,13 @@ def search_knowledge_examples(
         return "\n\n".join(examples)
 
     except Exception as e:
+        # Graceful degradation: example search failures should not break the framework.
+        # Missing examples reduce quality but allow the core reasoning to proceed.
         logger.debug(
             "knowledge_search_skipped",
             method=search_method,
-            error=str(e)
+            error=str(e),
+            error_type=type(e).__name__
         )
         return ""
 
