@@ -12,21 +12,45 @@
 
 ---
 
-## 🏗️ Architecture: Gemini → Claude Handoff
+## 🏗️ Architecture: Two Gemini Paths
 
+Omni-Cortex uses Gemini for orchestration through **two parallel tools**:
+
+### Path 1: `prepare_context` — Context Preparation
+```
+Claude calls prepare_context → ContextGateway
+    ├── QueryAnalyzer (Gemini)     → Understands task intent
+    ├── FileDiscoverer (Gemini)    → Finds relevant files  
+    ├── DocumentationSearcher      → Fetches web docs
+    └── CodeSearcher               → grep/git searches
+                     ↓
+        StructuredContext → Claude uses for file discovery
+```
+**Use when:** Claude needs to understand the codebase, find files, get documentation.
+
+### Path 2: `reason` — Framework Selection + Execution Brief
+```
+Claude calls reason → HyperRouter
+    ├── _route_to_category()              → Fast local pattern match
+    ├── _select_with_specialist(Gemini)   → Picks framework chain
+    └── StructuredBriefGenerator
+        ├── gemini_analyze_task()         → Rich execution plan
+        └── enrich_evidence_from_chroma() → RAG knowledge
+                     ↓
+        ClaudeCodeBrief (~200 tokens) → Claude executes
+```
+**Use when:** Claude needs a thinking strategy and step-by-step execution plan.
+
+### Combined Flow
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│  USER → Claude Code → MCP Tool → Gemini (1M context)                │
-│                                      ↓                              │
-│                          🧠 Analyzes query deeply                   │
-│                          📚 Searches ChromaDB knowledge             │
-│                          🔍 Discovers relevant files                │
-│                          🎯 Selects framework chain                 │
-│                          📝 Generates ClaudeCodeBrief               │
-│                                      ↓                              │
-│                        Token-Efficient Brief → Claude               │
-│                                      ↓                              │
-│                          Claude executes precisely                  │
+│  USER → Claude Code                                                 │
+│            ↓                                                        │
+│      prepare_context → Gemini discovers files, docs, context        │
+│            ↓                                                        │
+│      reason → Gemini selects frameworks, generates brief            │
+│            ↓                                                        │
+│      Claude executes with full context + optimal strategy           │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
