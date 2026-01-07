@@ -55,3 +55,4 @@ htmlcov/
 chroma/
 *.db
 *.sqlite3
+.venv/
