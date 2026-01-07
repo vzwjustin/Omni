@@ -14,11 +14,11 @@
 
 ## 🏗️ Architecture: Two Gemini Paths
 
-Omni-Cortex uses Gemini for orchestration through **two parallel tools**:
+Omni-Cortex uses Gemini for orchestration through **two MCP tools** (called by Claude Code automatically):
 
 ### Path 1: `prepare_context` — Context Preparation
 ```
-Claude calls prepare_context → ContextGateway
+User asks question → Claude Code calls prepare_context → ContextGateway
     ├── QueryAnalyzer (Gemini)     → Understands task intent
     ├── FileDiscoverer (Gemini)    → Finds relevant files  
     ├── DocumentationSearcher      → Fetches web docs
@@ -26,11 +26,11 @@ Claude calls prepare_context → ContextGateway
                      ↓
         StructuredContext → Claude uses for file discovery
 ```
-**Use when:** Claude needs to understand the codebase, find files, get documentation.
+**Called when:** Claude needs to understand the codebase, find files, get documentation.
 
 ### Path 2: `reason` — Framework Selection + Execution Brief
 ```
-Claude calls reason → HyperRouter
+User asks question → Claude Code calls reason → HyperRouter
     ├── _route_to_category()              → Fast local pattern match
     ├── _select_with_specialist(Gemini)   → Picks framework chain
     └── StructuredBriefGenerator
@@ -39,16 +39,16 @@ Claude calls reason → HyperRouter
                      ↓
         ClaudeCodeBrief (~200 tokens) → Claude executes
 ```
-**Use when:** Claude needs a thinking strategy and step-by-step execution plan.
+**Called when:** Claude needs a thinking strategy and step-by-step execution plan.
 
 ### Combined Flow
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│  USER → Claude Code                                                 │
+│  USER speaks naturally → Claude Code (AI)                           │
 │            ↓                                                        │
-│      prepare_context → Gemini discovers files, docs, context        │
+│      Claude calls prepare_context → Gemini finds files, docs        │
 │            ↓                                                        │
-│      reason → Gemini selects frameworks, generates brief            │
+│      Claude calls reason → Gemini selects frameworks, makes brief   │
 │            ↓                                                        │
 │      Claude executes with full context + optimal strategy           │
 └─────────────────────────────────────────────────────────────────────┘
