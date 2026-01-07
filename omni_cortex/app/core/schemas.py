@@ -358,64 +358,66 @@ class ClaudeCodeBrief(BaseModel):
         """
         Token-efficient brief that preserves ALL information.
         
-        Efficiency comes from formatting, NOT content removal.
-        Claude gets everything it needs, just without prose fluff.
+        Uses bullet points for efficiency - clear structure without prose.
+        Claude gets everything it needs.
         """
         lines = [f"[{self.task_type.value}] {self.objective}"]
         
-        # Targets - all files, compact format
+        # Targets with bullet points
         if self.repo_targets.files:
             lines.append(f"→ {' '.join(self.repo_targets.files)}")
         if self.repo_targets.areas:
-            lines.append(f"  areas: {', '.join(self.repo_targets.areas)}")
+            for area in self.repo_targets.areas:
+                lines.append(f"  • {area}")
         if self.repo_targets.do_not_touch:
-            lines.append(f"  avoid: {', '.join(self.repo_targets.do_not_touch)}")
+            for avoid in self.repo_targets.do_not_touch:
+                lines.append(f"  ⊘ {avoid}")
         
-        # ALL execution steps - no truncation
+        # ALL execution steps with numbers
         if self.execution_plan:
             lines.append("")
             for i, step in enumerate(self.execution_plan, 1):
                 lines.append(f"{i}. {step}")
         
-        # All verification commands and criteria
+        # Verification with bullets
         if self.verification.commands or self.verification.acceptance_criteria:
             lines.append("")
-            if self.verification.commands:
-                lines.append(f"✓ Run: {' && '.join(self.verification.commands)}")
-            if self.verification.acceptance_criteria:
-                lines.append(f"✓ Pass: {'; '.join(self.verification.acceptance_criteria)}")
+            for cmd in self.verification.commands:
+                lines.append(f"✓ {cmd}")
+            for criteria in self.verification.acceptance_criteria:
+                lines.append(f"• {criteria}")
         
-        # ALL constraints
+        # ALL constraints with bullets
         if self.constraints:
             lines.append("")
-            lines.append(f"⚠ {'; '.join(self.constraints)}")
+            for c in self.constraints:
+                lines.append(f"⚠ {c}")
         
-        # ALL evidence - full insights from Gemini's analysis
+        # ALL evidence with bullets
         if self.evidence:
             lines.append("")
-            lines.append("Evidence:")
             for e in self.evidence:
-                lines.append(f"  [{e.source_type.value}] {e.ref}")
-                lines.append(f"    → {e.relevance}")
-                # Include key content if short enough
-                if len(e.content) <= 200:
-                    lines.append(f"    {e.content}")
+                lines.append(f"• [{e.source_type.value}] {e.ref}")
+                lines.append(f"  → {e.relevance}")
+                if len(e.content) <= 150:
+                    lines.append(f"  {e.content}")
         
-        # ALL assumptions
+        # ALL assumptions with bullets
         if self.assumptions:
             lines.append("")
-            lines.append(f"Assumes: {'; '.join(self.assumptions)}")
+            for a in self.assumptions:
+                lines.append(f"• {a}")
         
-        # ALL open questions
+        # ALL open questions with bullets
         if self.open_questions:
-            lines.append(f"Questions: {'; '.join(self.open_questions)}")
+            for q in self.open_questions:
+                lines.append(f"? {q}")
         
-        # ALL stop conditions
+        # ALL stop conditions with bullets
         if self.stop_conditions:
             lines.append("")
-            lines.append("Stop if:")
             for s in self.stop_conditions:
-                lines.append(f"  ⛔ {s}")
+                lines.append(f"⛔ {s}")
         
         return "\n".join(lines)
 
