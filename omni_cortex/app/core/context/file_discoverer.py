@@ -19,13 +19,21 @@ from ..constants import CONTENT, WORKSPACE
 from ..errors import LLMError, ProviderNotConfiguredError, OmniCortexError
 from ..correlation import get_correlation_id
 
-# Try to import Google AI
+# Try to import Google AI (new package with thinking mode)
 try:
-    import google.generativeai as genai
+    from google import genai
+    from google.genai import types
     GOOGLE_AI_AVAILABLE = True
 except ImportError:
-    GOOGLE_AI_AVAILABLE = False
-    genai = None
+    # Fallback to deprecated package
+    try:
+        import google.generativeai as genai
+        types = None
+        GOOGLE_AI_AVAILABLE = True
+    except ImportError:
+        GOOGLE_AI_AVAILABLE = False
+        genai = None
+        types = None
 
 logger = structlog.get_logger("context.file_discoverer")
 

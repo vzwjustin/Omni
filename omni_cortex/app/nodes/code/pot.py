@@ -18,6 +18,7 @@ from ...state import GraphState
 from ..common import (
     quiet_star,
     format_code_context,
+    prepare_context_with_gemini,
     add_reasoning_step,
 )
 from ..example_utilities import search_code_examples
@@ -236,11 +237,14 @@ async def program_of_thoughts_node(state: GraphState) -> GraphState:
     Framework: Program of Thoughts (PoT): Code-Based Reasoning
     """
     query = state["query"]
-    code_context = format_code_context(
-        state.get("code_snippet"),
-        state.get("file_list"),
-        state.get("ide_context"),
+    # Use Gemini to preprocess context via ContextGateway
+
+    code_context = await prepare_context_with_gemini(
+
+        query=query,
+
         state=state
+
     )
 
     # Search for similar code examples

@@ -6,6 +6,7 @@ Shared components used across all framework nodes:
 - process_reward_model: PRM scoring for search algorithms
 - optimize_prompt: DSPy-style prompt optimization
 - LLM client wrappers
+- ContextGateway integration for Gemini preprocessing
 """
 
 import asyncio
@@ -16,6 +17,7 @@ from typing import Callable, Optional, Any
 from ..core.settings import get_settings
 from ..core.constants import CONTENT
 from ..core.errors import LLMError, ProviderNotConfiguredError
+from ..core.context_gateway import ContextGateway, StructuredContext
 from ..state import GraphState
 from ..nodes.langchain_tools import (
     call_langchain_tool,
@@ -584,13 +586,45 @@ def extract_code_blocks(text: str) -> list[str]:
 CODE_BLOCK_PATTERN = r"```(?:\w+)?\n(.*?)```"
 
 
+async def prepare_context_with_gemini(
+    query: str,
+    state: GraphState
+) -> str:
+    """
+    Use Gemini (via ContextGateway) to preprocess and structure context for Claude.
+    
+    This is the proper Gemini→Claude flow:
+    1. Gemini analyzes query, discovers files, fetches docs
+    2. Returns StructuredContext with rich preprocessing
+    3. Claude uses this context for deep reasoning
+    """
+    # Initialize gateway
+    gateway = ContextGateway()
+    
+    # Prepare structured context via Gemini
+    structured_context = await gateway.prepare_context(
+        query=query,
+        code_context=state.get("code_snippet"),
+        file_list=state.get("file_list"),
+        search_docs=True,
+        max_files=15
+    )
+    
+    # Convert to Claude-ready prompt
+    return structured_context.to_claude_prompt()
+
+
 def format_code_context(
     code_snippet: Optional[str],
     file_list: Optional[list[str]],
     ide_context: Optional[str],
     state: Optional[GraphState] = None
 ) -> str:
-    """Format code context for LLM prompts, including RAG-retrieved context."""
+    """
+    DEPRECATED: Use prepare_context_with_gemini() instead for proper Gemini→Claude flow.
+    
+    This is a fallback for simple context formatting without Gemini preprocessing.
+    """
     parts = []
 
     # Include RAG context if available (auto-fetched during routing)

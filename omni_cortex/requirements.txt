@@ -22,7 +22,8 @@ watchfiles>=0.21.0
 # LLM Providers
 # =============================================================================
 # Google AI (Gemini models - recommended for cost)
-google-generativeai>=0.8.0  # Direct API for ContextGateway
+google-genai>=0.3.0  # NEW: Supports thinking mode (extended reasoning)
+google-generativeai>=0.8.0  # DEPRECATED: Fallback only
 langchain-google-genai>=4.0.0
 
 # OpenRouter (uses OpenAI SDK with custom base_url)

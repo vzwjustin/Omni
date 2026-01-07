@@ -16,11 +16,10 @@ from ..constants import CONTENT, SEARCH
 from ..errors import LLMError, ProviderNotConfiguredError, RAGError, OmniCortexError
 from ..correlation import get_correlation_id
 
-# Try to import Google AI
+# Try to import Google AI (new package with thinking mode)
 try:
-    import google.generativeai as genai
-    from google.generativeai import GenerativeModel
-    from google.generativeai.types import Tool
+    from google import genai
+    from google.genai import types
     GOOGLE_AI_AVAILABLE = True
 except ImportError:
     GOOGLE_AI_AVAILABLE = False
