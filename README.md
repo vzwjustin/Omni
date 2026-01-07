@@ -223,39 +223,38 @@ Omni contains the world's largest collection of formalized cognitive architectur
 
 ---
 
-## 🧠 Architecture: Multi-Turn Orchestration
-
-Omni-Cortex **executes real reasoning algorithms** using MCP client sampling.
+## 🧠 Architecture: Gemini Orchestrates, Claude Executes
 
 ```
-User Query → Category Router → Specialist Agent → Framework Chain → Multi-Turn Executor
-                  ↓                   ↓                  ↓                    ↓
-            "debug"           Debug Detective      [fw1, fw2, fw3]    Server orchestrates
-            "code_gen"        Code Architect           ↓              multiple client calls
-            "refactor"        Refactor Surgeon    Each framework     per framework
-                ...                               runs its algorithm  (branch, evaluate, etc.)
+User Query → Claude → Gemini (via MCP) → Structured Context → Claude Executes
+                          ↓
+              1. Analyze intent & extract keywords
+              2. Discover relevant files (with scoring)
+              3. Search code (grep/ripgrep/git)
+              4. Fetch documentation from web
+              5. Query ChromaDB knowledge base (16K+ examples)
+              6. Structure everything into organized brief
 ```
 
 ### How It Works
 
-1.  **Hierarchical Router**: Two-stage routing—fast category match, then specialist selection
-2.  **Specialist Agents**: 9 domain experts that understand their framework toolbox
-3.  **Framework Chaining**: Complex tasks get 2-4 frameworks run in sequence
-4.  **Multi-Turn Executor**: Each framework makes multiple calls to client for its algorithm
-5.  **MCP Sampling**: Server requests completions from client (no external APIs)
-6.  **Memory**: Episodic memory + RAG for cross-session learning
-7.  **Training Data Knowledge Base**: 16K+ examples (debugging, reasoning, instructions) with embeddings
+1. **User asks Claude** a question
+2. **Claude calls Omni-Cortex** (MCP tool)
+3. **Gemini Context Gateway** does the heavy lifting:
+   - Analyzes query to understand intent
+   - Discovers relevant files with relevance scoring
+   - Searches codebase via grep/git
+   - Fetches web documentation if needed
+   - Queries ChromaDB for similar past solutions (16K+ examples)
+   - Selects optimal framework chain (62 available)
+   - Generates token-efficient execution brief (~200 tokens)
+4. **Claude receives structured context** and executes
 
-### Example: Tree of Thoughts
-
-When you use Tree of Thoughts, the server:
-1. Requests 3 solution branches from client (temp=0.8)
-2. Requests evaluation of each branch (temp=0.2)
-3. Selects best based on extracted scores
-4. Requests expansion of winner (temp=0.3)
-5. Returns final solution + metadata
-
-**No API keys needed** - all inference happens in your local Claude Desktop client.
+### Key Design
+- **Gemini burns tokens freely** (1M context) - does ALL the heavy thinking
+- **Claude gets surgical briefs** (~200 tokens) - focuses on execution  
+- **Cost**: ~$0.0001 per query (virtually free with Gemini's free tier)
+- **Fallback**: If Gemini unavailable, uses local pattern matching (still works, less smart)
 
 ---
 
