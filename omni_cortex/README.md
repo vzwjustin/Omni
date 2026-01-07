@@ -6,85 +6,122 @@
 [![MCP Compatible](https://img.shields.io/badge/MCP-Compatible-green?style=for-the-badge)](https://modelcontextprotocol.io)
 [![Frameworks](https://img.shields.io/badge/Frameworks-62-purple?style=for-the-badge)](FRAMEWORKS.md)
 
-**Omni Cortex** is an MCP server that gives your IDE's AI access to **62 advanced reasoning frameworks**. It doesn't write the code for you; it gives your AI the *strategy* to write better code.
+**Omni Cortex** is an MCP server that gives Claude access to **62 advanced reasoning frameworks** through Gemini-powered orchestration. Gemini thinks deeply about your problem and generates ultra-efficient execution briefs for Claude.
 
-> **"Don't memorize complex prompt engineering. Just tell Omni how you feel about the code, and it picks the perfect cognitive strategy."**
+> **"Gemini orchestrates. Claude executes. You ship faster."**
+
+---
+
+## 🏗️ Architecture: Gemini → Claude Handoff
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  USER → Claude Code → MCP Tool → Gemini (1M context)                │
+│                                      ↓                              │
+│                          🧠 Analyzes query deeply                   │
+│                          📚 Searches ChromaDB knowledge             │
+│                          🔍 Discovers relevant files                │
+│                          🎯 Selects framework chain                 │
+│                          📝 Generates ClaudeCodeBrief               │
+│                                      ↓                              │
+│                        Token-Efficient Brief → Claude               │
+│                                      ↓                              │
+│                          Claude executes precisely                  │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**Key Design:**
+- **Gemini burns tokens freely** (1M context) - does ALL the heavy thinking
+- **Claude gets surgical briefs** (~200 tokens) - focuses on execution
+- **20% token savings** vs verbose formats, with zero information loss
 
 ---
 
 ## 🔮 Vibe-Based Routing
-You don't need to ask for "Active Inference" or "Chain of Verification." Just speak naturally. The **Smart Router** analyzes your intent using a comprehensive "Vibe Dictionary."
 
-| You Say | Omni Hears | Selected Strategy |
-|:---|:---|:---|
-| *"WTF is wrong with this? It's failing randomly!"* | **Debugging Panic** | `active_inference` (Hypothesis Testing Loop) |
-| *"This code is spaghetti. Kill it with fire."* | **Refactoring Rage** | `graph_of_thoughts` (Dependency disentanglement) |
-| *"Is this actually secure? Check for hacks."* | **Security Anxiety** | `chain_of_verification` (Red Teaming & Auditing) |
-| *"I have no idea how to start this weird problem."* | **Novelty Confusion** | `self_discover` (First Principles exploration) |
-| *"Make it faster. It's too slow."* | **Performance Need** | `tree_of_thoughts` (Optimization Search) |
-| *"Prove it with evidence from the docs."* | **Verification Need** | `rarr` (Research, Augment, Revise) |
-| *"Make the tests pass, fix the CI."* | **Execution Mode** | `swe_agent` (Repo-first execution loop) |
-| *"How do these modules relate?"* | **Architecture Query** | `graphrag` (Entity-relation grounding) |
+You don't need to ask for "Active Inference" or "Chain of Verification." Just speak naturally:
+
+| You Say | Selected Strategy |
+|:---|:---|
+| *"WTF is wrong with this? It's failing randomly!"* | `active_inference` → Hypothesis Testing Loop |
+| *"This code is spaghetti. Kill it with fire."* | `graph_of_thoughts` → Dependency disentanglement |
+| *"Is this actually secure? Check for hacks."* | `chain_of_verification` → Red Teaming & Auditing |
+| *"I have no idea how to start this weird problem."* | `self_discover` → First Principles exploration |
+| *"Make it faster. It's too slow."* | `tree_of_thoughts` → Optimization Search |
+| *"Make the tests pass, fix the CI."* | `tdd_prompting` → Test-Driven Development |
 
 ---
 
-## 🔗 Framework Chaining — NEW
+## 🔗 Framework Chaining
 
-For complex tasks, Omni doesn't just pick one framework—it **chains multiple frameworks** together in a pipeline, each building on the output of the last.
-
-### How It Works
+For complex tasks, Omni chains multiple frameworks together in a pipeline:
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    HIERARCHICAL ROUTING                         │
-├─────────────────────────────────────────────────────────────────┤
-│  Stage 1: CATEGORY        Fast pattern match to 1 of 9 domains │
-│  Stage 2: SPECIALIST      Domain expert picks framework chain   │
-│  Stage 3: PIPELINE        Execute frameworks in sequence        │
-└─────────────────────────────────────────────────────────────────┘
+Category Router → Specialist Agent → Framework Chain → Pipeline Executor
+      ↓                   ↓                  ↓               ↓
+  "debug"         Debug Detective      [fw1 → fw2 → fw3]   Execute each
+  "code_gen"      Code Architect               ↓           in sequence
+  "refactor"      Refactor Surgeon     Pass state between
+      ...                              frameworks
 ```
-
-### The 9 Specialist Agents
-
-| Specialist | Domain | Example Chain |
-|:---|:---|:---|
-| **Debug Detective** | Bug hunting, root cause | `self_ask → active_inference → verify_and_edit` |
-| **Code Architect** | New implementations | `plan_and_solve → parsel → tdd_prompting → self_refine` |
-| **Refactor Surgeon** | Code cleanup | `plan_and_solve → graph_of_thoughts → verify_and_edit` |
-| **System Architect** | Design decisions | `reason_flux → multi_agent_debate → plan_and_solve` |
-| **Verification Expert** | Security, correctness | `red_team → chain_of_verification → verify_and_edit` |
-| **Agent Orchestrator** | Multi-step tasks | `swe_agent → tdd_prompting → verify_and_edit` |
-| **Retrieval Specialist** | Docs, knowledge | `hyde → rag_fusion → rarr` |
-| **Explorer** | Novel problems | `self_discover → analogical → self_refine` |
-| **Speed Demon** | Quick fixes | `system1` (single framework, no chain) |
 
 ### Example: Complex Bug Fix
 
-When you say *"This async handler crashes randomly under load, I've tried everything"*:
+When you say *"This async handler crashes randomly under load"*:
 
-1. **Category Match** → `debug` (vibe: "crashes", "tried everything")
-2. **Specialist Decision** → Debug Detective selects `complex_bug` chain
+1. **Category Match** → `debug` (vibe: "crashes", "randomly")
+2. **Specialist Decision** → Debug Detective selects chain
 3. **Pipeline Execution**:
    ```
-   self_ask          →  "What exactly are we debugging?"
-   active_inference  →  Hypothesis testing loop
-   verify_and_edit   →  Validate fix, patch only what's wrong
+   self_ask         →  "What exactly are we debugging?"
+   active_inference →  Hypothesis testing loop
+   verify_and_edit  →  Validate fix, patch only what's wrong
    ```
 
-Each framework passes its output to the next. The final answer incorporates insights from all three.
+---
+
+## 📋 ClaudeCodeBrief Format (NEW)
+
+The structured handoff protocol optimizes for Claude Max subscriptions:
+
+```
+[DEBUG] Fix user auth failing after password reset
+→ auth/password.py:L45-67 auth/session.py
+  • authentication
+  ⊘ auth/oauth.py
+
+1. Check reset_password() return value
+2. Verify session invalidation after reset
+3. Add token refresh call after password change
+
+✓ pytest tests/auth/ -v
+• All tests pass
+• Auth flow works
+
+⚠ Preserve existing functionality
+⚠ Do not break API
+
+• [FILE] auth/password.py:L45
+  → returns None instead of new token
+• [FILE] auth/session.py:L78
+  → does not invalidate old tokens
+
+⛔ If required inputs missing, request them
+```
+
+**~200 tokens** with full actionability.
 
 ---
 
 ## ⚡ Installation
 
-### Option 1: The One-Liner (Docker)
-The easiest way to perform a "Headless Transformation" on your IDE.
+### Option 1: Docker Pull
 ```bash
 docker pull vzwjustin/omni-cortex:latest
 ```
 
 ### Option 2: Add to MCP Config
-Add this to your IDE's MCP settings file (e.g., `claude_desktop_config.json` or Cursor settings):
+Add to your IDE's MCP settings (e.g., `claude_desktop_config.json`):
 
 ```json
 {
@@ -92,9 +129,7 @@ Add this to your IDE's MCP settings file (e.g., `claude_desktop_config.json` or 
     "omni-cortex": {
       "command": "docker",
       "args": [
-        "run",
-        "--rm",
-        "-i",
+        "run", "--rm", "-i",
         "-v", "/path/to/your/code:/code",
         "vzwjustin/omni-cortex:latest"
       ]
@@ -102,148 +137,37 @@ Add this to your IDE's MCP settings file (e.g., `claude_desktop_config.json` or 
   }
 }
 ```
-*(Replace `/path/to/your/code` with your actual project directory)*
-*(Note: Mounting your code volume allows Omni to read your codebase for context-aware strategies.)*
 
 ---
 
-## 🧩 The 62 Frameworks
-Omni contains the world's largest collection of formalized cognitive architectures for coding.
+## 🧩 Framework Registry (Consolidated)
 
-<details>
-<summary><h3>🔍 Debugging & Verification (7)</h3></summary>
-
-| Framework | Best For |
-|:---|:---|
-| **Active Inference** | Root cause analysis of "impossible" bugs. |
-| **Chain of Verification** | Security audits and logic checking. |
-| **Self Debugging** | Pre-computation mental traces before coding. |
-| **Reverse CoT** | Working backward from a wrong output to the error. |
-| **Red Team** | Adversarial attack simulation. |
-| **Reflexion** | Learning from past failures in a loop. |
-| **TDD Prompting** | Writing tests before implementation. |
-</details>
-
-<details>
-<summary><h3>🏗️ Architecture & Planning (8)</h3></summary>
-
-| Framework | Best For |
-|:---|:---|
-| **Reason Flux** | Hierarchical system design (Template -> Expand -> Refine). |
-| **Plan and Solve** | Explicit roadmap creation before execution. |
-| **State Machine** | Designing robust FSMs and workflows. |
-| **CoALA** | Agentic loop with episodic memory. |
-| **Buffer of Thoughts** | Managing massive context requirements. |
-| **Least-to-Most** | Bottom-up decomposition of complex systems. |
-| **Comparative Arch** | Weighing trade-offs between multiple approaches. |
-| **Step Back** | Abstraction and first-principles thinking. |
-</details>
-
-<details>
-<summary><h3>🚀 Optimization & Code Gen (15)</h3></summary>
-
-| Framework | Best For |
-|:---|:---|
-| **Tree of Thoughts** | Exploring multiple optimization paths. |
-| **Graph of Thoughts** | Non-linear refactoring of spaghetti code. |
-| **AlphaCodium** | Competitive programming-style iterative solutions. |
-| **Chain of Code** | Execution-based logic reasoning. |
-| **ProCoder** | Compiler-feedback guided iteration. |
-| **LLM Loop** | Continuous integration/test loops. |
-| **Evol-Instruct** | Increasing constraint complexity. |
-| **CodeChain** | Modular code generation with self-revisions. |
-| **RECODE** | Multi-candidate validation with CFG debugging. |
-| **PAL** | Program-Aided Language - code as reasoning. |
-| **Scratchpads** | Structured intermediate reasoning workspace. |
-| **Critic** | Generate then critique pattern. |
-| **Program of Thoughts** | Step-by-step code reasoning. |
-| *(and more...)* | *See [FRAMEWORKS.md](FRAMEWORKS.md) for full list.* |
-</details>
-
-<details>
-<summary><h3>💡 Creativity & Learning (6)</h3></summary>
-
-| Framework | Best For |
-|:---|:---|
-| **Self Discover** | Solving novel problems with no known pattern. |
-| **Analogical** | Finding similar solutions in history. |
-| **Multi-Agent Debate** | Arguing pros/cons of a decision. |
-| **Rubber Duck** | Socratic questioning to help you think. |
-| **System 1** | Fast, intuitive "gut check" answers. |
-| **Chain of Note** | Researching and summarizing massive docs. |
-</details>
-
-<details>
-<summary><h3>✅ Verification & Claim Integrity (8) — NEW</h3></summary>
-
-| Framework | Best For |
-|:---|:---|
-| **Self-Consistency** | Multi-sample voting for reliable answers. |
-| **Self-Ask** | Sub-question decomposition before solving. |
-| **RaR** | Rephrase-and-Respond for clarity. |
-| **Verify-and-Edit** | Verify claims, edit only failures. |
-| **RARR** | Research, Augment, Revise - evidence-driven. |
-| **SelfCheckGPT** | Hallucination detection via sampling. |
-| **MetaQA** | Metamorphic testing for reasoning reliability. |
-| **RAGAS** | RAG Assessment for retrieval quality. |
-</details>
-
-<details>
-<summary><h3>🤖 Agent Orchestration (5) — NEW</h3></summary>
-
-| Framework | Best For |
-|:---|:---|
-| **ReWOO** | Plan then execute - minimize tool calls. |
-| **LATS** | Tree search over action sequences. |
-| **MRKL** | Modular reasoning with specialized modules. |
-| **SWE-Agent** | Repo-first execution loop (inspect/edit/run). |
-| **Toolformer** | Smart tool selection policy. |
-</details>
-
-<details>
-<summary><h3>📚 RAG & Retrieval Grounding (5) — NEW</h3></summary>
-
-| Framework | Best For |
-|:---|:---|
-| **Self-RAG** | Self-triggered selective retrieval. |
-| **HyDE** | Hypothetical Document Embeddings. |
-| **RAG-Fusion** | Multi-query retrieval with rank fusion. |
-| **RAPTOR** | Hierarchical abstraction retrieval. |
-| **GraphRAG** | Entity-relation grounding for dependencies. |
-</details>
-
----
-
-## 🧠 Architecture: "Headless" Protocols
-Omni-Cortex acts as a **Protocol Provider**.
+**NEW:** All 62 frameworks are now defined in a single source of truth:
 
 ```
-User Query → Category Router → Specialist Agent → Framework Chain → Pipeline Executor
-                  ↓                   ↓                  ↓               ↓
-            "debug"           Debug Detective      [fw1, fw2, fw3]    Execute each
-            "code_gen"        Code Architect           ↓              in sequence
-            "refactor"        Refactor Surgeon    Pass state between
-                ...                                frameworks
+app/frameworks/registry.py  ← Single Source of Truth
+       ↓
+  FrameworkDefinition dataclass:
+  - name, display_name, category
+  - description, best_for, vibes
+  - steps (reasoning template)
+  - complexity, task_type
 ```
 
-1.  **Hierarchical Router**: Two-stage routing—fast category match, then specialist selection
-2.  **Specialist Agents**: 9 domain experts that understand their framework toolbox
-3.  **Framework Chaining**: Complex tasks get 2-4 frameworks run in sequence
-4.  **Pipeline Executor**: Each framework builds on the previous output
-5.  **Memory**: Episodic memory + RAG for cross-session learning
+Previously synced across 4 locations (now deprecated):
+- ~~FRAMEWORK_NODES in graph.py~~
+- ~~FRAMEWORKS dict in routing/framework_registry.py~~
+- ~~VIBE_DICTIONARY in vibe_dictionary.py~~
+- ~~get_framework_info() scattered throughout~~
 
-This means **Omni doesn't need your API keys**. It just tells your AI *how* to think.
-
----
-
-## 📊 Framework Categories
+### Categories
 
 | Category | Count | Focus |
 |:---|:---:|:---|
 | Strategy | 7 | Architecture, planning, system design |
 | Search | 4 | Optimization, exploration, complex bugs |
 | Iterative | 8 | Debugging, refinement, learning loops |
-| Code | 17 | Code generation, testing, algorithms |
+| Code | 15 | Code generation, testing, algorithms |
 | Context | 6 | Research, abstraction, security |
 | Fast | 2 | Quick fixes, scaffolding |
 | Verification | 8 | Claim integrity, hallucination detection |
@@ -251,7 +175,101 @@ This means **Omni doesn't need your API keys**. It just tells your AI *how* to t
 | RAG | 5 | Retrieval grounding, evidence-based |
 | **Total** | **62** | |
 
-See [FRAMEWORKS.md](FRAMEWORKS.md) for complete documentation.
+<details>
+<summary><h3>🔍 Debugging & Verification (7)</h3></summary>
+
+| Framework | Best For |
+|:---|:---|
+| **Active Inference** | Root cause analysis of "impossible" bugs |
+| **Chain of Verification** | Security audits and logic checking |
+| **Self Debugging** | Pre-computation mental traces before coding |
+| **Reverse CoT** | Working backward from a wrong output to the error |
+| **Red Team** | Adversarial attack simulation |
+| **Reflexion** | Learning from past failures in a loop |
+| **TDD Prompting** | Writing tests before implementation |
+</details>
+
+<details>
+<summary><h3>🏗️ Architecture & Planning (7)</h3></summary>
+
+| Framework | Best For |
+|:---|:---|
+| **ReasonFlux** | Hierarchical system design |
+| **Plan-and-Solve** | Explicit roadmap creation before execution |
+| **Self-Discover** | Solving novel problems with no known pattern |
+| **CoALA** | Agentic loop with episodic memory |
+| **Buffer of Thoughts** | Managing massive context requirements |
+| **Least-to-Most** | Bottom-up decomposition of complex systems |
+| **Comparative Arch** | Weighing trade-offs between multiple approaches |
+</details>
+
+<details>
+<summary><h3>🚀 Optimization & Code Gen (15)</h3></summary>
+
+| Framework | Best For |
+|:---|:---|
+| **Tree of Thoughts** | Exploring multiple optimization paths |
+| **Graph of Thoughts** | Non-linear refactoring of spaghetti code |
+| **Program of Thoughts** | Math, data processing, computational problems |
+| **Chain-of-Code** | Execution-based logic reasoning |
+| **CRITIC** | API usage validation with external tools |
+| **Self-Debugging** | Mental execution trace before presenting code |
+| **Reverse Chain-of-Thought** | Backward debugging from wrong outputs |
+| *(and more...)* | *See [FRAMEWORKS.md](FRAMEWORKS.md)* |
+</details>
+
+<details>
+<summary><h3>✅ Verification & Integrity (8)</h3></summary>
+
+| Framework | Best For |
+|:---|:---|
+| **Self-Consistency** | Multi-sample voting for reliable answers |
+| **Self-Ask** | Sub-question decomposition before solving |
+| **RaR** | Rephrase-and-Respond for clarity |
+| **Verify-and-Edit** | Verify claims, edit only failures |
+| **RARR** | Research, Augment, Revise - evidence-driven |
+| **SelfCheckGPT** | Hallucination detection via sampling |
+| **MetaQA** | Metamorphic testing for reasoning reliability |
+| **RAGAS** | RAG Assessment for retrieval quality |
+</details>
+
+<details>
+<summary><h3>🤖 Agent Orchestration (5)</h3></summary>
+
+| Framework | Best For |
+|:---|:---|
+| **ReWOO** | Plan then execute - minimize tool calls |
+| **LATS** | Tree search over action sequences |
+| **MRKL** | Modular reasoning with specialized modules |
+| **SWE-Agent** | Repo-first execution loop (inspect/edit/run) |
+| **Toolformer** | Smart tool selection policy |
+</details>
+
+<details>
+<summary><h3>📚 RAG & Retrieval (5)</h3></summary>
+
+| Framework | Best For |
+|:---|:---|
+| **Self-RAG** | Self-triggered selective retrieval |
+| **HyDE** | Hypothetical Document Embeddings |
+| **RAG-Fusion** | Multi-query retrieval with rank fusion |
+| **RAPTOR** | Hierarchical abstraction retrieval |
+| **GraphRAG** | Entity-relation grounding for dependencies |
+</details>
+
+---
+
+## 🔧 Recent Changes
+
+### Code Consolidation
+- **Single Registry**: All frameworks now in `app/frameworks/registry.py`
+- **Config Unified**: Deprecated `core/config.py`, using `core/settings.py`
+- **Token-Efficient Briefs**: `ClaudeCodeBrief.to_surgical_prompt()` for 20% savings
+
+### Architecture
+- **Gemini Orchestration**: Task analysis, context prep, framework selection
+- **ChromaDB Integration**: Knowledge buffer for cross-session learning
+- **Structured Handoff Protocol**: GeminiRouterOutput → ClaudeCodeBrief
 
 ---
 
