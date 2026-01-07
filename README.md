@@ -36,12 +36,12 @@ User Query → Claude → Gemini (via MCP) → Structured Context → Claude Exe
    - Fetches web documentation if needed
    - Queries ChromaDB for similar past solutions (16K+ examples)
    - Selects optimal framework chain (62 available)
-   - Generates token-efficient execution brief (~200 tokens)
+   - Generates token-efficient execution brief (20% format savings)
 4. **Claude receives structured context** and executes
 
 ### Key Design
 - **Gemini burns tokens freely** (1M context) - does ALL the heavy thinking
-- **Claude gets surgical briefs** (~200 tokens) - focuses on execution  
+- **Claude gets full context** with 20% token savings via efficient formatting
 - **Cost**: ~$0.0001 per query (virtually free with Gemini's free tier)
 
 ---
@@ -118,7 +118,7 @@ The structured handoff protocol optimizes for Claude Max subscriptions:
 ⛔ If required inputs missing, request them
 ```
 
-**~200 tokens** with full actionability.
+**20% token savings** via bullet points, full information preserved.
 
 ---
 
