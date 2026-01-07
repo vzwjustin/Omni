@@ -152,7 +152,6 @@ QUALITY: [0.0-1.0]
             critique = line.split(":", 1)[-1].strip()
         elif line.startswith("QUALITY:"):
             try:
-                import re
                 match = re.search(r'(\d+\.?\d*)', line)
                 if match:
                     quality = max(0.0, min(1.0, float(match.group(1))))

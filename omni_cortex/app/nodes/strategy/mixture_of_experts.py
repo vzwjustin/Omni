@@ -130,7 +130,6 @@ CONFIDENCE: [0.0-1.0 how confident you are in this domain]
             analysis = line.split(":", 1)[-1].strip()
         elif line.startswith("CONFIDENCE:"):
             try:
-                import re
                 match = re.search(r'(\d+\.?\d*)', line)
                 if match:
                     confidence = max(0.0, min(1.0, float(match.group(1))))
@@ -183,7 +182,6 @@ WEIGHT_5: [0.0-1.0]
         line = line.strip()
         if line.startswith("WEIGHT_"):
             try:
-                import re
                 match = re.search(r'(\d+\.?\d*)', line)
                 if match:
                     weights.append(max(0.0, min(1.0, float(match.group(1)))))

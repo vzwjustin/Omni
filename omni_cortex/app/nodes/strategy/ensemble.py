@@ -157,7 +157,6 @@ CONFIDENCE: [0.0-1.0]
     
     confidence = 0.7
     try:
-        import re
         match = re.search(r'(\d+\.?\d*)', conf_response)
         if match:
             confidence = max(0.0, min(1.0, float(match.group(1))))
@@ -199,7 +198,6 @@ QUALITY: [0.0-1.0]
             eval_response, _ = await call_fast_synthesizer(eval_prompt, state, max_tokens=32)
             
             try:
-                import re
                 match = re.search(r'(\d+\.?\d*)', eval_response)
                 if match:
                     evaluations.append(float(match.group(1)))

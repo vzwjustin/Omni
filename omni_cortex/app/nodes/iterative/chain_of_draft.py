@@ -99,7 +99,6 @@ WEAKNESS_3: [Third weakness]
         line = line.strip()
         if line.startswith("QUALITY:"):
             try:
-                import re
                 match = re.search(r'(\d+\.?\d*)', line)
                 if match:
                     quality = max(0.0, min(1.0, float(match.group(1))))

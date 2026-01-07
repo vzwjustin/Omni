@@ -5,6 +5,7 @@ Manages multiple Chroma collections for different content types,
 enabling precise retrieval based on context.
 """
 
+import os
 import threading
 from typing import Any, Dict, List, Optional
 from langchain_chroma import Chroma

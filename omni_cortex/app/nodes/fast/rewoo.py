@@ -75,7 +75,6 @@ PLAN:
             current_action = line.split(":", 1)[-1].strip()
             current_deps = []
         elif line.startswith("DEPENDS_"):
-            import re
             deps = [int(d) for d in re.findall(r'\d+', line.split(":")[-1])]
             current_deps = deps
     

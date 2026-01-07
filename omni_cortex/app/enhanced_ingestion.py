@@ -274,7 +274,6 @@ def main():
 
     stats = ingest_repository(repo_root)
 
-    import structlog
     logger = structlog.get_logger("enhanced_ingestion")
     logger.info(
         "enhanced_ingestion_complete",

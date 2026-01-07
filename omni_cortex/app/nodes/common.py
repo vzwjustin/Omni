@@ -10,6 +10,7 @@ Shared components used across all framework nodes:
 """
 
 import asyncio
+import difflib
 import functools
 import re
 import structlog
@@ -37,6 +38,17 @@ DEFAULT_PRM_TOKENS = 10
 DEFAULT_PRM_TEMP = 0.1
 DEFAULT_OPTIMIZATION_TOKENS = 2000
 DEFAULT_OPTIMIZATION_TEMP = 0.3
+
+# Granular token limits for specific use cases
+# These are used throughout framework nodes for different operations
+TOKENS_SCORE_PARSING = 32       # Parse numerical scores (0.0-1.0)
+TOKENS_SHORT_RESPONSE = 64       # Very short responses (satisfaction, quality)
+TOKENS_QUESTION = 256            # Generate questions or critiques
+TOKENS_ANALYSIS = 512            # Quick analysis or evaluation
+TOKENS_DETAILED = 768            # Detailed solutions or reasoning
+TOKENS_COMPREHENSIVE = 1024      # Comprehensive analysis
+TOKENS_EXTENDED = 1536           # Extended reasoning
+TOKENS_FULL = 2048               # Full synthesis or final answers
 
 
 # =============================================================================
@@ -663,8 +675,6 @@ def get_rag_context(state: GraphState) -> str:
 
 def generate_code_diff(original_code: str, updated_code: str) -> str:
     """Generate a unified diff between original and updated code."""
-    import difflib
-
     diff = difflib.unified_diff(
         original_code.splitlines(),
         updated_code.splitlines(),

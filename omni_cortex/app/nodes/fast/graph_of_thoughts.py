@@ -107,7 +107,6 @@ DEPENDENCIES:
     for line in response.split("\n"):
         if "DEPENDS_ON:" in line:
             try:
-                import re
                 thought_id = int(re.search(r'THOUGHT_(\d+)', line).group(1))
                 deps = [int(d) for d in re.findall(r'\d+', line.split("DEPENDS_ON:")[-1])]
                 
@@ -116,7 +115,8 @@ DEPENDENCIES:
                     for dep_id in deps:
                         if dep_id <= len(nodes):
                             nodes[dep_id - 1].successors.append(thought_id)
-            except:
+            except Exception as e:
+        logger.debug("score_parsing_failed", response=score_response[:50] if "score_response" in locals() else response[:50], error=str(e))
                 pass
 
 

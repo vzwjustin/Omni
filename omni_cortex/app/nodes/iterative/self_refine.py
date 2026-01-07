@@ -130,7 +130,6 @@ QUALITY_SCORE: [0.0-1.0 rating of current solution]
             current_section = "improvements"
         elif line.startswith("QUALITY_SCORE:"):
             try:
-                import re
                 match = re.search(r'(\d+\.?\d*)', line)
                 if match:
                     score = max(0.0, min(1.0, float(match.group(1))))
@@ -224,7 +223,6 @@ NOTES: [Any final observations]
     response, _ = await call_fast_synthesizer(prompt, state, max_tokens=512)
     
     score = 0.7
-    import re
     match = re.search(r'FINAL_SCORE:\s*(\d+\.?\d*)', response)
     if match:
         try:

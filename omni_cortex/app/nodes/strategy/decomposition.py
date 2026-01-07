@@ -86,7 +86,6 @@ DEPENDS_3: [1] (if depends on sub-problem 1)
             current_deps = []
         elif line.startswith("DEPENDS_"):
             deps_text = line.split(":")[-1].strip()
-            import re
             current_deps = [int(d) for d in re.findall(r'\d+', deps_text)]
     
     if current_desc:

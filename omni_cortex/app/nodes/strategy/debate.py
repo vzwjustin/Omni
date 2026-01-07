@@ -225,7 +225,6 @@ SYNTHESIS: [your synthesized solution]
             winner_name = line.split(":")[-1].strip()
         elif line.startswith("WINNER_SCORE:"):
             try:
-                import re
                 match = re.search(r'(\d+\.?\d*)', line)
                 if match:
                     winner_score = max(0.0, min(1.0, float(match.group(1))))

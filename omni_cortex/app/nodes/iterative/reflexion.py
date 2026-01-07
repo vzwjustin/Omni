@@ -128,7 +128,6 @@ MISSING: [What's missing or wrong, if anything]
             success = "yes" in line.lower()
         elif line.startswith("SCORE:"):
             try:
-                import re
                 match = re.search(r'(\d+\.?\d*)', line)
                 if match:
                     score = max(0.0, min(1.0, float(match.group(1))))

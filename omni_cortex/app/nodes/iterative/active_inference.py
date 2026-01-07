@@ -200,7 +200,6 @@ Respond with ONLY a number between 0.0 and 1.0 representing updated confidence.
     response, _ = await call_fast_synthesizer(prompt, state, max_tokens=32)
     
     try:
-        import re
         match = re.search(r'(\d+\.?\d*)', response.strip())
         if match:
             return max(0.0, min(1.0, float(match.group(1))))

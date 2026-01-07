@@ -110,7 +110,6 @@ REL_2: [entity_id] [relation] [entity_id] - [description]
     for line in response.split("\n"):
         if line.startswith("REL_"):
             try:
-                import re
                 ids = [int(x) for x in re.findall(r'\b\d+\b', line)]
                 if len(ids) >= 2:
                     parts = line.split("-", 1)
@@ -123,7 +122,8 @@ REL_2: [entity_id] [relation] [entity_id] - [description]
                         relation_type=rel_type,
                         description=desc
                     ))
-            except Exception:
+            except Exception as e:
+        logger.debug("score_parsing_failed", response=score_response[:50] if "score_response" in locals() else response[:50], error=str(e))
                 pass
     
     return relationships
@@ -148,10 +148,10 @@ RELEVANT_IDS: [comma-separated IDs]
     response, _ = await call_fast_synthesizer(prompt, state, max_tokens=128)
     
     try:
-        import re
         ids = [int(x) for x in re.findall(r'\d+', response)]
         return ids[:5]
-    except Exception:
+    except Exception as e:
+        logger.debug("score_parsing_failed", response=score_response[:50] if "score_response" in locals() else response[:50], error=str(e))
         return [1, 2, 3]
 
 

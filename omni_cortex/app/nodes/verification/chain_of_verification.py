@@ -241,7 +241,6 @@ REASONING: [Brief explanation]
                 verdict = v
         elif line.startswith("confidence:"):
             try:
-                import re
                 match = re.search(r'(\d+\.?\d*)', line)
                 if match:
                     confidence = max(0.0, min(1.0, float(match.group(1))))

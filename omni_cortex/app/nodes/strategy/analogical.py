@@ -154,7 +154,6 @@ RELEVANCE_SCORE: [0.0-1.0 how well this analogy fits]
             adapted = line.split(":", 1)[-1].strip()
         elif line.startswith("RELEVANCE_SCORE:"):
             try:
-                import re
                 match = re.search(r'(\d+\.?\d*)', line)
                 if match:
                     score = max(0.0, min(1.0, float(match.group(1))))

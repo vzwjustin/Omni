@@ -278,7 +278,6 @@ SATISFACTION: [0.0-1.0]
     response, _ = await call_fast_synthesizer(prompt, state, max_tokens=64)
     
     try:
-        import re
         match = re.search(r'(\d+\.?\d*)', response)
         if match:
             return max(0.0, min(1.0, float(match.group(1))))

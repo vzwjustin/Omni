@@ -103,11 +103,11 @@ SCORE:
     
     score = 0.7
     try:
-        import re
         match = re.search(r'(\d+\.?\d*)', score_response)
         if match:
             score = max(0.0, min(1.0, float(match.group(1))))
-    except:
+    except Exception as e:
+        logger.debug("score_parsing_failed", response=score_response[:50] if "score_response" in locals() else response[:50], error=str(e))
         pass
     
     return ReasoningState(
