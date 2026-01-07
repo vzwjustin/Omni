@@ -12,51 +12,47 @@
 
 ---
 
-## 🏗️ Architecture: Two Gemini Paths
+## 🏗️ Architecture: Gemini Orchestrates, Claude Executes
 
-Omni-Cortex uses Gemini for orchestration through **two MCP tools** (called by Claude Code automatically):
-
-### Path 1: `prepare_context` — Context Preparation
 ```
-User asks question → Claude Code calls prepare_context → ContextGateway
-    ├── QueryAnalyzer (Gemini)     → Understands task intent
-    ├── FileDiscoverer (Gemini)    → Finds relevant files  
-    ├── DocumentationSearcher      → Fetches web docs
-    └── CodeSearcher               → grep/git searches
-                     ↓
-        StructuredContext → Claude uses for file discovery
-```
-**Called when:** Claude needs to understand the codebase, find files, get documentation.
-
-### Path 2: `reason` — Framework Selection + Execution Brief
-```
-User asks question → Claude Code calls reason → HyperRouter
-    ├── _route_to_category()              → Fast local pattern match
-    ├── _select_with_specialist(Gemini)   → Picks framework chain
-    └── StructuredBriefGenerator
-        ├── gemini_analyze_task()         → Rich execution plan
-        └── enrich_evidence_from_chroma() → RAG knowledge
-                     ↓
-        ClaudeCodeBrief (~200 tokens) → Claude executes
-```
-**Called when:** Claude needs a thinking strategy and step-by-step execution plan.
-
-### Combined Flow
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│  USER speaks naturally → Claude Code (AI)                           │
-│            ↓                                                        │
-│      Claude calls prepare_context → Gemini finds files, docs        │
-│            ↓                                                        │
-│      Claude calls reason → Gemini selects frameworks, makes brief   │
-│            ↓                                                        │
-│      Claude executes with full context + optimal strategy           │
-└─────────────────────────────────────────────────────────────────────┘
+User Query → Gemini Context Gateway → Structured Context → Claude Deep Reasoning
+                    ↓
+        1. Analyze intent & extract keywords
+        2. Discover relevant files (with scoring)
+        3. Search code (grep/ripgrep/git)
+        4. Fetch documentation from web
+        5. Query ChromaDB knowledge base (16K+ examples)
+        6. Structure everything into organized brief
 ```
 
-**Key Design:**
+### How It Works
+
+When you ask Claude a question, Omni-Cortex intercepts it:
+
+1. **Gemini Context Gateway** (cheap, 1M context)
+   - Analyzes your query to understand intent
+   - Discovers relevant files with relevance scoring
+   - Searches codebase via grep/git
+   - Fetches web documentation if needed
+   - Queries ChromaDB for similar past solutions
+   - Selects optimal framework chain (62 available)
+   - Generates token-efficient execution brief
+
+2. **Structured Context → Claude** (~200 tokens)
+   - Files to look at (with line numbers)
+   - Execution plan (numbered steps)
+   - Verification commands
+   - Evidence from codebase analysis
+   - Stop conditions
+
+3. **Claude Deep Reasoning**
+   - Receives focused, surgical brief
+   - Executes with full context already gathered
+   - No egg hunting - everything is pre-discovered
+
+### Key Design
 - **Gemini burns tokens freely** (1M context) - does ALL the heavy thinking
-- **Claude gets surgical briefs** (~200 tokens) - focuses on execution
+- **Claude gets surgical briefs** (~200 tokens) - focuses on execution  
 - **20% token savings** vs verbose formats, with zero information loss
 
 ---
