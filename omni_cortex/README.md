@@ -15,45 +15,34 @@
 ## 🏗️ Architecture: Gemini Orchestrates, Claude Executes
 
 ```
-User Query → Gemini Context Gateway → Structured Context → Claude Deep Reasoning
-                    ↓
-        1. Analyze intent & extract keywords
-        2. Discover relevant files (with scoring)
-        3. Search code (grep/ripgrep/git)
-        4. Fetch documentation from web
-        5. Query ChromaDB knowledge base (16K+ examples)
-        6. Structure everything into organized brief
+User Query → Claude → Gemini (via MCP) → Structured Context → Claude Executes
+                          ↓
+              1. Analyze intent & extract keywords
+              2. Discover relevant files (with scoring)
+              3. Search code (grep/ripgrep/git)
+              4. Fetch documentation from web
+              5. Query ChromaDB knowledge base (16K+ examples)
+              6. Structure everything into organized brief
 ```
 
 ### How It Works
 
-When you ask Claude a question, Omni-Cortex intercepts it:
-
-1. **Gemini Context Gateway** (cheap, 1M context)
-   - Analyzes your query to understand intent
+1. **User asks Claude** a question
+2. **Claude calls Omni-Cortex** (MCP tool)
+3. **Gemini Context Gateway** does the heavy lifting:
+   - Analyzes query to understand intent
    - Discovers relevant files with relevance scoring
    - Searches codebase via grep/git
    - Fetches web documentation if needed
-   - Queries ChromaDB for similar past solutions
+   - Queries ChromaDB for similar past solutions (16K+ examples)
    - Selects optimal framework chain (62 available)
-   - Generates token-efficient execution brief
-
-2. **Structured Context → Claude** (~200 tokens)
-   - Files to look at (with line numbers)
-   - Execution plan (numbered steps)
-   - Verification commands
-   - Evidence from codebase analysis
-   - Stop conditions
-
-3. **Claude Deep Reasoning**
-   - Receives focused, surgical brief
-   - Executes with full context already gathered
-   - No egg hunting - everything is pre-discovered
+   - Generates token-efficient execution brief (~200 tokens)
+4. **Claude receives structured context** and executes
 
 ### Key Design
 - **Gemini burns tokens freely** (1M context) - does ALL the heavy thinking
 - **Claude gets surgical briefs** (~200 tokens) - focuses on execution  
-- **20% token savings** vs verbose formats, with zero information loss
+- **Cost**: ~$0.0001 per query (virtually free with Gemini's free tier)
 
 ---
 
