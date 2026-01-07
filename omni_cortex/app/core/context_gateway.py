@@ -9,43 +9,37 @@ This module acts as a preprocessing layer that uses Gemini Flash to:
 5. Structure rich context for Claude
 
 Architecture:
-    User Query → Gemini Flash (cheap, fast) → Structured Context → Claude (expensive, powerful)
+    User Query -> Gemini Flash (cheap, fast) -> Structured Context -> Claude (expensive, powerful)
 
 Gemini does the "egg hunting" so Claude can focus on deep reasoning.
+
+This module uses composition with specialized components:
+- QueryAnalyzer: Query understanding and task analysis
+- FileDiscoverer: Workspace file discovery and ranking
+- DocumentationSearcher: Web and knowledge base documentation search
+- CodeSearcher: Codebase search via grep/git
 """
 
 import asyncio
-import json
-import os
-import re
-import subprocess
+import threading
 import structlog
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Optional, List, Dict, Any, Tuple
-from .settings import get_settings
-from .context_utils import count_tokens
+from typing import Optional, List, Dict, Any
 
-# Import RAG and memory systems
-try:
-    from ..collection_manager import get_collection_manager
-    from ..langchain_integration import get_memory
-    CHROMA_AVAILABLE = True
-except ImportError:
-    CHROMA_AVAILABLE = False
-    get_collection_manager = None
-    get_memory = None
+from .constants import CONTENT
+from .context import (
+    QueryAnalyzer,
+    FileDiscoverer,
+    DocumentationSearcher,
+    CodeSearcher,
+)
 
 logger = structlog.get_logger("context_gateway")
 
-# Try to import Google AI
-try:
-    import google.generativeai as genai
-    GOOGLE_AI_AVAILABLE = True
-except ImportError:
-    GOOGLE_AI_AVAILABLE = False
-    genai = None
 
+# =============================================================================
+# Dataclasses - Keep in gateway for cross-module compatibility
+# =============================================================================
 
 @dataclass
 class FileContext:
@@ -115,7 +109,7 @@ class StructuredContext:
 
     # Documentation (pre-fetched snippets)
     documentation: List[DocumentationContext] = field(default_factory=list)
-    
+
     # Code Search Results (grep/git)
     code_search: List[CodeSearchContext] = field(default_factory=list)
 
@@ -132,7 +126,7 @@ class StructuredContext:
     # Additional Context
     related_patterns: List[str] = field(default_factory=list)  # Similar code patterns
     dependencies: List[str] = field(default_factory=list)  # External deps to consider
-    
+
     # Token Budget (Gemini optimizes to stay under this)
     token_budget: int = 50000  # Max tokens for Claude prompt
     actual_tokens: int = 0  # Actual token count after generation
@@ -166,23 +160,22 @@ class StructuredContext:
                 doc_lines.append(f"*Source: {doc.source}*")
                 doc_lines.append(f"```\n{doc.snippet}\n```")
             sections.append("\n".join(doc_lines))
-        
+
         # Code Search Section
         if self.code_search:
             search_lines = ["## Code Search Results"]
             for search in self.code_search[:3]:
                 search_lines.append(f"### {search.search_type.upper()}: {search.query}")
                 search_lines.append(f"*Files: {search.file_count} | Matches: {search.match_count}*")
-                search_lines.append(f"```\n{search.results[:2000]}\n```")
+                search_lines.append(f"```\n{search.results[:CONTENT.SNIPPET_MAX]}\n```")
             sections.append("\n".join(search_lines))
-        
 
         # Framework Section
         sections.append(f"""## Recommended Approach
 **Framework**: `{self.recommended_framework}`
 **Reason**: {self.framework_reason}""")
         if self.chain_suggestion:
-            sections.append(f"**Chain**: {' → '.join(self.chain_suggestion)}")
+            sections.append(f"**Chain**: {' -> '.join(self.chain_suggestion)}")
 
         # Execution Plan
         if self.execution_steps:
@@ -200,7 +193,7 @@ class StructuredContext:
 
         # Potential Blockers
         if self.potential_blockers:
-            blockers = ["## ⚠️ Potential Blockers"]
+            blockers = ["## Potential Blockers"]
             for b in self.potential_blockers:
                 blockers.append(f"- {b}")
             sections.append("\n".join(blockers))
@@ -240,16 +233,19 @@ class StructuredContext:
         }
 
 
+# =============================================================================
+# ContextGateway - Now uses composition with specialized components
+# =============================================================================
+
 class ContextGateway:
     """
     Gemini-powered context optimization layer.
 
-    Does the heavy lifting of:
-    - Analyzing queries to understand intent
-    - Discovering relevant files in workspace
-    - Fetching documentation from the web
-    - Scoring and ranking relevance
-    - Structuring everything for Claude
+    Uses composition with specialized components:
+    - QueryAnalyzer: Analyzes queries to understand intent
+    - FileDiscoverer: Discovers relevant files in workspace
+    - DocumentationSearcher: Fetches documentation from web/knowledge base
+    - CodeSearcher: Searches codebase via grep/git
 
     Usage:
         gateway = ContextGateway()
@@ -261,52 +257,11 @@ class ContextGateway:
     """
 
     def __init__(self):
-        self.settings = get_settings()
-        self._model = None
-        self._search_model = None
-
-    def _get_model(self):
-        """Get or create Gemini model for analysis."""
-        if self._model is None:
-            if not GOOGLE_AI_AVAILABLE:
-                raise RuntimeError("google-generativeai not installed")
-
-            api_key = self.settings.google_api_key
-            if not api_key:
-                raise RuntimeError("GOOGLE_API_KEY not configured")
-
-            genai.configure(api_key=api_key)
-            self._model = genai.GenerativeModel(
-                self.settings.routing_model or "gemini-2.0-flash"
-            )
-        return self._model
-
-    def _get_search_model(self):
-        """Get model with Google Search grounding for documentation lookup."""
-        if self._search_model is None:
-            if not GOOGLE_AI_AVAILABLE:
-                raise RuntimeError("google-generativeai not installed")
-
-            api_key = self.settings.google_api_key
-            if not api_key:
-                raise RuntimeError("GOOGLE_API_KEY not configured")
-
-            genai.configure(api_key=api_key)
-
-            # Use grounded model for web search
-            from google.generativeai import GenerativeModel
-            from google.generativeai.types import Tool
-
-            # Google Search grounding tool
-            google_search_tool = Tool.from_google_search_retrieval(
-                google_search_retrieval={"disable_attribution": False}
-            )
-
-            self._search_model = GenerativeModel(
-                model_name="gemini-3-flash-preview",
-                tools=[google_search_tool]
-            )
-        return self._search_model
+        # Composition: delegate to specialized components
+        self._query_analyzer = QueryAnalyzer()
+        self._file_discoverer = FileDiscoverer()
+        self._doc_searcher = DocumentationSearcher()
+        self._code_searcher = CodeSearcher()
 
     async def prepare_context(
         self,
@@ -337,38 +292,72 @@ class ContextGateway:
         Returns:
             StructuredContext ready for Claude
         """
-        logger.info("context_gateway_start", query=query[:100])
+        logger.info("context_gateway_start", query=query[:CONTENT.QUERY_LOG])
 
-        # Run analysis tasks in parallel
+        # Run analysis tasks in parallel using specialized components
         tasks = [
-            self._analyze_query(query, code_context),
-            self._discover_files(query, workspace_path, file_list, max_files),
+            self._query_analyzer.analyze(query, code_context),
+            self._file_discoverer.discover(query, workspace_path, file_list, max_files),
         ]
 
         if search_docs:
-            tasks.append(self._search_documentation(query))
-        
+            tasks.append(self._doc_searcher.search_web(query))
+
         # Add code search if workspace is provided
         if workspace_path:
-            tasks.append(self._search_codebase(query, workspace_path))
+            tasks.append(self._code_searcher.search(query, workspace_path))
 
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         # Parse results
         query_analysis = results[0] if not isinstance(results[0], Exception) else {}
         file_contexts = results[1] if not isinstance(results[1], Exception) else []
-        
+
+        # Convert file contexts from component dataclass to gateway dataclass
+        converted_files = [
+            FileContext(
+                path=f.path,
+                relevance_score=f.relevance_score,
+                summary=f.summary,
+                key_elements=f.key_elements,
+                line_count=f.line_count,
+                size_kb=f.size_kb,
+            )
+            for f in file_contexts
+        ]
+
         # Documentation and code search are optional
         next_idx = 2
         doc_contexts = []
         code_search_results = []
-        
+
         if search_docs:
-            doc_contexts = results[next_idx] if not isinstance(results[next_idx], Exception) else []
+            raw_docs = results[next_idx] if not isinstance(results[next_idx], Exception) else []
+            # Convert doc contexts
+            doc_contexts = [
+                DocumentationContext(
+                    source=d.source,
+                    title=d.title,
+                    snippet=d.snippet,
+                    relevance_score=d.relevance_score,
+                )
+                for d in raw_docs
+            ]
             next_idx += 1
-        
+
         if workspace_path and next_idx < len(results):
-            code_search_results = results[next_idx] if not isinstance(results[next_idx], Exception) else []
+            raw_code = results[next_idx] if not isinstance(results[next_idx], Exception) else []
+            # Convert code search contexts
+            code_search_results = [
+                CodeSearchContext(
+                    search_type=c.search_type,
+                    query=c.query,
+                    results=c.results,
+                    file_count=c.file_count,
+                    match_count=c.match_count,
+                )
+                for c in raw_code
+            ]
 
         # Handle exceptions
         for i, result in enumerate(results):
@@ -380,7 +369,7 @@ class ContextGateway:
             task_type=query_analysis.get("task_type", "general"),
             task_summary=query_analysis.get("summary", query),
             complexity=query_analysis.get("complexity", "medium"),
-            relevant_files=file_contexts,
+            relevant_files=converted_files,
             entry_point=query_analysis.get("entry_point"),
             documentation=doc_contexts,
             code_search=code_search_results,
@@ -405,453 +394,35 @@ class ContextGateway:
 
         return context
 
-    async def _analyze_query(
-        self,
-        query: str,
-        code_context: Optional[str] = None
-    ) -> Dict[str, Any]:
-        """Use Gemini to deeply analyze the query."""
-        model = self._get_model()
-
-        prompt = f"""Analyze this coding task and provide structured analysis.
-
-QUERY: {query}
-
-{f"CODE CONTEXT:{chr(10)}{code_context[:2000]}" if code_context else ""}
-
-Respond in JSON format:
-{{
-    "task_type": "debug|implement|refactor|architect|test|review|explain|optimize",
-    "summary": "Clear 1-2 sentence description of what needs to be done",
-    "complexity": "low|medium|high|very_high",
-    "entry_point": "suggested file or function to start with, or null",
-    "framework": "best framework from: reason_flux, active_inference, self_debugging, mcts_rstar, alphacodium, plan_and_solve, multi_agent_debate, chain_of_verification, swe_agent, tree_of_thoughts",
-    "framework_reason": "Why this framework is best for this task",
-    "chain": ["framework1", "framework2"] or null if single framework sufficient,
-    "steps": ["Step 1: ...", "Step 2: ..."],
-    "success_criteria": ["Criterion 1", "Criterion 2"],
-    "blockers": ["Potential issue 1"] or [],
-    "patterns": ["Pattern to look for in code"],
-    "dependencies": ["External deps to consider"]
-}}
-
-Be specific and actionable. Focus on what Claude needs to execute effectively."""
-
-        try:
-            response = await asyncio.to_thread(
-                model.generate_content,
-                prompt,
-                generation_config={"temperature": 0.3}
-            )
-
-            # Extract JSON from response
-            text = response.text
-            json_match = re.search(r'\{[\s\S]*\}', text)
-            if json_match:
-                return json.loads(json_match.group())
-            return {}
-        except Exception as e:
-            logger.error("query_analysis_failed", error=str(e))
-            return {}
-
-    async def _discover_files(
-        self,
-        query: str,
-        workspace_path: Optional[str],
-        file_list: Optional[List[str]],
-        max_files: int
-    ) -> List[FileContext]:
-        """Discover and rank relevant files using Gemini."""
-        if not workspace_path and not file_list:
-            return []
-
-        model = self._get_model()
-
-        # Get file listing
-        files_to_analyze = []
-        if file_list:
-            files_to_analyze = file_list[:50]  # Cap at 50
-        elif workspace_path:
-            files_to_analyze = await self._list_workspace_files(workspace_path)
-
-        if not files_to_analyze:
-            return []
-
-        # Have Gemini score relevance
-        file_listing = "\n".join(files_to_analyze[:100])  # Cap listing
-
-        prompt = f"""Given this query and file listing, identify the most relevant files.
-
-QUERY: {query}
-
-FILES:
-{file_listing}
-
-For each relevant file, respond in JSON array format:
-[
-    {{
-        "path": "path/to/file.py",
-        "relevance_score": 0.95,
-        "summary": "Main entry point for authentication logic",
-        "key_elements": ["login()", "validate_token()", "User class"]
-    }}
-]
-
-Only include files that are actually relevant (score > 0.5).
-Order by relevance score descending.
-Maximum {max_files} files."""
-
-        try:
-            response = await asyncio.to_thread(
-                model.generate_content,
-                prompt,
-                generation_config={"temperature": 0.2}
-            )
-
-            text = response.text
-            json_match = re.search(r'\[[\s\S]*\]', text)
-            if json_match:
-                files_data = json.loads(json_match.group())
-                return [
-                    FileContext(
-                        path=f["path"],
-                        relevance_score=f.get("relevance_score", 0.5),
-                        summary=f.get("summary", ""),
-                        key_elements=f.get("key_elements", []),
-                    )
-                    for f in files_data[:max_files]
-                ]
-            return []
-        except Exception as e:
-            logger.error("file_discovery_failed", error=str(e))
-            return []
-
-    async def _list_workspace_files(self, workspace_path: str) -> List[str]:
-        """List relevant files in workspace (excludes common non-code files)."""
-        exclude_patterns = {
-            "__pycache__", ".git", "node_modules", ".venv", "venv",
-            ".pytest_cache", ".mypy_cache", "dist", "build", ".egg-info",
-            ".tox", "htmlcov", ".coverage", "*.pyc", "*.pyo"
-        }
-
-        include_extensions = {
-            ".py", ".js", ".ts", ".tsx", ".jsx", ".go", ".rs", ".java",
-            ".c", ".cpp", ".h", ".hpp", ".cs", ".rb", ".php", ".swift",
-            ".kt", ".scala", ".sql", ".sh", ".yaml", ".yml", ".json",
-            ".toml", ".md", ".rst", ".dockerfile"
-        }
-
-        files = []
-        try:
-            workspace = Path(workspace_path)
-            for path in workspace.rglob("*"):
-                if path.is_file():
-                    # Check exclusions
-                    if any(ex in str(path) for ex in exclude_patterns):
-                        continue
-                    # Check extensions
-                    if path.suffix.lower() in include_extensions or path.name.lower() in {"dockerfile", "makefile"}:
-                        rel_path = str(path.relative_to(workspace))
-                        files.append(rel_path)
-                        if len(files) >= 200:  # Cap at 200 files
-                            break
-        except Exception as e:
-            logger.error("workspace_listing_failed", error=str(e))
-
-        return files
-
-    async def _search_documentation(self, query: str) -> List[DocumentationContext]:
-        """Search web for relevant documentation using Gemini with Google Search."""
-        try:
-            model = self._get_search_model()
-
-            prompt = f"""Search for relevant documentation, API references, or technical guides for:
-
-{query}
-
-Find official documentation, tutorials, or authoritative sources that would help with this task.
-For each relevant source, provide:
-- The URL/source
-- A brief title
-- The most relevant snippet or information
-
-Focus on actionable, technical content."""
-
-            response = await asyncio.to_thread(
-                model.generate_content,
-                prompt,
-                generation_config={"temperature": 0.3}
-            )
-
-            # Parse response into documentation contexts
-            # The grounded response includes search results
-            docs = []
-            text = response.text
-
-            # Try to extract structured data, or parse the text
-            # For now, return as single context if there's content
-            if text and len(text) > 50:
-                docs.append(DocumentationContext(
-                    source="Google Search (Gemini Grounded)",
-                    title="Documentation Search Results",
-                    snippet=text[:2000],  # Cap snippet size
-                    relevance_score=0.8
-                ))
-
-            return docs
-        except Exception as e:
-            logger.warning("doc_search_failed", error=str(e))
-            return []
-
-    async def _search_knowledge_base(self, query: str, task_type: str) -> List[DocumentationContext]:
-        """
-        Search ChromaDB collections for relevant framework docs, learnings, and patterns.
-        
-        Args:
-            query: User's query
-            task_type: Type of task (debug, implement, refactor, etc.)
-            
-        Returns:
-            List of relevant documentation from ChromaDB
-        """
-        if not CHROMA_AVAILABLE:
-            logger.debug("chroma_unavailable", reason="import_failed")
-            return []
-        
-        try:
-            manager = get_collection_manager()
-            results = []
-            
-            # Search learnings for similar past solutions
-            try:
-                learnings = await asyncio.to_thread(
-                    manager.search_learnings,
-                    query,
-                    k=3,
-                    min_rating=0.7
-                )
-                for learning in learnings:
-                    if 'solution' in learning and 'problem' in learning:
-                        results.append(DocumentationContext(
-                            source=f"Past Learning (Framework: {learning.get('framework', 'unknown')})",
-                            title=learning.get('problem', '')[:100],
-                            snippet=learning.get('solution', '')[:1500],
-                            relevance_score=learning.get('rating', 0.8)
-                        ))
-            except Exception as e:
-                logger.debug("learnings_search_failed", error=str(e))
-            
-            # For debug tasks, search debugging knowledge
-            if task_type == "debug":
-                try:
-                    debug_docs = await asyncio.to_thread(
-                        manager.search_debugging_knowledge,
-                        query,
-                        k=3
-                    )
-                    for doc in debug_docs:
-                        if hasattr(doc, 'page_content'):
-                            results.append(DocumentationContext(
-                                source="Debugging Knowledge Base",
-                                title="Similar Bug Fix",
-                                snippet=doc.page_content[:1500],
-                                relevance_score=0.75
-                            ))
-                except Exception as e:
-                    logger.debug("debug_knowledge_search_failed", error=str(e))
-            
-            # Search framework documentation
-            try:
-                framework_docs = await asyncio.to_thread(
-                    manager.search_frameworks,query,
-                    k=3
-                )
-                for doc in framework_docs:
-                    if hasattr(doc, 'page_content'):
-                        metadata = doc.metadata or {}
-                        results.append(DocumentationContext(
-                            source=f"Framework Docs: {metadata.get('framework_name', 'unknown')}",
-                            title=metadata.get('function', metadata.get('class', 'Documentation')),
-                            snippet=doc.page_content[:1500],
-                            relevance_score=0.7
-                        ))
-            except Exception as e:
-                logger.debug("framework_docs_search_failed", error=str(e))
-            
-            logger.info("knowledge_base_search_complete", results=len(results))
-            return results[:5]  # Cap at 5 results
-            
-        except Exception as e:
-            logger.error("knowledge_base_search_failed", error=str(e))
-            return []
-
-    async def _search_codebase(
-        self,
-        query: str,
-        workspace_path: Optional[str],
-        search_queries: Optional[List[str]] = None
-    ) -> List[CodeSearchContext]:
-        """
-        Search codebase using grep/ripgrep or git commands.
-        
-        Args:
-            query: User's original query
-            workspace_path: Path to workspace
-            search_queries: Specific search queries extracted by Gemini
-            
-        Returns:
-            List of code search results
-        """
-        if not workspace_path or not os.path.exists(workspace_path):
-            return []
-        
-        results = []
-        
-        # If no specific queries, let Gemini extract them from the query
-        if not search_queries:
-            model = self._get_model()
-            prompt = f"""Extract 1-3 specific code search queries from this task:
-
-{query}
-
-Return ONLY the search terms, one per line. Focus on:
-- Function/class names mentioned
-- Error messages or strings
-- Technical keywords
-- File patterns
-
-Example output:
-authenticate
-login_required
-JWT"""
-
-            try:
-                response = await asyncio.to_thread(
-                    model.generate_content,
-                    prompt,
-                    generation_config={"temperature": 0.2}
-                )
-                search_queries = [line.strip() for line in response.text.split('\n') if line.strip()][:3]
-            except Exception as e:
-                logger.warning("search_query_extraction_failed", error=str(e))
-                search_queries = []
-        
-        # Try ripgrep first (faster), fall back to grep
-        search_cmd = None
-        if os.system("which rg > /dev/null 2>&1") == 0:
-            search_cmd = "rg"
-        elif os.system("which grep > /dev/null 2>&1") == 0:
-            search_cmd = "grep"
-        
-        if not search_cmd or not search_queries:
-            return []
-        
-        for search_term in search_queries[:3]:
-            try:
-                if search_cmd == "rg":
-                    cmd = [
-                        "rg",
-                        "--no-heading",
-                        "--line-number",
-                        "--context", "2",
-                        "--max-count", "10",
-                        "--type-not", "lock",
-                        search_term,
-                        workspace_path
-                    ]
-                else:
-                    cmd = [
-                        "grep",
-                        "-r",
-                        "-n",
-                        "-C", "2",
-                        "--exclude=*.lock",
-                        "--exclude-dir=node_modules",
-                        "--exclude-dir=.git",
-                        search_term,
-                        workspace_path
-                    ]
-                
-                proc = await asyncio.create_subprocess_exec(
-                    *cmd,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE
-                )
-                stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=5.0)
-                
-                if proc.returncode == 0 and stdout:
-                    output = stdout.decode('utf-8', errors='ignore')
-                    lines = output.split('\n')
-                    file_count = len(set(line.split(':')[0] for line in lines if ':' in line))
-                    
-                    results.append(CodeSearchContext(
-                        search_type="grep",
-                        query=search_term,
-                        results=output[:3000],  # Cap output
-                        file_count=file_count,
-                        match_count=len([l for l in lines if search_term in l])
-                    ))
-                    
-            except asyncio.TimeoutError:
-                logger.warning("code_search_timeout", query=search_term)
-            except Exception as e:
-                logger.error("code_search_failed", query=search_term, error=str(e))
-        
-        # Also try git log if this is a git repo
-        git_dir = os.path.join(workspace_path, ".git")
-        if os.path.exists(git_dir) and search_queries:
-            try:
-                cmd = [
-                    "git",
-                    "-C", workspace_path,
-                    "log",
-                    "--all",
-                    "--oneline",
-                    "--grep", query[:100],
-                    "-10"
-                ]
-                proc = await asyncio.create_subprocess_exec(
-                    *cmd,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE
-                )
-                stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=3.0)
-                
-                if stdout:
-                    output = stdout.decode('utf-8', errors='ignore')
-                    if output.strip():
-                        results.append(CodeSearchContext(
-                            search_type="git_log",
-                            query=query[:100],
-                            results=output,
-                            file_count=0,
-                            match_count=len(output.split('\n'))
-                        ))
-            except Exception as e:
-                logger.debug("git_log_search_skipped", error=str(e))
-        
-        logger.info("code_search_complete", queries=len(search_queries), results=len(results))
-        return results
-
-
     async def quick_analyze(self, query: str) -> Dict[str, Any]:
         """
         Quick analysis without file discovery or doc search.
 
         Use for fast routing decisions.
         """
-        return await self._analyze_query(query)
+        return await self._query_analyzer.analyze(query)
 
 
-# Global singleton
+# =============================================================================
+# Global singleton with thread-safe initialization
+# =============================================================================
+
 _gateway: Optional[ContextGateway] = None
+_gateway_lock = threading.Lock()
 
 
 def get_context_gateway() -> ContextGateway:
-    """Get the global ContextGateway singleton."""
+    """Get the global ContextGateway singleton (thread-safe)."""
     global _gateway
-    if _gateway is None:
-        _gateway = ContextGateway()
+
+    # Fast path: already initialized
+    if _gateway is not None:
+        return _gateway
+
+    # Thread-safe initialization with double-check locking
+    with _gateway_lock:
+        if _gateway is None:
+            _gateway = ContextGateway()
     return _gateway
 
 

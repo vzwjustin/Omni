@@ -13,7 +13,9 @@ import functools
 import re
 import structlog
 from typing import Callable, Optional, Any
-from ..core.config import model_config, settings
+from ..core.settings import get_settings
+from ..core.constants import CONTENT
+from ..core.errors import LLMError, ProviderNotConfiguredError
 from ..state import GraphState
 from ..nodes.langchain_tools import (
     call_langchain_tool,
@@ -42,10 +44,10 @@ DEFAULT_OPTIMIZATION_TEMP = 0.3
 def quiet_star(func: Callable) -> Callable:
     """
     Quiet-STaR decorator: Enforces <quiet_thought> internal monologue.
-    
+
     Wraps framework nodes to ensure every LLM generation includes
     an internal thinking block before the actual output.
-    
+
     Usage:
         @quiet_star
         async def my_framework_node(state: GraphState) -> GraphState:
@@ -83,17 +85,17 @@ def quiet_star(func: Callable) -> Callable:
 def extract_quiet_thought(response: str) -> tuple[str, str]:
     """
     Extract quiet thought and actual response from LLM output.
-    
+
     Returns: (quiet_thought, actual_response)
     """
     pattern = r"<quiet_thought>(.*?)</quiet_thought>"
     match = re.search(pattern, response, re.DOTALL)
-    
+
     if match:
         quiet_thought = match.group(1).strip()
         actual_response = re.sub(pattern, "", response, flags=re.DOTALL).strip()
         return quiet_thought, actual_response
-    
+
     return "", response
 
 
@@ -109,26 +111,26 @@ async def process_reward_model(
 ) -> float:
     """
     Process Reward Model: Score a reasoning step on 0-1 scale.
-    
+
     Used by MCTS, ToT, and other search algorithms to evaluate
     the quality of intermediate reasoning steps.
-    
+
     Args:
         step: The current reasoning step to evaluate
         context: Task context (code, query, etc.)
         goal: The end goal we're trying to achieve
         previous_steps: Steps taken before this one
-    
+
     Returns:
         Score from 0.0 (poor) to 1.0 (excellent)
     """
-    if not settings.enable_prm_scoring:
+    if not get_settings().enable_prm_scoring:
         return 0.5  # Default neutral score when PRM is disabled
-    
+
     previous_context = ""
     if previous_steps:
         previous_context = "\n".join(f"Step {i+1}: {s}" for i, s in enumerate(previous_steps))
-    
+
     prompt = f"""You are a Process Reward Model evaluating reasoning steps.
 
 GOAL: {goal}
@@ -167,16 +169,20 @@ Respond with ONLY a single decimal number between 0.0 and 1.0."""
             score = float(match.group(1))
             return max(0.0, min(1.0, score))
         else:
-            logger.warning("prm_score_no_number", response=response[:100] if response else "")
+            logger.warning("prm_score_no_number", response=response[:CONTENT.QUERY_LOG] if response else "")
             return 0.5
     except ValueError as e:
         # Failed to parse float from response
-        logger.warning("prm_score_parsing_failed", response=response[:100] if response else "", error=str(e))
+        logger.warning("prm_score_parsing_failed", response=response[:CONTENT.QUERY_LOG] if response else "", error=str(e))
         return 0.5
-    except Exception as e:
-        # LLM or network error
-        logger.error("prm_scoring_failed", error=str(e))
+    except (LLMError, ProviderNotConfiguredError) as e:
+        # LLM provider error - log and return default
+        logger.error("prm_scoring_failed", error=str(e), error_type=type(e).__name__)
         return 0.5  # Default on error
+    except Exception as e:
+        # Unknown error - wrap in LLMError
+        logger.error("prm_scoring_failed", error=str(e))
+        raise LLMError(f"PRM scoring failed: {e}") from e
 
 
 async def batch_score_steps(
@@ -203,21 +209,21 @@ async def optimize_prompt(
 ) -> str:
     """
     DSPy-style prompt optimization.
-    
+
     Uses the LLM to rewrite a prompt for a specific task,
     incorporating best practices and task-specific optimizations.
-    
+
     Args:
         task_description: Description of what we're trying to accomplish
         base_prompt: The original prompt template
         examples: Optional few-shot examples to include
-    
+
     Returns:
         Optimized prompt string
     """
-    if not settings.enable_dspy_optimization:
+    if not get_settings().enable_dspy_optimization:
         return base_prompt
-    
+
     examples_text = ""
     if examples:
         examples_text = "\n\nEXAMPLES:\n"
@@ -225,7 +231,7 @@ async def optimize_prompt(
             examples_text += f"Example {i+1}:\n"
             examples_text += f"  Input: {ex.get('input', 'N/A')}\n"
             examples_text += f"  Output: {ex.get('output', 'N/A')}\n"
-    
+
     optimization_prompt = f"""You are a prompt engineering expert. Optimize the following prompt for the given task.
 
 TASK DESCRIPTION:
@@ -253,9 +259,13 @@ Return ONLY the optimized prompt, no explanations."""
             temperature=DEFAULT_OPTIMIZATION_TEMP
         )
         return optimized.strip()
+    except (LLMError, ProviderNotConfiguredError) as e:
+        # LLM provider error during optimization; fall back to original
+        logger.warning("prompt_optimization_failed", error=str(e), error_type=type(e).__name__, task=task_description[:CONTENT.QUERY_PREVIEW])
+        return base_prompt
     except Exception as e:
-        # LLM or network error during optimization; fall back to original
-        logger.warning("prompt_optimization_failed", error=str(e), task=task_description[:50])
+        # Unknown error during optimization; log and fall back to original
+        logger.warning("prompt_optimization_failed", error=str(e), task=task_description[:CONTENT.QUERY_PREVIEW])
         return base_prompt
 
 
@@ -282,19 +292,21 @@ def _get_llm_client(
         Configured LangChain chat client (ChatAnthropic or ChatOpenAI)
 
     Raises:
-        ValueError: If no valid provider is configured or pass-through mode is active
+        ProviderNotConfiguredError: If no valid provider is configured or pass-through mode is active
     """
-    provider = settings.llm_provider.lower()
+    provider = get_settings().llm_provider.lower()
 
     # Handle explicit pass-through mode
     if provider == "pass-through":
-        raise ValueError(
+        raise ProviderNotConfiguredError(
             "Pass-through mode is configured (LLM_PROVIDER=pass-through). "
             "Internal LLM calls are disabled. Set LLM_PROVIDER to 'anthropic', 'openai', or 'openrouter' "
-            "and provide the corresponding API key to enable internal reasoning."
+            "and provide the corresponding API key to enable internal reasoning.",
+            details={"provider": "pass-through", "mode": "disabled"}
         )
 
     # Select the appropriate model name based on type
+    settings = get_settings()
     if model_type == "deep_reasoning":
         base_model = settings.deep_reasoning_model
     else:
@@ -317,15 +329,19 @@ def _get_llm_client(
     elif settings.openrouter_api_key:
         effective_provider = "openrouter"
     else:
-        raise ValueError(
+        raise ProviderNotConfiguredError(
             "No LLM provider configured. Set LLM_PROVIDER to 'google', 'anthropic', 'openai', or 'openrouter' "
-            "with the corresponding API key, or provide any API key for auto-detection."
+            "with the corresponding API key, or provide any API key for auto-detection.",
+            details={"provider": "none", "hint": "Set LLM_PROVIDER and corresponding API key"}
         )
 
     # Create client based on effective provider
     if effective_provider == "google":
         if not settings.google_api_key:
-            raise ValueError("LLM_PROVIDER=google but GOOGLE_API_KEY is not set")
+            raise ProviderNotConfiguredError(
+                "LLM_PROVIDER=google but GOOGLE_API_KEY is not set",
+                details={"provider": "google", "env_var": "GOOGLE_API_KEY"}
+            )
         from langchain_google_genai import ChatGoogleGenerativeAI
         # Google uses model name like "gemini-2.0-flash" (strip google/ prefix if present)
         model_name = strip_prefix(base_model)
@@ -337,7 +353,10 @@ def _get_llm_client(
         )
     elif effective_provider == "anthropic":
         if not settings.anthropic_api_key:
-            raise ValueError("LLM_PROVIDER=anthropic but ANTHROPIC_API_KEY is not set")
+            raise ProviderNotConfiguredError(
+                "LLM_PROVIDER=anthropic but ANTHROPIC_API_KEY is not set",
+                details={"provider": "anthropic", "env_var": "ANTHROPIC_API_KEY"}
+            )
         from langchain_anthropic import ChatAnthropic
         return ChatAnthropic(
             model=strip_prefix(base_model),
@@ -347,7 +366,10 @@ def _get_llm_client(
         )
     elif effective_provider == "openai":
         if not settings.openai_api_key:
-            raise ValueError("LLM_PROVIDER=openai but OPENAI_API_KEY is not set")
+            raise ProviderNotConfiguredError(
+                "LLM_PROVIDER=openai but OPENAI_API_KEY is not set",
+                details={"provider": "openai", "env_var": "OPENAI_API_KEY"}
+            )
         from langchain_openai import ChatOpenAI
         return ChatOpenAI(
             model=strip_prefix(base_model),
@@ -357,7 +379,10 @@ def _get_llm_client(
         )
     elif effective_provider == "openrouter":
         if not settings.openrouter_api_key:
-            raise ValueError("LLM_PROVIDER=openrouter but OPENROUTER_API_KEY is not set")
+            raise ProviderNotConfiguredError(
+                "LLM_PROVIDER=openrouter but OPENROUTER_API_KEY is not set",
+                details={"provider": "openrouter", "env_var": "OPENROUTER_API_KEY"}
+            )
         from langchain_openai import ChatOpenAI
         # OpenRouter uses full model path (no stripping)
         return ChatOpenAI(
@@ -369,7 +394,10 @@ def _get_llm_client(
         )
 
     # This should never be reached due to the check above, but satisfies type checker
-    raise ValueError(f"Unknown provider: {effective_provider}")
+    raise ProviderNotConfiguredError(
+        f"Unknown provider: {effective_provider}",
+        details={"provider": effective_provider}
+    )
 
 
 def _estimate_tokens(text: str) -> int:
@@ -558,7 +586,7 @@ def format_code_context(
         rag_formatted = state.get("working_memory", {}).get("rag_context_formatted", "")
         if rag_formatted:
             parts.append(rag_formatted)
-            
+
         # Include Past Learnings (Episodic Memory)
         episodic_memory = state.get("episodic_memory", [])
         if episodic_memory:
@@ -590,7 +618,7 @@ def get_rag_context(state: GraphState) -> str:
 def generate_code_diff(original_code: str, updated_code: str) -> str:
     """Generate a unified diff between original and updated code."""
     import difflib
-    
+
     diff = difflib.unified_diff(
         original_code.splitlines(),
         updated_code.splitlines(),

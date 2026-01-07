@@ -15,35 +15,14 @@ from contextlib import redirect_stdout, redirect_stderr
 from typing import Dict, Any
 
 from ...state import GraphState
-from ...collection_manager import get_collection_manager
 from ..common import (
     quiet_star,
     format_code_context,
     add_reasoning_step,
-    call_fast_synthesizer  # Kept for import compatibility
 )
+from ..example_utilities import search_code_examples
 
 logger = logging.getLogger(__name__)
-
-
-def _search_code_examples(query: str, task_type: str = "code_generation") -> str:
-    """Search instruction knowledge base for similar code examples."""
-    try:
-        manager = get_collection_manager()
-        results = manager.search_instruction_knowledge(query, k=3, task_type=task_type, language="python")
-
-        if not results:
-            return ""
-
-        examples = []
-        for i, doc in enumerate(results, 1):
-            examples.append(f"Code Example {i}:\n{doc.page_content[:500]}")
-
-        return "\n\n".join(examples)
-    except Exception as e:
-        # Gracefully degrade if no API key or collection empty
-        logger.debug("instruction_knowledge_search_skipped", error=str(e))
-        return ""
 
 
 # =============================================================================
@@ -59,29 +38,59 @@ ALLOWED_IMPORTS = frozenset([
 ])
 
 # Safe builtins whitelist
+# SECURITY: Intentionally EXCLUDES:
+# - type(): can create classes with arbitrary methods
+# - isinstance/issubclass: type introspection can leak info
+# - getattr/setattr/delattr/hasattr: attribute manipulation
+# - eval/exec/compile: code execution
+# - open/__import__: file/module access
 SAFE_BUILTINS = {
-    'abs': abs, 'all': all, 'any': any, 'bin': bin, 'bool': bool,
-    'chr': chr, 'dict': dict, 'divmod': divmod, 'enumerate': enumerate,
-    'filter': filter, 'float': float, 'format': format, 'frozenset': frozenset,
-    'hash': hash, 'hex': hex, 'int': int, 'isinstance': isinstance,
-    'issubclass': issubclass, 'iter': iter, 'len': len, 'list': list,
-    'map': map, 'max': max, 'min': min, 'next': next, 'oct': oct,
-    'ord': ord, 'pow': pow, 'print': print, 'range': range, 'repr': repr,
-    'reversed': reversed, 'round': round, 'set': set, 'slice': slice,
-    'sorted': sorted, 'str': str, 'sum': sum, 'tuple': tuple, 'type': type,
-    'zip': zip, 'True': True, 'False': False, 'None': None,
+    # Math/logic
+    'abs': abs, 'all': all, 'any': any, 'divmod': divmod, 'pow': pow,
+    'round': round, 'sum': sum, 'min': min, 'max': max,
+    # Type constructors (safe - can't define methods)
+    'bool': bool, 'int': int, 'float': float, 'str': str,
+    'list': list, 'dict': dict, 'set': set, 'frozenset': frozenset, 'tuple': tuple,
+    # Iteration
+    'range': range, 'enumerate': enumerate, 'zip': zip,
+    'map': map, 'filter': filter, 'reversed': reversed, 'sorted': sorted,
+    'iter': iter, 'next': next, 'slice': slice,
+    # String/repr
+    'chr': chr, 'ord': ord, 'repr': repr, 'format': format,
+    'bin': bin, 'hex': hex, 'oct': oct, 'hash': hash,
+    # Length
+    'len': len,
+    # I/O (sandboxed)
+    'print': print,
+    # Constants
+    'True': True, 'False': False, 'None': None,
 }
 
-# Python's builtin code runner (NOT shell - safe for sandboxing)
-_python_code_runner = getattr(builtins, 'ex' + 'ec')
+# exec() for sandboxed code execution
+# NOTE: This is intentionally using exec() - the sandbox security comes from:
+# 1. AST validation blocking dangerous patterns
+# 2. Restricted builtins (no type(), getattr(), etc.)
+# 3. Timeout protection
+# 4. Restricted globals/locals
+_python_code_runner = exec
 
 # Dangerous functions to block
 _DANGEROUS_FUNCS = {'eval', 'compile', 'open', 'input', '__import__',
                     'globals', 'locals', 'vars', 'dir', 'getattr', 'setattr',
                     'delattr', 'hasattr', 'breakpoint', 'exit', 'quit'}
 
-# Dangerous method names to block (shell/process related)
-_DANGEROUS_METHODS = {'popen', 'spawn', 'fork', 'call', 'run', 'Popen', 'check_output'}
+# Dangerous method names to block (shell/process/introspection related)
+_DANGEROUS_METHODS = {
+    # Process execution
+    'popen', 'spawn', 'fork', 'call', 'run', 'Popen', 'check_output', 'check_call',
+    'system', 'execv', 'execve', 'spawnl', 'spawnle',
+    # File operations
+    'read', 'write', 'readlines', 'writelines',
+    # Dangerous introspection
+    'mro', '__subclasses__', '__bases__', '__class__',
+    # Code execution
+    'exec', 'eval', 'compile',
+}
 
 
 class _SafetyValidator(ast.NodeVisitor):
@@ -164,12 +173,13 @@ async def _safe_execute(code: str, timeout: float = 5.0) -> Dict[str, Any]:
     # Prepare restricted environment
     safe_globals = {"__builtins__": SAFE_BUILTINS.copy()}
 
-    # Add allowed imports
+    # Add allowed imports (skip if not available on system - not all are required)
     for module_name in ALLOWED_IMPORTS:
         try:
             safe_globals[module_name] = __import__(module_name)
-        except ImportError:
-            pass
+        except ImportError as e:
+            # Module not installed - acceptable, not all modules required
+            logger.debug("optional_sandbox_module_unavailable", module=module_name)
 
     stdout_capture = io.StringIO()
     stderr_capture = io.StringIO()
@@ -210,9 +220,9 @@ async def program_of_thoughts_node(state: GraphState) -> GraphState:
     )
 
     # Search for similar code examples
-    code_examples = _search_code_examples(query, task_type="code_generation")
+    code_examples = search_code_examples(query, task_type="code_generation")
     if code_examples:
-        logger.info("instruction_knowledge_examples_found", query_preview=query[:50])
+        logger.info("pot_enhanced", query_preview=query[:50])
 
     # Construct the Protocol Prompt for the Client
     prompt = f"""# Program of Thoughts Protocol

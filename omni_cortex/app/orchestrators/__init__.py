@@ -95,6 +95,31 @@ from .rag_frameworks import (
     graphrag,
 )
 
+# Framework Factory (declarative framework definitions)
+from .framework_factory import (
+    FrameworkStep,
+    FrameworkConfig,
+    execute_framework,
+    run_framework,
+    get_available_frameworks,
+    get_framework_description,
+    FRAMEWORK_CONFIGS,
+    # Individual configs
+    PROGRAM_OF_THOUGHTS,
+    CHAIN_OF_VERIFICATION,
+    CRITIC,
+    CHAIN_OF_CODE,
+    SELF_DEBUGGING,
+    TDD_PROMPTING,
+    REVERSE_COT,
+    CODECHAIN,
+    EVOL_INSTRUCT,
+    PROCODER,
+    PAL,
+    PARSEL,
+    DOCPROMPTING,
+)
+
 
 # Framework registry mapping framework names to orchestrator functions
 FRAMEWORK_ORCHESTRATORS = {
@@ -182,6 +207,27 @@ FRAMEWORK_ORCHESTRATORS = {
 
 __all__ = [
     "FRAMEWORK_ORCHESTRATORS",
+    # Framework Factory
+    "FrameworkStep",
+    "FrameworkConfig",
+    "execute_framework",
+    "run_framework",
+    "get_available_frameworks",
+    "get_framework_description",
+    "FRAMEWORK_CONFIGS",
+    "PROGRAM_OF_THOUGHTS",
+    "CHAIN_OF_VERIFICATION",
+    "CRITIC",
+    "CHAIN_OF_CODE",
+    "SELF_DEBUGGING",
+    "TDD_PROMPTING",
+    "REVERSE_COT",
+    "CODECHAIN",
+    "EVOL_INSTRUCT",
+    "PROCODER",
+    "PAL",
+    "PARSEL",
+    "DOCPROMPTING",
     # Strategy
     "reason_flux",
     "self_discover",

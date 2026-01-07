@@ -20,22 +20,22 @@ async def call_langchain_tool(
 ) -> Any:
     """
     Call a LangChain tool by name.
-    
+
     Args:
         tool_name: Name of the tool to call
         tool_input: Input for the tool (str or dict depending on tool)
         state: Optional GraphState for context
-        
+
     Returns:
         Tool output (type depends on tool - typically str or dict)
     """
     # Find the tool
     tool = next((t for t in AVAILABLE_TOOLS if t.name == tool_name), None)
-    
+
     if not tool:
         logger.warning("tool_not_found", tool_name=tool_name)
         return f"Tool '{tool_name}' not found"
-    
+
     try:
         # Execute the tool
         result = await tool.ainvoke(tool_input)
@@ -81,11 +81,11 @@ def format_tool_descriptions() -> str:
     descriptions = []
     for tool in AVAILABLE_TOOLS:
         descriptions.append(f"- **{tool.name}**: {tool.description}")
-    
+
     # Add explicit instruction for learning
     descriptions.append("\n**IMPORTANT SYSTEM INSTRUCTION**:")
     descriptions.append("When you have successfully solved a problem or generated a useful solution, you MUST use the `save_learning` tool to persist this knowledge for future reference. This is critical for the system's long-term improvement.")
-    
+
     return "\n".join(descriptions)
 
 

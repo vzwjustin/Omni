@@ -80,7 +80,7 @@ Revise hypotheses for next iteration."""
     act_prompt = f"""ACT: Implement fix based on evidence
 
 ## Evidence Chain
-{chr(10).join(f'{label}: {text[:100]}...' for label, text in iterations[-3:])}
+{chr(10).join(f'{label}: {text[:CONTENT.QUERY_LOG]}...' for label, text in iterations[-3:])}
 
 ## Original Problem
 {query}
@@ -322,7 +322,7 @@ List any gaps."""
                 "metadata": {
                     "framework": "re2",
                     "iterations": iteration + 1,
-                    "requirements": requirements[:200] + "..."
+                    "requirements": requirements[:CONTENT.ERROR_PREVIEW] + "..."
                 }
             }
 
@@ -341,7 +341,7 @@ Update implementation to satisfy all requirements."""
         "metadata": {
             "framework": "re2",
             "iterations": max_iterations,
-            "final_evaluation": evaluation[:200] + "..."
+            "final_evaluation": evaluation[:CONTENT.ERROR_PREVIEW] + "..."
         }
     }
 
@@ -380,7 +380,7 @@ async def rubber_duck(sampler: ClientSampler, query: str, context: str) -> Dict[
     # Insight synthesis
     insight_prompt = f"""Based on this Socratic dialogue:
 
-{chr(10).join(f'Q: {q}\\nA: {a[:100]}...' for q, a in questions_and_answers)}
+{chr(10).join(f'Q: {q}\\nA: {a[:CONTENT.QUERY_LOG]}...' for q, a in questions_and_answers)}
 
 ## Original Problem
 {query}
@@ -462,7 +462,7 @@ Answer YES or NO with brief explanation."""
     # Final answer based on chain
     final_prompt = f"""Provide final solution based on reasoning chain:
 
-{chr(10).join(f'{step["type"]}: {step["content"][:100]}...' for step in chain)}
+{chr(10).join(f'{step["type"]}: {step["content"][:CONTENT.QUERY_LOG]}...' for step in chain)}
 
 Original problem: {query}
 
@@ -495,7 +495,7 @@ async def reflexion(sampler: ClientSampler, query: str, context: str) -> Dict[st
 
 Context: {context}
 
-{f'Previous learnings: {chr(10).join(a["reflection"][:100] + "..." for a in attempts)}' if attempts else 'First attempt - do your best.'}
+{f'Previous learnings: {chr(10).join(a["reflection"][:CONTENT.QUERY_LOG] + "..." for a in attempts)}' if attempts else 'First attempt - do your best.'}
 
 Provide solution:"""
 
@@ -537,7 +537,7 @@ Key lessons to remember for next attempt?"""
         "metadata": {
             "framework": "reflexion",
             "attempts": len(attempts),
-            "learnings": [a["reflection"][:100] + "..." for a in attempts]
+            "learnings": [a["reflection"][:CONTENT.QUERY_LOG] + "..." for a in attempts]
         }
     }
 
@@ -598,6 +598,6 @@ Provide improved version:"""
         "metadata": {
             "framework": "self_refine",
             "refinement_iterations": len(critiques),
-            "critiques": [c[:100] + "..." for c in critiques]
+            "critiques": [c[:CONTENT.QUERY_LOG] + "..." for c in critiques]
         }
     }

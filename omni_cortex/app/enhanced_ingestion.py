@@ -48,19 +48,19 @@ def process_python_file(file_path: Path, content: str) -> List[Tuple[str, Dict[s
     """Process Python file with AST analysis and intelligent chunking."""
     chunks = []
     relative_path = file_path.as_posix()
-    
+
     # Extract imports
     imports = CodeAnalyzer.extract_imports(content)
-    
+
     # Extract framework context
     framework_name, framework_category = extract_framework_info(file_path)
-    
+
     # Determine category
     category = categorize_file(file_path)
-    
+
     # Extract code structure (functions, classes)
     structure_chunks = CodeAnalyzer.extract_structure(content, relative_path)
-    
+
     if structure_chunks:
         # Add structured chunks
         for chunk_content, metadata, line_start, line_end in structure_chunks:
@@ -72,7 +72,7 @@ def process_python_file(file_path: Path, content: str) -> List[Tuple[str, Dict[s
             metadata.category = category.value
             metadata.has_todo = 'TODO' in chunk_content
             metadata.has_fixme = 'FIXME' in chunk_content
-            
+
             chunks.append((chunk_content, metadata.to_dict()))
     else:
         # Fallback: store entire file as one chunk
@@ -92,7 +92,7 @@ def process_python_file(file_path: Path, content: str) -> List[Tuple[str, Dict[s
             tags=CodeAnalyzer._extract_tags(content)
         )
         chunks.append((content, metadata.to_dict()))
-    
+
     return chunks
 
 
@@ -100,12 +100,12 @@ def process_markdown_file(file_path: Path, content: str) -> List[Tuple[str, Dict
     """Process Markdown file with section-based chunking."""
     chunks = []
     relative_path = file_path.as_posix()
-    
+
     category = categorize_file(file_path)
-    
+
     # Chunk by sections
     section_chunks = MarkdownAnalyzer.chunk_by_sections(content, relative_path)
-    
+
     if len(section_chunks) > 1:
         # Multiple sections
         total_chunks = len(section_chunks)
@@ -114,7 +114,7 @@ def process_markdown_file(file_path: Path, content: str) -> List[Tuple[str, Dict
             metadata.total_chunks = total_chunks
             metadata.chunk_index = idx
             metadata.has_todo = 'TODO' in chunk_content or 'FIXME' in chunk_content
-            
+
             chunks.append((chunk_content, metadata.to_dict()))
     else:
         # Single section or small file
@@ -129,14 +129,14 @@ def process_markdown_file(file_path: Path, content: str) -> List[Tuple[str, Dict
             tags=MarkdownAnalyzer._extract_section_tags(content)
         )
         chunks.append((content, metadata.to_dict()))
-    
+
     return chunks
 
 
 def process_config_file(file_path: Path, content: str) -> List[Tuple[str, Dict[str, Any]]]:
     """Process configuration files (YAML, JSON, env)."""
     relative_path = file_path.as_posix()
-    
+
     metadata = DocumentMetadata(
         path=relative_path,
         file_name=file_path.name,
@@ -146,16 +146,16 @@ def process_config_file(file_path: Path, content: str) -> List[Tuple[str, Dict[s
         char_count=len(content),
         tags=['configuration']
     )
-    
+
     return [(content, metadata.to_dict())]
 
 
 def process_text_file(file_path: Path, content: str) -> List[Tuple[str, Dict[str, Any]]]:
     """Process plain text files."""
     relative_path = file_path.as_posix()
-    
+
     category = categorize_file(file_path)
-    
+
     metadata = DocumentMetadata(
         path=relative_path,
         file_name=file_path.name,
@@ -164,7 +164,7 @@ def process_text_file(file_path: Path, content: str) -> List[Tuple[str, Dict[str
         chunk_type=ChunkType.FULL_FILE.value,
         char_count=len(content)
     )
-    
+
     return [(content, metadata.to_dict())]
 
 
@@ -175,10 +175,10 @@ def process_file(file_path: Path, root: Path) -> List[Tuple[str, Dict[str, Any]]
     except Exception as e:
         logger.warning("file_read_failed", path=str(file_path), error=str(e))
         return []
-    
+
     # Make path relative to root
     relative_path = file_path.relative_to(root)
-    
+
     # Route to appropriate processor
     if file_path.suffix == ".py":
         return process_python_file(relative_path, content)
@@ -197,53 +197,53 @@ def ingest_repository(
 ) -> Dict[str, int]:
     """
     Ingest repository with enhanced metadata and chunking.
-    
+
     Returns statistics about ingestion.
     """
     patterns = patterns or DEFAULT_PATTERNS
-    
+
     logger.info("enhanced_ingest_start", root=str(root_path), collection=collection_name)
-    
+
     # Collect all chunks
     all_chunks: List[Tuple[str, Dict[str, Any]]] = []
     file_count = 0
-    
+
     for pattern in patterns:
         for file_path in root_path.glob(pattern):
             if file_path.is_dir() or should_skip(file_path):
                 continue
-            
+
             chunks = process_file(file_path, root_path)
             all_chunks.extend(chunks)
             file_count += 1
-            
+
             if file_count % 10 == 0:
                 logger.info("processing", files=file_count, chunks=len(all_chunks))
-    
+
     if not all_chunks:
         logger.warning("no_documents_found")
         return {"files": 0, "chunks": 0, "added": 0}
-    
+
     # Separate texts and metadatas
     from collections import defaultdict
     chunks_by_collection = defaultdict(list)
-    
+
     from .collection_manager import get_collection_manager
     manager = get_collection_manager()
-    
+
     for text, metadata in all_chunks:
         # Route logic currently resides in CollectionManager, but we can access it or replicate it.
         # Ideally, we used the manager's routing
         target_collection = manager.route_to_collection(metadata)
         chunks_by_collection[target_collection].append((text, metadata))
-    
+
     total_added = 0
     stats = {"files": file_count, "chunks": len(all_chunks)}
-    
+
     for coll_name, items in chunks_by_collection.items():
         coll_texts = [item[0] for item in items]
         coll_metas = [item[1] for item in items]
-        
+
         added = manager.add_documents(coll_texts, coll_metas, collection_name=coll_name)
         total_added += added
         logger.info("collection_populated", collection=coll_name, count=added)
@@ -259,11 +259,11 @@ def _extract_module_path(file_path: Path) -> str:
     # Convert file path to module path
     # e.g., app/nodes/iterative/active_inf.py -> app.nodes.iterative.active_inf
     parts = list(file_path.parts)
-    
+
     # Remove file extension
     if parts[-1].endswith('.py'):
         parts[-1] = parts[-1][:-3]
-    
+
     # Join with dots
     return '.'.join(parts)
 
@@ -271,13 +271,17 @@ def _extract_module_path(file_path: Path) -> str:
 def main():
     """Main entry point for enhanced ingestion."""
     repo_root = Path(__file__).resolve().parents[1]
-    
+
     stats = ingest_repository(repo_root)
-    
-    print(f"Enhanced ingestion complete:")
-    print(f"  Files processed: {stats['files']}")
-    print(f"  Chunks created: {stats['chunks']}")
-    print(f"  Documents added: {stats['total_added']}")
+
+    import structlog
+    logger = structlog.get_logger("enhanced_ingestion")
+    logger.info(
+        "enhanced_ingestion_complete",
+        files=stats['files'],
+        chunks=stats['chunks'],
+        total_added=stats['total_added']
+    )
 
 
 if __name__ == "__main__":

@@ -38,7 +38,7 @@ Plan steps and what you EXPECT to observe at each step.""",
 
     # Check if revision needed
     revision_check = await sampler.request_sample(
-        f"Do observations contradict plan?\n\nExpected: {plan[:200]}...\n\nActual: {observations[:200]}...\n\nRevision needed?",
+        f"Do observations contradict plan?\n\nExpected: {plan[:CONTENT.ERROR_PREVIEW]}...\n\nActual: {observations[:CONTENT.ERROR_PREVIEW]}...\n\nRevision needed?",
         temperature=0.4
     )
 
@@ -100,8 +100,8 @@ async def lats(sampler: ClientSampler, query: str, context: str) -> Dict[str, An
     final = await sampler.request_sample(
         f"""Finalize:
 
-Chosen path: {branches[best['branch_idx']][:200]}...
-Execution result: {execution[:200]}...
+Chosen path: {branches[best['branch_idx']][:CONTENT.ERROR_PREVIEW]}...
+Execution result: {execution[:CONTENT.ERROR_PREVIEW]}...
 Alternatives considered: {len(branches)}
 
 Provide complete solution.""",
@@ -136,7 +136,7 @@ async def mrkl(sampler: ClientSampler, query: str, context: str) -> Dict[str, An
     module_outputs = {}
     for module in modules:
         output = await sampler.request_sample(
-            f"{module} module execution:\n\nRouting: {routing[:200]}...\n\nTask: {query}\n\nModule output:",
+            f"{module} module execution:\n\nRouting: {routing[:CONTENT.ERROR_PREVIEW]}...\n\nTask: {query}\n\nModule output:",
             temperature=0.6
         )
         module_outputs[module] = output
@@ -145,7 +145,7 @@ async def mrkl(sampler: ClientSampler, query: str, context: str) -> Dict[str, An
     reconciliation = await sampler.request_sample(
         f"""Reconcile conflicting outputs:
 
-{chr(10).join(f'{mod}: {out[:100]}...' for mod, out in module_outputs.items())}
+{chr(10).join(f'{mod}: {out[:CONTENT.QUERY_LOG]}...' for mod, out in module_outputs.items())}
 
 Resolve conflicts.""",
         temperature=0.5
@@ -247,7 +247,7 @@ async def toolformer(sampler: ClientSampler, query: str, context: str) -> Dict[s
 
     # Document rationale
     documentation = await sampler.request_sample(
-        f"Document tool decision rationale:\n\n{justification[:200]}...\n\nWhy these tools? Why not others?",
+        f"Document tool decision rationale:\n\n{justification[:CONTENT.ERROR_PREVIEW]}...\n\nWhy these tools? Why not others?",
         temperature=0.4
     )
 

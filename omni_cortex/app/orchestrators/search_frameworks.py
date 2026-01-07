@@ -320,10 +320,10 @@ Balance innovation with pragmatism, creativity with rigor."""
         "metadata": {
             "framework": "everything_of_thought",
             "perspectives": {
-                "analytical": analytical[:200] + "...",
-                "creative": creative[:200] + "...",
-                "critical": critical[:200] + "...",
-                "practical": practical[:200] + "..."
+                "analytical": analytical[:CONTENT.ERROR_PREVIEW] + "...",
+                "creative": creative[:CONTENT.ERROR_PREVIEW] + "...",
+                "critical": critical[:CONTENT.ERROR_PREVIEW] + "...",
+                "practical": practical[:CONTENT.ERROR_PREVIEW] + "..."
             }
         }
     }

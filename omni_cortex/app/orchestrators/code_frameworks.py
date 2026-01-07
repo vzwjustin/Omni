@@ -6,6 +6,7 @@ Frameworks specialized for code generation, debugging, and testing.
 
 from typing import Dict, Any
 from ..core.sampling import ClientSampler, extract_code_blocks, extract_score
+from ..core.constants import CONTENT
 
 
 async def program_of_thoughts(sampler: ClientSampler, query: str, context: str) -> Dict[str, Any]:
@@ -224,7 +225,7 @@ async def self_debugging(sampler: ClientSampler, query: str, context: str) -> Di
 
     # Catch bugs
     catch = await sampler.request_sample(
-        f"Identify potential bugs:\n\nTrace: {trace[:200]}...\nEdges: {edges[:200]}...\n\nWhat bugs exist?",
+        f"Identify potential bugs:\n\nTrace: {trace[:CONTENT.ERROR_PREVIEW]}...\nEdges: {edges[:CONTENT.ERROR_PREVIEW]}...\n\nWhat bugs exist?",
         temperature=0.5
     )
 
@@ -374,7 +375,7 @@ Tests: {tests}
 
 Problem: {query}
 
-{f'Previous attempt had issues: {solution[:200]}' if solution else 'First attempt'}
+{f'Previous attempt had issues: {solution[:CONTENT.ERROR_PREVIEW]}' if solution else 'First attempt'}
 
 Provide code.""",
             temperature=0.6
@@ -614,9 +615,9 @@ async def recode(sampler: ClientSampler, query: str, context: str) -> Dict[str, 
     cfg_analysis = await sampler.request_sample(
         f"""Analyze control flow of each:
 
-Candidate 1: {candidates[0][:200]}...
-Candidate 2: {candidates[1][:200]}...
-Candidate 3: {candidates[2][:200]}...
+Candidate 1: {candidates[0][:CONTENT.ERROR_PREVIEW]}...
+Candidate 2: {candidates[1][:CONTENT.ERROR_PREVIEW]}...
+Candidate 3: {candidates[2][:CONTENT.ERROR_PREVIEW]}...
 
 Check for control flow issues.""",
         temperature=0.4
@@ -631,7 +632,7 @@ Validations:
 2. {validations[1][:150]}...
 3. {validations[2][:150]}...
 
-CFG: {cfg_analysis[:200]}...
+CFG: {cfg_analysis[:CONTENT.ERROR_PREVIEW]}...
 
 Which is best based on correctness, robustness, clarity?""",
         temperature=0.4
@@ -711,7 +712,7 @@ async def scratchpads(sampler: ClientSampler, query: str, context: str) -> Dict[
 
     # Risks
     scratchpad['risks'] = await sampler.request_sample(
-        f"RISKS: Potential issues + mitigations\n\nPlan: {scratchpad['plan'][:200]}...\n\nWhat could go wrong?",
+        f"RISKS: Potential issues + mitigations\n\nPlan: {scratchpad['plan'][:CONTENT.ERROR_PREVIEW]}...\n\nWhat could go wrong?",
         temperature=0.6
     )
 
@@ -725,11 +726,11 @@ async def scratchpads(sampler: ClientSampler, query: str, context: str) -> Dict[
     solution = await sampler.request_sample(
         f"""Solve using scratchpad:
 
-FACTS: {scratchpad['facts'][:100]}...
-CONSTRAINTS: {scratchpad['constraints'][:100]}...
-PLAN: {scratchpad['plan'][:100]}...
-RISKS: {scratchpad['risks'][:100]}...
-CHECKS: {scratchpad['checks'][:100]}...
+FACTS: {scratchpad['facts'][:CONTENT.QUERY_LOG]}...
+CONSTRAINTS: {scratchpad['constraints'][:CONTENT.QUERY_LOG]}...
+PLAN: {scratchpad['plan'][:CONTENT.QUERY_LOG]}...
+RISKS: {scratchpad['risks'][:CONTENT.QUERY_LOG]}...
+CHECKS: {scratchpad['checks'][:CONTENT.QUERY_LOG]}...
 
 Original: {query}
 
@@ -780,7 +781,7 @@ List all functions needed.""",
 
     # Compose dependent functions
     composed = await sampler.request_sample(
-        f"Build dependent functions:\n\nBase: {base_funcs}\n\nGraph: {graph[:200]}...\n\nImplement remaining functions.",
+        f"Build dependent functions:\n\nBase: {base_funcs}\n\nGraph: {graph[:CONTENT.ERROR_PREVIEW]}...\n\nImplement remaining functions.",
         temperature=0.6
     )
 
@@ -826,7 +827,7 @@ async def docprompting(sampler: ClientSampler, query: str, context: str) -> Dict
 
     # Verify against docs
     verified = await sampler.request_sample(
-        f"Cross-check against docs:\n\n{code}\n\nDocs: {signatures[:200]}...\n\nCorrect params, types, error handling?",
+        f"Cross-check against docs:\n\n{code}\n\nDocs: {signatures[:CONTENT.ERROR_PREVIEW]}...\n\nCorrect params, types, error handling?",
         temperature=0.4
     )
 

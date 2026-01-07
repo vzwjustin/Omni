@@ -44,7 +44,7 @@ Tag each claim as HIGH/MEDIUM/LOW confidence.""",
 
     # Critique groundedness
     critique = await sampler.request_sample(
-        f"Confirm groundedness:\n\n{updated}\n\nEvidence: {retrieved[:200]}...\n\nRemove unsupported claims.",
+        f"Confirm groundedness:\n\n{updated}\n\nEvidence: {retrieved[:CONTENT.ERROR_PREVIEW]}...\n\nRemove unsupported claims.",
         temperature=0.4
     )
 
@@ -90,7 +90,7 @@ async def hyde(sampler: ClientSampler, query: str, context: str) -> Dict[str, An
 
     # Compare to hypothesis
     comparison = await sampler.request_sample(
-        f"Note where reality differs from hypothesis:\n\nHypothesis: {hypothesis[:200]}...\n\nActual: {cited[:200]}...\n\nDifferences?",
+        f"Note where reality differs from hypothesis:\n\nHypothesis: {hypothesis[:CONTENT.ERROR_PREVIEW]}...\n\nActual: {cited[:CONTENT.ERROR_PREVIEW]}...\n\nDifferences?",
         temperature=0.4
     )
 
@@ -134,7 +134,7 @@ List queries.""",
     fused = await sampler.request_sample(
         f"""Fuse retrieved chunks:
 
-{chr(10).join(f'Query {i+1}: {r[:100]}...' for i, r in enumerate(retrievals))}
+{chr(10).join(f'Query {i+1}: {r[:CONTENT.QUERY_LOG]}...' for i, r in enumerate(retrievals))}
 
 Dedupe + reciprocal rank merge. Combined evidence:""",
         temperature=0.5
@@ -148,7 +148,7 @@ Dedupe + reciprocal rank merge. Combined evidence:""",
 
     # Check coverage
     coverage = await sampler.request_sample(
-        f"Ensure all query facets addressed:\n\nQueries: {diverse_queries[:200]}...\n\nAnswer: {synthesized[:200]}...\n\nAll aspects covered?",
+        f"Ensure all query facets addressed:\n\nQueries: {diverse_queries[:CONTENT.ERROR_PREVIEW]}...\n\nAnswer: {synthesized[:CONTENT.ERROR_PREVIEW]}...\n\nAll aspects covered?",
         temperature=0.4
     )
 
@@ -170,7 +170,7 @@ async def raptor(sampler: ClientSampler, query: str, context: str) -> Dict[str, 
 
     # Retrieve top-down
     high_level = await sampler.request_sample(
-        f"Retrieve high-level first:\n\nQuery: {query}\n\nHierarchy: {hierarchy[:200]}...\n\nDoc-level matches:",
+        f"Retrieve high-level first:\n\nQuery: {query}\n\nHierarchy: {hierarchy[:CONTENT.ERROR_PREVIEW]}...\n\nDoc-level matches:",
         temperature=0.5
     )
 
@@ -222,7 +222,7 @@ async def graphrag(sampler: ClientSampler, query: str, context: str) -> Dict[str
 
     # Build graph
     graph = await sampler.request_sample(
-        f"Build conceptual relation map:\n\nEntities: {entities[:200]}...\n\nRelations: {relations[:200]}...\n\nGraph structure:",
+        f"Build conceptual relation map:\n\nEntities: {entities[:CONTENT.ERROR_PREVIEW]}...\n\nRelations: {relations[:CONTENT.ERROR_PREVIEW]}...\n\nGraph structure:",
         temperature=0.5
     )
 

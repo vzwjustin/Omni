@@ -19,9 +19,9 @@ from app.state import GraphState, create_initial_state, MemoryStore
 from app.langchain_integration import (
     OmniCortexMemory,
     get_memory,
-    _memory_store,
-    MAX_MEMORY_THREADS,
 )
+from app.memory.manager import get_memory_store, get_memory_store_lock
+from app.core.constants import LIMITS
 
 
 # =============================================================================
@@ -103,8 +103,8 @@ async def clean_memory_store():
 
     Clears the global _memory_store to prevent test pollution.
     """
-    # Store original state
-    from app.langchain_integration import _memory_store, _memory_store_lock
+    _memory_store = get_memory_store()
+    _memory_store_lock = get_memory_store_lock()
 
     original_store = dict(_memory_store)
 

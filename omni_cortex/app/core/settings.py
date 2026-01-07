@@ -4,6 +4,7 @@ Centralized Settings for Omni-Cortex
 All configuration in one place with validation.
 """
 
+import threading
 from pathlib import Path
 from typing import Optional
 from pydantic import Field, field_validator
@@ -55,6 +56,13 @@ class OmniCortexSettings(BaseSettings):
     enable_auto_ingest: bool = Field(default=True, alias="ENABLE_AUTO_INGEST")
     enable_dspy_optimization: bool = Field(default=True, alias="ENABLE_DSPY_OPTIMIZATION")
     enable_prm_scoring: bool = Field(default=True, alias="ENABLE_PRM_SCORING")
+    enable_mcp_sampling: bool = Field(default=False, alias="ENABLE_MCP_SAMPLING")
+    use_langchain_llm: bool = Field(default=False, alias="USE_LANGCHAIN_LLM")
+    lean_mode: bool = Field(default=True, alias="LEAN_MODE")
+
+    # Paths
+    checkpoint_path: Path = Field(default=Path("/app/data/checkpoints.sqlite"), alias="CHECKPOINT_PATH")
+    watch_root: Optional[Path] = Field(default=None, alias="WATCH_ROOT")
 
     # Logging
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
@@ -101,19 +109,28 @@ class OmniCortexSettings(BaseSettings):
         extra = "ignore"
 
 
-# Global singleton
+# Global singleton with thread-safe initialization
 _settings: Optional[OmniCortexSettings] = None
+_settings_lock = threading.Lock()
 
 
 def get_settings() -> OmniCortexSettings:
-    """Get the global settings singleton."""
+    """Get the global settings singleton (thread-safe)."""
     global _settings
-    if _settings is None:
-        _settings = OmniCortexSettings()
+
+    # Fast path: already initialized
+    if _settings is not None:
+        return _settings
+
+    # Thread-safe initialization with double-check locking
+    with _settings_lock:
+        if _settings is None:
+            _settings = OmniCortexSettings()
     return _settings
 
 
 def reset_settings() -> None:
-    """Reset settings singleton (useful for testing)."""
+    """Reset settings singleton (useful for testing, thread-safe)."""
     global _settings
-    _settings = None
+    with _settings_lock:
+        _settings = None

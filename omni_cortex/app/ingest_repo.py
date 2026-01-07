@@ -66,7 +66,7 @@ def main() -> None:
 
     docs = read_files(repo_root, DEFAULT_PATTERNS)
     if not docs:
-        logger.warn("no_docs_found")
+        logger.warning("no_docs_found")
         return
 
     texts = [c for _, c in docs]

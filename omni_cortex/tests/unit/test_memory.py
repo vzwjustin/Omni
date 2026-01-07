@@ -16,10 +16,14 @@ from langchain_core.messages import HumanMessage, AIMessage
 from app.langchain_integration import (
     OmniCortexMemory,
     get_memory,
-    _memory_store,
-    _memory_store_lock,
-    MAX_MEMORY_THREADS,
 )
+from app.memory.manager import get_memory_store, get_memory_store_lock
+from app.core.constants import LIMITS
+
+# Aliases for test compatibility
+_memory_store = get_memory_store()
+_memory_store_lock = get_memory_store_lock()
+MAX_MEMORY_THREADS = LIMITS.MAX_MEMORY_THREADS
 
 
 class TestOmniCortexMemoryCreation:

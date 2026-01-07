@@ -1,0 +1,106 @@
+"""
+Reason Tool Handler
+
+The smart routing handler that uses HyperRouter for framework selection.
+"""
+
+import logging
+import sys
+import traceback
+
+from mcp.types import TextContent
+
+from ..framework_prompts import FRAMEWORKS
+from .validation import (
+    ValidationError,
+    validate_query,
+    validate_context,
+    validate_thread_id,
+)
+
+logger = logging.getLogger("omni-cortex")
+
+
+async def handle_reason(
+    arguments: dict,
+    router,
+) -> list[TextContent]:
+    """
+    Handle the 'reason' tool - smart routing with structured brief.
+
+    Args:
+        arguments: Tool arguments (query, context, thread_id)
+        router: HyperRouter instance for framework selection
+
+    Returns:
+        List with single TextContent containing structured brief
+    """
+    # Validate inputs
+    try:
+        query = validate_query(arguments.get("query"), required=True)
+        context = validate_context(arguments.get("context"))
+        thread_id = validate_thread_id(arguments.get("thread_id"), required=False)
+    except ValidationError as e:
+        return [TextContent(type="text", text=f"Validation error: {str(e)}")]
+
+    # Generate structured brief using the new protocol
+    try:
+        router_output = await router.generate_structured_brief(
+            query=query,
+            context=context,
+            code_snippet=None,
+            ide_context=None,
+            file_list=None
+        )
+
+        # Build output with pipeline metadata + Claude brief
+        brief = router_output.claude_code_brief
+        pipeline = router_output.pipeline
+        gate = router_output.integrity_gate
+        telemetry = router_output.telemetry
+
+        # Compact header - single line metadata
+        stages = "→".join([s.framework_id for s in pipeline.stages])
+        signals = ",".join([s.type.value for s in router_output.detected_signals[:3]]) if router_output.detected_signals else ""
+
+        output = f"[{stages}] conf={gate.confidence.score:.0%} risk={router_output.task_profile.risk_level.value}"
+        if signals:
+            output += f" signals={signals}"
+        output += "\n\n"
+
+        # The actual brief for Claude - compact but rich
+        output += brief.to_compact_prompt()
+
+        # Gate warning only if not proceeding
+        if gate.recommendation.action.value != "PROCEED":
+            output += f"\n\n⚠️ {gate.recommendation.action.value}: {gate.recommendation.notes}"
+
+    except Exception as e:
+        # Fallback to simple template mode if structured brief fails
+        err_detail = traceback.format_exc()
+        logger.warning(f"Structured brief generation failed: {e}\n{err_detail}")
+        print(f"BRIEF FAILED: {e}\n{err_detail}", file=sys.stderr)
+
+        selected = router._check_vibe_dictionary(query)
+        if not selected:
+            selected = router._heuristic_select(query, context)
+        if not selected or selected not in FRAMEWORKS:
+            selected = "self_discover"
+
+        fw_info = router.get_framework_info(selected)
+        complexity = router.estimate_complexity(query, context if context != "None provided" else None)
+
+        fw = FRAMEWORKS.get(selected, {
+            "category": "unknown",
+            "best_for": [],
+            "prompt": "Apply your best reasoning to: {query}\n\nContext: {context}"
+        })
+        prompt = fw["prompt"].format(query=query, context=context or "None provided")
+
+        output = f"# Framework: {selected}\n"
+        output += f"Category: {fw_info.get('category', fw.get('category', 'unknown'))} | Complexity: {complexity:.2f}\n"
+        output += f"Best for: {', '.join(fw_info.get('best_for', fw.get('best_for', [])))}\n"
+        output += "\n---\n\n"
+        output += prompt
+
+    return [TextContent(type="text", text=output)]

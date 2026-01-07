@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 
 class ReasoningRequest(BaseModel):
     """Input schema for reasoning requests from IDE agents."""
-    
+
     query: str = Field(
         ...,
         description="The main task or question to reason about",
@@ -42,7 +42,7 @@ class ReasoningRequest(BaseModel):
 
 class ReasoningStep(BaseModel):
     """A single step in the reasoning trace."""
-    
+
     step_number: int
     framework_node: str
     thought: str
@@ -53,7 +53,7 @@ class ReasoningStep(BaseModel):
 
 class ReasoningResponse(BaseModel):
     """Output schema for reasoning results."""
-    
+
     strategy_executed: str = Field(
         ...,
         description="Name of the framework that was executed"
@@ -90,7 +90,7 @@ class ReasoningResponse(BaseModel):
 
 class FrameworkInfo(BaseModel):
     """Information about an available reasoning framework."""
-    
+
     name: str
     category: str
     description: str
@@ -100,7 +100,7 @@ class FrameworkInfo(BaseModel):
 
 class HealthResponse(BaseModel):
     """Health check response."""
-    
+
     status: str = "healthy"
     version: str
     frameworks_loaded: int

@@ -16,21 +16,28 @@ Configuration:
 When both are false, template mode is used (server returns prompts, client executes).
 """
 
-import os
+import asyncio
 import re
+import time
 from typing import Optional
 import structlog
 
+from .settings import get_settings
+from .errors import LLMError, SamplerTimeout, SamplerCircuitOpen
+
 logger = structlog.get_logger("sampling")
+
+# Get settings
+_settings = get_settings()
 
 # Check if MCP sampling is explicitly enabled
 # Default to False since Claude Code doesn't support it yet
-SAMPLING_ENABLED = os.getenv("ENABLE_MCP_SAMPLING", "false").lower() == "true"
+SAMPLING_ENABLED = _settings.enable_mcp_sampling
 
 # Check if LangChain LLM fallback is enabled
 # When true, uses direct API calls via LangChain when sampling fails
 # Requires API key (ANTHROPIC_API_KEY, OPENAI_API_KEY, or OPENROUTER_API_KEY)
-LANGCHAIN_LLM_ENABLED = os.getenv("USE_LANGCHAIN_LLM", "false").lower() == "true"
+LANGCHAIN_LLM_ENABLED = _settings.use_langchain_llm
 
 
 class SamplingNotSupportedError(Exception):
@@ -118,7 +125,6 @@ class ClientSampler:
             )
 
         # Try the sampling call with timeout protection
-        import asyncio
         try:
             # Use a timeout to detect clients that don't respond to sampling
             result = await asyncio.wait_for(
@@ -161,6 +167,168 @@ class ClientSampler:
 
         # Fallback: convert to string
         return str(result)
+
+
+class ResilientSampler:
+    """Wrapper around ClientSampler with timeout, retry, and circuit breaker."""
+
+    def __init__(
+        self,
+        sampler: ClientSampler,
+        timeout: float = 30.0,
+        max_retries: int = 3,
+        circuit_threshold: int = 5,
+        circuit_reset_time: float = 60.0
+    ):
+        """
+        Initialize a resilient sampler wrapper.
+
+        Args:
+            sampler: The underlying ClientSampler instance
+            timeout: Default timeout in seconds for requests
+            max_retries: Maximum number of retry attempts
+            circuit_threshold: Number of failures before circuit opens
+            circuit_reset_time: Seconds to wait before allowing retry after circuit opens
+        """
+        self._sampler = sampler
+        self._timeout = timeout
+        self._max_retries = max_retries
+        self._failure_count = 0
+        self._circuit_open_until: Optional[float] = None
+        self._circuit_threshold = circuit_threshold
+        self._circuit_reset_time = circuit_reset_time
+
+    async def request_sample(
+        self,
+        prompt: str,
+        temperature: float = 0.7,
+        max_tokens: int = 4000,
+        system_prompt: Optional[str] = None,
+        timeout: Optional[float] = None
+    ) -> str:
+        """
+        Request a sample with timeout, retry, and circuit breaker protection.
+
+        Args:
+            prompt: The prompt to send to the client
+            temperature: Sampling temperature (0.0-1.0)
+            max_tokens: Maximum tokens to generate
+            system_prompt: Optional system instruction
+            timeout: Override the default timeout for this request
+
+        Returns:
+            The client's response as a string
+
+        Raises:
+            SamplerCircuitOpen: If circuit breaker is open
+            SamplerTimeout: If all retries timed out
+            LLMError: If all retries failed for other reasons
+        """
+        # Check circuit breaker
+        if self._circuit_open_until and time.time() < self._circuit_open_until:
+            remaining = self._circuit_open_until - time.time()
+            logger.warning(
+                "circuit_breaker_open",
+                remaining_seconds=remaining,
+                failure_count=self._failure_count
+            )
+            raise SamplerCircuitOpen(
+                f"Circuit breaker open, retry after {remaining:.0f}s"
+            )
+
+        effective_timeout = timeout or self._timeout
+        last_error: Optional[Exception] = None
+
+        for attempt in range(self._max_retries):
+            try:
+                logger.debug(
+                    "sampler_request_attempt",
+                    attempt=attempt + 1,
+                    max_retries=self._max_retries,
+                    timeout=effective_timeout
+                )
+
+                result = await asyncio.wait_for(
+                    self._sampler.request_sample(
+                        prompt=prompt,
+                        temperature=temperature,
+                        max_tokens=max_tokens,
+                        system_prompt=system_prompt
+                    ),
+                    timeout=effective_timeout
+                )
+
+                # Success - reset failure count
+                self._failure_count = 0
+                self._circuit_open_until = None
+                logger.debug("sampler_request_success", attempt=attempt + 1)
+                return result
+
+            except asyncio.TimeoutError:
+                last_error = SamplerTimeout(
+                    f"Request timed out after {effective_timeout}s (attempt {attempt + 1}/{self._max_retries})"
+                )
+                logger.warning(
+                    "sampler_timeout",
+                    attempt=attempt + 1,
+                    timeout=effective_timeout
+                )
+
+            except SamplingNotSupportedError:
+                # Don't retry for unsupported sampling - propagate immediately
+                raise
+
+            except Exception as e:
+                last_error = e
+                logger.warning(
+                    "sampler_request_error",
+                    attempt=attempt + 1,
+                    error=str(e),
+                    error_type=type(e).__name__
+                )
+
+            # Record failure
+            self._failure_count += 1
+
+            # Check if circuit breaker should open
+            if self._failure_count >= self._circuit_threshold:
+                self._circuit_open_until = time.time() + self._circuit_reset_time
+                logger.error(
+                    "circuit_breaker_opened",
+                    failure_count=self._failure_count,
+                    reset_after_seconds=self._circuit_reset_time
+                )
+
+            # Exponential backoff before next retry
+            if attempt < self._max_retries - 1:
+                backoff_time = 2 ** attempt  # 1s, 2s, 4s...
+                logger.debug("sampler_backoff", seconds=backoff_time)
+                await asyncio.sleep(backoff_time)
+
+        # All retries exhausted
+        if last_error:
+            if isinstance(last_error, SamplerTimeout):
+                raise last_error
+            raise LLMError(f"Sampler failed after {self._max_retries} retries: {last_error}")
+        raise LLMError(f"Sampler failed after {self._max_retries} retries")
+
+    def reset_circuit_breaker(self) -> None:
+        """Manually reset the circuit breaker state."""
+        self._failure_count = 0
+        self._circuit_open_until = None
+        logger.info("circuit_breaker_reset")
+
+    @property
+    def is_circuit_open(self) -> bool:
+        """Check if the circuit breaker is currently open."""
+        if self._circuit_open_until is None:
+            return False
+        return time.time() < self._circuit_open_until
+
+    @property
+    def failure_count(self) -> int:
+        """Get the current failure count."""
+        return self._failure_count
 
 
 def extract_score(text: str, default: float = 0.5) -> float:
@@ -225,13 +393,15 @@ def extract_json_object(text: str) -> Optional[dict]:
     if match:
         try:
             return json.loads(match.group(1))
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as e:
+            logger.warning("json_decode_failed_in_code_block", error=str(e), text_preview=text[:100])
             pass
 
     # Try to parse the whole text
     try:
         return json.loads(text)
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as e:
+        logger.debug("json_decode_failed_full_text", error=str(e), text_preview=text[:100])
         pass
 
     # Try to find JSON object anywhere in text

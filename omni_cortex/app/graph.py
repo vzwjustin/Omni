@@ -5,15 +5,15 @@ Defines the graph structure for orchestrating reasoning frameworks
 with proper state management and memory persistence.
 """
 
+import os
 from typing import Literal
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
-import aiosqlite
 import structlog
-import os
 
 from .state import GraphState
 from .core.router import HyperRouter
+from .core.settings import get_settings
 from .langchain_integration import (
     enhance_state_with_langchain,
     save_to_langchain_memory,
@@ -21,169 +21,16 @@ from .langchain_integration import (
     AVAILABLE_TOOLS
 )
 
-CHECKPOINT_PATH = os.getenv("CHECKPOINT_PATH", "/app/data/checkpoints.sqlite")
+# Import generated nodes - SINGLE SOURCE OF TRUTH
+# This replaces 62 manual imports with one line
+from .nodes.generator import GENERATED_NODES
+
+CHECKPOINT_PATH = str(get_settings().checkpoint_path)
 logger = structlog.get_logger("graph")
 
-# Import all framework nodes
-from .nodes.strategy import (
-    reason_flux_node,
-    self_discover_node,
-    buffer_of_thoughts_node,
-    coala_node,
-    least_to_most_node,
-    comparative_architecture_node,
-    plan_and_solve_node
-)
-from .nodes.search import (
-    mcts_rstar_node,
-    tree_of_thoughts_node,
-    graph_of_thoughts_node,
-    everything_of_thought_node
-)
-from .nodes.iterative import (
-    active_inference_node,
-    multi_agent_debate_node,
-    adaptive_injection_node,
-    re2_node,
-    rubber_duck_debugging_node,
-    react_node,
-    reflexion_node,
-    self_refine_node
-)
-from .nodes.code import (
-    program_of_thoughts_node,
-    chain_of_verification_node,
-    critic_node,
-    chain_of_code_node,
-    self_debugging_node,
-    tdd_prompting_node,
-    reverse_chain_of_thought_node,
-    alphacodium_node,
-    codechain_node,
-    evol_instruct_node,
-    llmloop_node,
-    procoder_node,
-    recode_node,
-    parsel_node,
-    docprompting_node
-)
-from .nodes.context import (
-    chain_of_note_node,
-    step_back_node,
-    analogical_node,
-    red_team_node,
-    state_machine_node,
-    chain_of_thought_node
-)
-from .nodes.fast import (
-    skeleton_of_thought_node,
-    system1_node
-)
-from .nodes.verification import (
-    self_consistency_node,
-    self_ask_node,
-    rar_node,
-    verify_and_edit_node,
-    rarr_node,
-    selfcheckgpt_node,
-    metaqa_node,
-    ragas_node
-)
-from .nodes.agent import (
-    rewoo_node,
-    lats_node,
-    mrkl_node,
-    swe_agent_node,
-    toolformer_node
-)
-from .nodes.rag import (
-    self_rag_node,
-    hyde_node,
-    rag_fusion_node,
-    raptor_node,
-    graphrag_node
-)
-from .nodes.code import (
-    pal_node,
-    scratchpads_node
-)
 
-
-# Framework registry
-FRAMEWORK_NODES = {
-    # Strategy
-    "reason_flux": reason_flux_node,
-    "self_discover": self_discover_node,
-    "buffer_of_thoughts": buffer_of_thoughts_node,
-    "coala": coala_node,
-    "least_to_most": least_to_most_node,
-    "comparative_arch": comparative_architecture_node,
-    "plan_and_solve": plan_and_solve_node,
-    # Search
-    "mcts_rstar": mcts_rstar_node,
-    "tree_of_thoughts": tree_of_thoughts_node,
-    "graph_of_thoughts": graph_of_thoughts_node,
-    "everything_of_thought": everything_of_thought_node,
-    # Iterative
-    "active_inference": active_inference_node,
-    "multi_agent_debate": multi_agent_debate_node,
-    "adaptive_injection": adaptive_injection_node,
-    "re2": re2_node,
-    "rubber_duck": rubber_duck_debugging_node,
-    "react": react_node,
-    "reflexion": reflexion_node,
-    "self_refine": self_refine_node,
-    # Code
-    "program_of_thoughts": program_of_thoughts_node,
-    "chain_of_verification": chain_of_verification_node,
-    "critic": critic_node,
-    "chain_of_code": chain_of_code_node,
-    "self_debugging": self_debugging_node,
-    "tdd_prompting": tdd_prompting_node,
-    "reverse_cot": reverse_chain_of_thought_node,
-    "alphacodium": alphacodium_node,
-    "codechain": codechain_node,
-    "evol_instruct": evol_instruct_node,
-    "llmloop": llmloop_node,
-    "procoder": procoder_node,
-    "recode": recode_node,
-    # Context
-    "chain_of_note": chain_of_note_node,
-    "step_back": step_back_node,
-    "analogical": analogical_node,
-    "red_team": red_team_node,
-    "state_machine": state_machine_node,
-    "chain_of_thought": chain_of_thought_node,
-    # Fast
-    "skeleton_of_thought": skeleton_of_thought_node,
-    "system1": system1_node,
-    # Verification
-    "self_consistency": self_consistency_node,
-    "self_ask": self_ask_node,
-    "rar": rar_node,
-    "verify_and_edit": verify_and_edit_node,
-    "rarr": rarr_node,
-    "selfcheckgpt": selfcheckgpt_node,
-    "metaqa": metaqa_node,
-    "ragas": ragas_node,
-    # Agent
-    "rewoo": rewoo_node,
-    "lats": lats_node,
-    "mrkl": mrkl_node,
-    "swe_agent": swe_agent_node,
-    "toolformer": toolformer_node,
-    # RAG
-    "self_rag": self_rag_node,
-    "hyde": hyde_node,
-    "rag_fusion": rag_fusion_node,
-    "raptor": raptor_node,
-    "graphrag": graphrag_node,
-    # Code (additional)
-    "pal": pal_node,
-    "scratchpads": scratchpads_node,
-    "parsel": parsel_node,
-    "docprompting": docprompting_node,
-}
+# Framework registry - now auto-generated from FrameworkDefinition
+FRAMEWORK_NODES = GENERATED_NODES
 
 
 # Initialize router
@@ -339,8 +186,10 @@ async def execute_framework_node(state: GraphState) -> GraphState:
             framework_fn = FRAMEWORK_NODES[selected_framework]
             state = await framework_fn(state)
         else:
-            # Fallback to self_discover
-            state = await self_discover_node(state)
+            # Fallback to self_discover (from generated nodes)
+            fallback_fn = FRAMEWORK_NODES.get("self_discover")
+            if fallback_fn:
+                state = await fallback_fn(state)
             state["selected_framework"] = "self_discover (fallback)"
 
     # Save to LangChain memory after execution
@@ -371,7 +220,7 @@ async def execute_framework_node(state: GraphState) -> GraphState:
 def should_continue(state: GraphState) -> Literal["execute", "end"]:
     """
     Conditional edge: Determine if we should execute or end.
-    
+
     Always execute after routing (could add retry logic here in the future).
     """
     # Check if we have a selected framework

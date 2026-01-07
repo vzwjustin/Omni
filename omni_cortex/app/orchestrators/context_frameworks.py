@@ -40,7 +40,7 @@ async def chain_of_note(sampler: ClientSampler, query: str, context: str) -> Dic
         f"""NOTE 4 - Synthesis: Complete answer
 
 Notes so far:
-{chr(10).join(f'{label}: {text[:100]}...' for label, text in notes)}
+{chr(10).join(f'{label}: {text[:CONTENT.QUERY_LOG]}...' for label, text in notes)}
 
 Original question: {query}
 
@@ -80,8 +80,8 @@ Think at a higher level: What's the general class of problem? What principles go
     applied = await sampler.request_sample(
         f"""APPLY abstract principles:
 
-Principles: {abstract[:200]}...
-Constraints: {constraints[:200]}...
+Principles: {abstract[:CONTENT.ERROR_PREVIEW]}...
+Constraints: {constraints[:CONTENT.ERROR_PREVIEW]}...
 
 Concrete problem: {query}
 Context: {context}
@@ -222,7 +222,7 @@ async def state_machine(sampler: ClientSampler, query: str, context: str) -> Dic
 
     # Actions
     actions = await sampler.request_sample(
-        f"ACTIONS: What happens on transition?\n\nGuards: {guards[:200]}...\n\nWhat actions execute?",
+        f"ACTIONS: What happens on transition?\n\nGuards: {guards[:CONTENT.ERROR_PREVIEW]}...\n\nWhat actions execute?",
         temperature=0.6
     )
 

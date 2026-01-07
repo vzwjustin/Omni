@@ -12,6 +12,12 @@ class OmniCortexError(Exception):
         super().__init__(message)
         self.details = details or {}
 
+    def __repr__(self) -> str:
+        name = self.__class__.__name__
+        if self.details:
+            return f"{name}({self.args[0]!r}, details={self.details!r})"
+        return f"{name}({self.args[0]!r})"
+
 
 # Routing errors
 class RoutingError(OmniCortexError):
@@ -72,3 +78,11 @@ class ProviderNotConfiguredError(LLMError):
 
 class RateLimitError(LLMError):
     """API rate limit exceeded."""
+
+
+class SamplerTimeout(LLMError):
+    """Sampler request timed out."""
+
+
+class SamplerCircuitOpen(LLMError):
+    """Circuit breaker is open, sampler unavailable."""

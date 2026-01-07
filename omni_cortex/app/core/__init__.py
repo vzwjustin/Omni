@@ -1,8 +1,9 @@
 """Core module initialization."""
 
-from .config import settings, Settings, ModelConfig
 from .settings import get_settings, OmniCortexSettings, reset_settings
 from .router import HyperRouter
+from .correlation import get_correlation_id, set_correlation_id, clear_correlation_id
+from .logging import add_correlation_id
 from .errors import (
     OmniCortexError,
     RoutingError,
@@ -22,13 +23,15 @@ from .errors import (
 )
 
 __all__ = [
-    "settings",
-    "Settings",
-    "ModelConfig",
     "get_settings",
     "OmniCortexSettings",
     "reset_settings",
     "HyperRouter",
+    # Correlation ID utilities
+    "get_correlation_id",
+    "set_correlation_id",
+    "clear_correlation_id",
+    "add_correlation_id",
     # Error hierarchy
     "OmniCortexError",
     "RoutingError",

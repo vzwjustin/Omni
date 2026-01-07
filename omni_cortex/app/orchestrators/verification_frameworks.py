@@ -27,7 +27,7 @@ async def self_consistency(sampler: ClientSampler, query: str, context: str) -> 
     normalized = await sampler.request_sample(
         f"""Normalize these {num_samples} solutions:
 
-{chr(10).join(f'Solution {i+1}: {s[:200]}...' for i, s in enumerate(solutions))}
+{chr(10).join(f'Solution {i+1}: {s[:CONTENT.ERROR_PREVIEW]}...' for i, s in enumerate(solutions))}
 
 For each, extract: hypothesis -> fix -> expected evidence""",
         temperature=0.4
@@ -153,7 +153,7 @@ Write clear spec with:
 
     # Verify
     verified = await sampler.request_sample(
-        f"Map to acceptance criteria:\n\nSpec: {rephrased[:200]}...\n\nSolution: {solution[:200]}...\n\nMeets all criteria?",
+        f"Map to acceptance criteria:\n\nSpec: {rephrased[:CONTENT.ERROR_PREVIEW]}...\n\nSolution: {solution[:CONTENT.ERROR_PREVIEW]}...\n\nMeets all criteria?",
         temperature=0.3
     )
 
@@ -272,7 +272,7 @@ async def selfcheckgpt(sampler: ClientSampler, query: str, context: str) -> Dict
     consistency = await sampler.request_sample(
         f"""Compare answers for disagreement hotspots:
 
-Original: {draft[:200]}...
+Original: {draft[:CONTENT.ERROR_PREVIEW]}...
 
 Samples:
 {chr(10).join(f'{i+1}. {s[:150]}...' for i, s in enumerate(samples))}
@@ -389,10 +389,10 @@ async def ragas(sampler: ClientSampler, query: str, context: str) -> Dict[str, A
     diagnosis = await sampler.request_sample(
         f"""DIAGNOSE failure modes:
 
-Relevance: {evaluation['relevance'][:100]}...
-Faithfulness: {evaluation['faithfulness'][:100]}...
-Completeness: {evaluation['completeness'][:100]}...
-Noise: {evaluation['noise'][:100]}...
+Relevance: {evaluation['relevance'][:CONTENT.QUERY_LOG]}...
+Faithfulness: {evaluation['faithfulness'][:CONTENT.QUERY_LOG]}...
+Completeness: {evaluation['completeness'][:CONTENT.QUERY_LOG]}...
+Noise: {evaluation['noise'][:CONTENT.QUERY_LOG]}...
 
 Failure modes + corrective actions?""",
         temperature=0.5

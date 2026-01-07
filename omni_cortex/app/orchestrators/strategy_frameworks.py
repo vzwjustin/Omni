@@ -135,7 +135,7 @@ Provide final verified solution."""
         "final_answer": verified,
         "metadata": {
             "framework": "self_discover",
-            "selected_patterns": selected_patterns[:200] + "..."
+            "selected_patterns": selected_patterns[:CONTENT.ERROR_PREVIEW] + "..."
         }
     }
 
@@ -179,8 +179,8 @@ What's the core challenge? What makes this difficult?"""
     approaches_prompt = f"""Generate possible approaches:
 
 ## Buffer So Far
-INIT: {buffer[0][1][:200]}...
-ANALYSIS: {buffer[1][1][:200]}...
+INIT: {buffer[0][1][:CONTENT.ERROR_PREVIEW]}...
+ANALYSIS: {buffer[1][1][:CONTENT.ERROR_PREVIEW]}...
 
 List 3 different approaches to solve this."""
 
@@ -252,10 +252,10 @@ What relevant knowledge applies? Any similar problems solved before? Best practi
     reasoning_prompt = f"""REASONING: Analyze and create action plan
 
 ## Perception
-{perception[:200]}...
+{perception[:CONTENT.ERROR_PREVIEW]}...
 
 ## Memory
-{memory[:200]}...
+{memory[:CONTENT.ERROR_PREVIEW]}...
 
 ## Goal
 {query}

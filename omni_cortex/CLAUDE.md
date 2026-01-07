@@ -8,15 +8,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **These rules are MANDATORY. Violations will break the system.**
 
-### Critical Synchronization (ENFORCED)
+### Framework Registry (Single Source of Truth)
 ```
-VIOLATION = SYSTEM FAILURE
+ONE LOCATION = NO SYNC ERRORS
 ```
-- **NEVER** modify `FRAMEWORK_NODES` in `app/graph.py` without ALSO updating:
-  1. `FRAMEWORKS` dict in `app/core/router.py`
-  2. `VIBE_DICTIONARY` in `app/core/vibe_dictionary.py`
-  3. `get_framework_info()` in `app/core/router.py`
-- All four locations MUST have matching framework names - no exceptions
+- All 62 frameworks are defined in `app/frameworks/registry.py`
+- This is the SINGLE SOURCE OF TRUTH - no more 4-location sync requirement
+- To add a new framework:
+  1. Add `FrameworkDefinition` to `app/frameworks/registry.py`
+  2. Create node implementation in `app/nodes/{category}/`
+  3. Import node in `app/graph.py` FRAMEWORK_NODES dict
+- Other files import from `app/frameworks` - never define frameworks elsewhere
 
 ### Async/Await (ENFORCED)
 ```
@@ -126,17 +128,19 @@ python -m server.main
 omni_cortex/
 ├── server/main.py              # MCP entry (LEAN_MODE controls tools)
 ├── app/
-│   ├── graph.py                # LangGraph (FRAMEWORK_NODES) ⚠️ SYNC REQUIRED
+│   ├── graph.py                # LangGraph workflow + FRAMEWORK_NODES
 │   ├── state.py                # GraphState TypedDict
 │   ├── langchain_integration.py
 │   ├── collection_manager.py   # ChromaDB
 │   ├── core/
-│   │   ├── router.py           # HyperRouter (FRAMEWORKS) ⚠️ SYNC REQUIRED
-│   │   ├── vibe_dictionary.py  # VIBE_DICTIONARY ⚠️ SYNC REQUIRED
+│   │   ├── router.py           # HyperRouter (imports from frameworks/)
+│   │   ├── vibe_dictionary.py  # Legacy (imports from frameworks/)
 │   │   ├── settings.py         # OmniCortexSettings (Pydantic)
 │   │   ├── errors.py           # Exception hierarchy
 │   │   └── config.py           # Legacy settings
-│   ├── frameworks/             # Registry (single source of truth)
+│   ├── frameworks/             # SINGLE SOURCE OF TRUTH for all 62 frameworks
+│   │   ├── __init__.py         # Package exports
+│   │   └── registry.py         # FrameworkDefinition + all 62 frameworks
 │   └── nodes/                  # Framework implementations
 │       ├── common.py           # @quiet_star, LLM wrappers
 │       ├── strategy/           # reason_flux, self_discover
@@ -206,9 +210,9 @@ format_reasoning_response() → MCP response
 
 | Component | File | Purpose |
 |-----------|------|---------|
+| Framework Registry | `app/frameworks/registry.py` | SINGLE SOURCE OF TRUTH for all 62 frameworks |
 | MCP Server | `server/main.py` | Tool registration, LEAN_MODE |
 | HyperRouter | `app/core/router.py` | Framework selection |
-| VIBE_DICTIONARY | `app/core/vibe_dictionary.py` | Pattern matching |
 | LangGraph | `app/graph.py` | Workflow orchestration |
 | Memory | `app/langchain_integration.py` | Conversation memory |
 | RAG | `app/collection_manager.py` | ChromaDB |
@@ -227,9 +231,27 @@ format_reasoning_response() → MCP response
 
 ## Adding a New Framework
 
-**⚠️ ALL FOUR LOCATIONS MUST BE UPDATED - NO EXCEPTIONS**
+**Single source of truth: `app/frameworks/registry.py`**
 
-1. **Create node** in `app/nodes/{category}/my_framework.py`:
+1. **Define framework** in `app/frameworks/registry.py`:
+   ```python
+   register(FrameworkDefinition(
+       name="my_framework",
+       display_name="My Framework",
+       category=FrameworkCategory.ITERATIVE,  # or STRATEGY, SEARCH, CODE, etc.
+       description="What this framework does. Best for X and Y.",
+       best_for=["use case 1", "use case 2"],
+       vibes=[
+           "casual phrase", "another vibe", "how users describe this",
+           "natural language triggers"
+       ],
+       node_function="app.nodes.iterative.my_framework_node",
+       complexity="medium",  # low, medium, high
+       task_type="debug",  # debug, refactor, architecture, etc.
+   ))
+   ```
+
+2. **Create node** in `app/nodes/{category}/my_framework.py`:
    ```python
    from app.state import GraphState
    from app.nodes.common import quiet_star
@@ -241,22 +263,19 @@ format_reasoning_response() → MCP response
        return state
    ```
 
-2. **Export** from `app/nodes/{category}/__init__.py`
+3. **Export** from `app/nodes/{category}/__init__.py`
 
-3. **Register in graph** (`app/graph.py`):
+4. **Register in graph** (`app/graph.py`):
    ```python
+   from .nodes.iterative import my_framework_node
    FRAMEWORK_NODES["my_framework"] = my_framework_node
    ```
 
-4. **Add router metadata** (`app/core/router.py`):
-   ```python
-   FRAMEWORKS["my_framework"] = {"category": "...", "description": "...", "best_for": [...]}
-   ```
-
-5. **Add vibe patterns** (`app/core/vibe_dictionary.py`):
-   ```python
-   VIBE_DICTIONARY["my_framework"] = ["casual phrase", "another vibe"]
-   ```
+That's it! The registry automatically provides:
+- Framework metadata for the router
+- Vibe patterns for natural language matching
+- Task type inference
+- Category organization
 
 ---
 
@@ -313,6 +332,6 @@ docker-compose exec omni-cortex pytest tests/ -v  # Run tests
 | Error | Fix |
 |-------|-----|
 | "No embedding provider" | Set `OPENAI_API_KEY` or use `EMBEDDING_PROVIDER=huggingface` |
-| Framework not found | Check all 4 sync locations match exactly |
+| Framework not found | Check `app/frameworks/registry.py` has the framework defined |
 | Memory not persisting | Use same `thread_id` across calls |
 | Sandbox timeout | Increase `SANDBOX_TIMEOUT` or check for infinite loops |
