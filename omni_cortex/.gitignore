@@ -1,0 +1,8 @@
+# Local-only files
+.claude/
+.codex/
+CODE_REVIEW_REPORT.md
+CODEBASE_ISSUES.md
+INCOMPLETE_CODE_AND_DOCS_AUDIT.md
+BUG_FIXES_*.md
+BUG_HUNT_REPORT.md
