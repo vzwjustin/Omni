@@ -16,13 +16,13 @@ Usage:
     prompt += format_examples_section(examples, "reasoning")
 """
 
-import logging
+import structlog
 from typing import Optional, List, Callable, Any
 
 from ..collection_manager import get_collection_manager
 from ..core.constants import CONTENT, SEARCH
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 def search_knowledge_examples(

@@ -86,7 +86,7 @@ from app.core.settings import get_settings
 # LEAN_MODE: Only expose essential tools to reduce MCP token overhead
 LEAN_MODE = get_settings().lean_mode
 
-logger = logging.getLogger("omni-cortex")
+logger = structlog.get_logger("omni-cortex")
 
 
 def create_server() -> Server:

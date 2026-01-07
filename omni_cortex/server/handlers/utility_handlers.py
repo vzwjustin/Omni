@@ -5,8 +5,8 @@ Handles memory, context, code execution, and utility tools.
 """
 
 import json
-import logging
 import os
+import structlog
 
 from mcp.types import TextContent
 
@@ -37,7 +37,7 @@ from .validation import (
     validate_category,
 )
 
-logger = logging.getLogger("omni-cortex")
+logger = structlog.get_logger("omni-cortex")
 
 
 async def handle_list_frameworks(arguments: dict) -> list[TextContent]:
