@@ -10,7 +10,7 @@ import ast
 import asyncio
 import builtins
 import io
-import logging
+import structlog
 from contextlib import redirect_stdout, redirect_stderr
 from typing import Dict, Any
 
@@ -22,7 +22,7 @@ from ..common import (
 )
 from ..example_utilities import search_code_examples
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 # =============================================================================
