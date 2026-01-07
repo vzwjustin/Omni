@@ -139,8 +139,14 @@ Focus on actionable, technical content."""
         except (LLMError, ProviderNotConfiguredError):
             raise  # Re-raise custom LLM errors
         except Exception as e:
-            logger.warning("doc_search_failed", error=str(e))
-            # Doc search failures are non-fatal - return empty list
+            # Graceful degradation: Web documentation search is optional enhancement.
+            # Failures should not block the main reasoning workflow. We log and
+            # return empty results, allowing the system to proceed without web docs.
+            logger.warning(
+                "doc_search_failed",
+                error=str(e),
+                error_type=type(e).__name__
+            )
             return []
 
     async def search_knowledge_base(
@@ -185,7 +191,14 @@ Focus on actionable, technical content."""
             except RAGError as e:
                 logger.debug("learnings_search_failed", error=str(e), error_type="RAGError")
             except Exception as e:
-                logger.debug("learnings_search_failed", error=str(e))
+                # Graceful degradation: Individual collection searches are independent.
+                # A failure in learnings search should not prevent other collections
+                # from being searched. Log and continue to next collection.
+                logger.debug(
+                    "learnings_search_failed",
+                    error=str(e),
+                    error_type=type(e).__name__
+                )
 
             # For debug tasks, search debugging knowledge
             if task_type == "debug":
@@ -206,7 +219,14 @@ Focus on actionable, technical content."""
                 except RAGError as e:
                     logger.debug("debug_knowledge_search_failed", error=str(e), error_type="RAGError")
                 except Exception as e:
-                    logger.debug("debug_knowledge_search_failed", error=str(e))
+                    # Graceful degradation: Debug knowledge search is supplementary.
+                    # Failure here should not block other collection searches or
+                    # the overall knowledge base lookup. Log and continue.
+                    logger.debug(
+                        "debug_knowledge_search_failed",
+                        error=str(e),
+                        error_type=type(e).__name__
+                    )
 
             # Search framework documentation
             try:
@@ -227,7 +247,14 @@ Focus on actionable, technical content."""
             except RAGError as e:
                 logger.debug("framework_docs_search_failed", error=str(e), error_type="RAGError")
             except Exception as e:
-                logger.debug("framework_docs_search_failed", error=str(e))
+                # Graceful degradation: Framework docs search is one of several
+                # knowledge sources. Failure should not prevent returning results
+                # from other successful collection searches. Log and continue.
+                logger.debug(
+                    "framework_docs_search_failed",
+                    error=str(e),
+                    error_type=type(e).__name__
+                )
 
             logger.info("knowledge_base_search_complete", results=len(results))
             return results[:5]  # Cap at 5 results
@@ -236,9 +263,14 @@ Focus on actionable, technical content."""
             logger.error("knowledge_base_search_failed", error=str(e), error_type="RAGError")
             return []
         except Exception as e:
+            # Non-graceful: This outer exception handler catches failures in the
+            # collection manager initialization or other critical infrastructure.
+            # Unlike individual collection search failures, this indicates a
+            # fundamental problem that should be surfaced to the caller.
             logger.error(
                 "knowledge_base_search_failed",
                 error=str(e),
+                error_type=type(e).__name__,
                 correlation_id=get_correlation_id()
             )
             raise OmniCortexError(f"Knowledge base search failed: {e}") from e

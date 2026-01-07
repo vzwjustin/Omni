@@ -81,7 +81,9 @@ def _search_examples(query: str, example_type: str) -> str:
             if examples:
                 return f"## Similar Code Examples\n\n{examples}"
     except Exception as e:
-        logger.debug("example_search_failed", error=str(e), example_type=example_type)
+        # Graceful degradation: example search failures should not block framework execution.
+        # Examples are optional enhancements; the framework can proceed without them.
+        logger.debug("example_search_failed", error=str(e), error_type=type(e).__name__, example_type=example_type)
 
     return ""
 
@@ -188,7 +190,10 @@ def _load_special_node(name: str, module_path: str) -> Optional[Callable]:
         node_name = f"{name}_node"
         return getattr(module, node_name, None)
     except Exception as e:
-        logger.warning("special_node_load_failed", name=name, error=str(e))
+        # Graceful degradation: if a special node fails to load, return None so the caller
+        # can fall back to a generated node. This ensures the system remains functional
+        # even when optional custom node implementations are unavailable.
+        logger.warning("special_node_load_failed", name=name, error=str(e), error_type=type(e).__name__)
         return None
 
 

@@ -71,9 +71,12 @@ class StructuredBriefGenerator:
                 query, code_snippet, ide_context
             )
         except Exception as e:
+            # Graceful degradation: Framework selection failures should not block brief generation.
+            # We fall back to safe baseline frameworks to ensure the user always gets a response.
             logger.warning(
                 "framework_selection_failed",
                 error=str(e)[:CONTENT.QUERY_LOG],
+                error_type=type(e).__name__,
                 fallback="self_discover->chain_of_thought"
             )
             framework_chain = ["self_discover", "chain_of_thought"]

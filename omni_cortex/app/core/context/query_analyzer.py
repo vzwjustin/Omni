@@ -145,13 +145,17 @@ Be specific and actionable. Focus on what Claude needs to execute effectively.""
         except (LLMError, ProviderNotConfiguredError):
             raise  # Re-raise custom LLM errors
         except Exception as e:
+            # Graceful degradation: Query analysis failures should not block the
+            # overall workflow. We convert errors to LLMError with helpful context
+            # so callers can decide whether to proceed with reduced functionality.
             error_msg = str(e).lower()
-            
+
             # Detect specific API errors and provide helpful messages
             if "insufficient" in error_msg or "quota" in error_msg or "billing" in error_msg:
                 logger.warning(
                     "gemini_billing_issue",
                     error="Insufficient funds or quota exceeded",
+                    error_type=type(e).__name__,
                     hint="Add credits to your Google Cloud account for Gemini API access."
                 )
                 raise LLMError(
@@ -162,6 +166,7 @@ Be specific and actionable. Focus on what Claude needs to execute effectively.""
                 logger.warning(
                     "gemini_auth_issue",
                     error="API key invalid or unauthorized",
+                    error_type=type(e).__name__,
                     hint="Check your GOOGLE_API_KEY is valid and has Gemini API enabled."
                 )
                 raise LLMError(
@@ -172,6 +177,7 @@ Be specific and actionable. Focus on what Claude needs to execute effectively.""
                 logger.error(
                     "query_analysis_failed",
                     error=str(e),
+                    error_type=type(e).__name__,
                     correlation_id=get_correlation_id()
                 )
                 raise LLMError(f"Query analysis failed: {e}") from e

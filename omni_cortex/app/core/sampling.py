@@ -394,15 +394,17 @@ def extract_json_object(text: str) -> Optional[dict]:
         try:
             return json.loads(match.group(1))
         except json.JSONDecodeError as e:
-            logger.warning("json_decode_failed_in_code_block", error=str(e), text_preview=text[:100])
-            pass
+            # Intentional fallback: code block content wasn't valid JSON,
+            # continue to try parsing full text or regex extraction
+            logger.debug("json_code_block_parse_failed", error=str(e), text_preview=text[:100])
 
     # Try to parse the whole text
     try:
         return json.loads(text)
     except json.JSONDecodeError as e:
-        logger.debug("json_decode_failed_full_text", error=str(e), text_preview=text[:100])
-        pass
+        # Intentional fallback: full text isn't valid JSON,
+        # continue to try regex-based extraction
+        logger.debug("json_full_text_parse_failed", error=str(e), text_preview=text[:100])
 
     # Try to find JSON object anywhere in text
     json_obj_pattern = r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}'
@@ -410,7 +412,10 @@ def extract_json_object(text: str) -> Optional[dict]:
     for match in matches:
         try:
             return json.loads(match)
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as e:
+            # Intentional fallback: this regex match wasn't valid JSON,
+            # continue to try next match in the list
+            logger.debug("json_regex_match_parse_failed", error=str(e), match_preview=match[:50])
             continue
 
     return None

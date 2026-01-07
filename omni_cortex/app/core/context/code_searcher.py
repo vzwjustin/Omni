@@ -173,7 +173,9 @@ JWT"""
             logger.warning("search_query_extraction_failed", error=str(e), error_type=type(e).__name__)
             return []
         except Exception as e:
-            logger.warning("search_query_extraction_failed", error=str(e))
+            # Graceful degradation: search query extraction is optional - code search
+            # can proceed without LLM-extracted terms, falling back to direct query usage
+            logger.warning("search_query_extraction_failed", error=str(e), error_type=type(e).__name__)
             return []
 
     async def _run_grep_searches(
@@ -236,13 +238,16 @@ JWT"""
             except OmniCortexError:
                 raise  # Re-raise custom errors
             except Exception as e:
+                # Graceful degradation: individual grep/rg search failures are non-fatal.
+                # Code search is supplementary context - continue with remaining searches
+                # to provide best-effort results even if some queries fail.
                 logger.error(
                     "code_search_failed",
                     query=search_term,
                     error=str(e),
+                    error_type=type(e).__name__,
                     correlation_id=get_correlation_id()
                 )
-                # Code search errors are non-fatal - continue with other searches
 
         return results
 
@@ -288,6 +293,8 @@ JWT"""
         except OmniCortexError:
             raise  # Re-raise custom errors
         except Exception as e:
-            logger.debug("git_log_search_skipped", error=str(e))
+            # Graceful degradation: git log search is optional supplementary context.
+            # Failures here should not block the main code search workflow.
+            logger.debug("git_log_search_skipped", error=str(e), error_type=type(e).__name__)
 
         return None

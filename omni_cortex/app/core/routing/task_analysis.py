@@ -114,7 +114,11 @@ PRIOR_KNOWLEDGE: [relevant insights from similar problems, or "none"]
         return result
 
     except Exception as e:
-        logger.warning("gemini_analysis_failed", error=str(e)[:CONTENT.QUERY_LOG])
+        # Intentional fallback: Gemini analysis is optional enrichment.
+        # If it fails (network, API limits, parsing), we return empty defaults
+        # and let the system proceed without pre-analysis. Claude can still
+        # handle the task; it just won't have the upfront execution plan.
+        logger.warning("gemini_analysis_failed", error=str(e)[:CONTENT.QUERY_LOG], error_type=type(e).__name__)
         return {
             "execution_plan": [],
             "focus_areas": [],
@@ -141,7 +145,9 @@ async def get_relevant_learnings(query: str, category: str = "") -> str:
                     f"{item.get('solution', '')[:CONTENT.ERROR_PREVIEW]}"
                 )
         except Exception as e:
-            logger.debug("learnings_search_failed", error=str(e)[:CONTENT.QUERY_LOG])
+            # Intentional fallback: Learnings search is optional context enrichment.
+            # Failures (Chroma unavailable, collection missing) degrade gracefully.
+            logger.debug("learnings_search_failed", error=str(e)[:CONTENT.QUERY_LOG], error_type=type(e).__name__)
 
         # 2. Search debugging knowledge (for debug tasks)
         debug_keywords = ["bug", "error", "fix", "debug"]
@@ -151,7 +157,9 @@ async def get_relevant_learnings(query: str, category: str = "") -> str:
                 for doc in docs:
                     all_context.append(f"[DEBUG_PATTERN] {doc.page_content[:CONTENT.ERROR_PREVIEW]}")
             except Exception as e:
-                logger.debug("debug_knowledge_search_failed", error=str(e)[:CONTENT.QUERY_LOG])
+                # Intentional fallback: Debug knowledge is optional enrichment.
+                # Collection may not exist or be empty - continue without it.
+                logger.debug("debug_knowledge_search_failed", error=str(e)[:CONTENT.QUERY_LOG], error_type=type(e).__name__)
 
         # 3. Search reasoning knowledge (for complex tasks)
         if category in ("architecture", "exploration", "refactor"):
@@ -160,7 +168,9 @@ async def get_relevant_learnings(query: str, category: str = "") -> str:
                 for doc in docs:
                     all_context.append(f"[REASONING_EXAMPLE] {doc.page_content[:CONTENT.ERROR_PREVIEW]}")
             except Exception as e:
-                logger.debug("reasoning_knowledge_search_failed", error=str(e)[:CONTENT.QUERY_LOG])
+                # Intentional fallback: Reasoning knowledge is optional enrichment.
+                # Collection may not exist or be empty - continue without it.
+                logger.debug("reasoning_knowledge_search_failed", error=str(e)[:CONTENT.QUERY_LOG], error_type=type(e).__name__)
 
         # 4. Search instruction knowledge (for implementation tasks)
         if category in ("code_gen", "agent"):
@@ -169,12 +179,17 @@ async def get_relevant_learnings(query: str, category: str = "") -> str:
                 for doc in docs:
                     all_context.append(f"[INSTRUCTION_EXAMPLE] {doc.page_content[:CONTENT.ERROR_PREVIEW]}")
             except Exception as e:
-                logger.debug("instruction_knowledge_search_failed", error=str(e)[:CONTENT.QUERY_LOG])
+                # Intentional fallback: Instruction knowledge is optional enrichment.
+                # Collection may not exist or be empty - continue without it.
+                logger.debug("instruction_knowledge_search_failed", error=str(e)[:CONTENT.QUERY_LOG], error_type=type(e).__name__)
 
         return "\n".join(all_context[:5]) if all_context else ""
 
     except Exception as e:
-        logger.debug("get_relevant_learnings_failed", error=str(e)[:CONTENT.QUERY_LOG])
+        # Intentional fallback: All learnings retrieval is optional enrichment.
+        # If ChromaDB is unavailable or manager fails to initialize, we return
+        # empty string and let the system proceed without prior knowledge context.
+        logger.debug("get_relevant_learnings_failed", error=str(e)[:CONTENT.QUERY_LOG], error_type=type(e).__name__)
         return ""
 
 
@@ -210,7 +225,9 @@ async def enrich_evidence_from_chroma(
                         relevance="Relevant code/documentation from codebase"
                     ))
         except Exception as e:
-            logger.debug("enrich_evidence_docs_failed", error=str(e)[:CONTENT.QUERY_LOG])
+            # Intentional fallback: Documentation search is optional enrichment.
+            # Collection may not exist - proceed without documentation evidence.
+            logger.debug("enrich_evidence_docs_failed", error=str(e)[:CONTENT.QUERY_LOG], error_type=type(e).__name__)
 
         # 2. Get prior successful solutions for similar tasks
         try:
@@ -225,7 +242,9 @@ async def enrich_evidence_from_chroma(
                         relevance=f"Prior successful solution using {learn.get('framework', 'unknown')}"
                     ))
         except Exception as e:
-            logger.debug("enrich_evidence_learnings_failed", error=str(e)[:CONTENT.QUERY_LOG])
+            # Intentional fallback: Prior learnings are optional enrichment.
+            # If search fails, proceed without prior solution evidence.
+            logger.debug("enrich_evidence_learnings_failed", error=str(e)[:CONTENT.QUERY_LOG], error_type=type(e).__name__)
 
         # 3. Debug-specific: Get debugging patterns and known fixes
         if task_type in ("debug", "fix") or category == "debug":
@@ -240,7 +259,9 @@ async def enrich_evidence_from_chroma(
                             relevance="Known debugging pattern or fix approach"
                         ))
             except Exception as e:
-                logger.debug("enrich_evidence_debug_failed", error=str(e)[:CONTENT.QUERY_LOG])
+                # Intentional fallback: Debug patterns are optional enrichment.
+                # Collection may not exist - proceed without debug evidence.
+                logger.debug("enrich_evidence_debug_failed", error=str(e)[:CONTENT.QUERY_LOG], error_type=type(e).__name__)
 
         # 4. Architecture/design: Get reasoning examples
         if category in ("architecture", "exploration", "refactor"):
@@ -255,7 +276,9 @@ async def enrich_evidence_from_chroma(
                             relevance="Example reasoning approach for similar problem"
                         ))
             except Exception as e:
-                logger.debug("enrich_evidence_reasoning_failed", error=str(e)[:CONTENT.QUERY_LOG])
+                # Intentional fallback: Reasoning examples are optional enrichment.
+                # Collection may not exist - proceed without reasoning evidence.
+                logger.debug("enrich_evidence_reasoning_failed", error=str(e)[:CONTENT.QUERY_LOG], error_type=type(e).__name__)
 
         # 5. Get framework-specific examples if using known framework
         if framework_chain:
@@ -271,10 +294,15 @@ async def enrich_evidence_from_chroma(
                             relevance=f"Example of {primary_fw} framework usage"
                         ))
             except Exception as e:
-                logger.debug("enrich_evidence_framework_failed", error=str(e)[:CONTENT.QUERY_LOG])
+                # Intentional fallback: Framework examples are optional enrichment.
+                # Collection may not exist - proceed without framework evidence.
+                logger.debug("enrich_evidence_framework_failed", error=str(e)[:CONTENT.QUERY_LOG], error_type=type(e).__name__)
 
     except Exception as e:
-        logger.debug("enrich_evidence_failed", error=str(e)[:CONTENT.QUERY_LOG])
+        # Intentional fallback: All evidence enrichment is optional.
+        # If ChromaDB is unavailable or manager fails to initialize,
+        # we return whatever evidence we collected so far (possibly empty).
+        logger.debug("enrich_evidence_failed", error=str(e)[:CONTENT.QUERY_LOG], error_type=type(e).__name__)
 
     return evidence[:4]  # Max 4 enriched evidence items
 
@@ -307,4 +335,7 @@ async def save_task_analysis(
         manager.add_documents([content], [metadata], "learnings")
 
     except Exception as e:
-        logger.debug("save_task_analysis_failed", error=str(e)[:CONTENT.QUERY_LOG])
+        # Intentional fallback: Saving task analysis is fire-and-forget.
+        # If ChromaDB is unavailable, we silently continue - the analysis
+        # was already used for the current request, persistence is optional.
+        logger.debug("save_task_analysis_failed", error=str(e)[:CONTENT.QUERY_LOG], error_type=type(e).__name__)

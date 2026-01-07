@@ -180,8 +180,10 @@ Respond with ONLY a single decimal number between 0.0 and 1.0."""
         logger.error("prm_scoring_failed", error=str(e), error_type=type(e).__name__)
         return 0.5  # Default on error
     except Exception as e:
-        # Unknown error - wrap in LLMError
-        logger.error("prm_scoring_failed", error=str(e))
+        # Broad catch intentional: LLM calls can fail with unpredictable errors
+        # (network issues, provider-specific exceptions, serialization errors, etc.)
+        # We log and wrap in LLMError to provide consistent error handling upstream.
+        logger.error("prm_scoring_failed", error=str(e), error_type=type(e).__name__)
         raise LLMError(f"PRM scoring failed: {e}") from e
 
 
@@ -264,8 +266,10 @@ Return ONLY the optimized prompt, no explanations."""
         logger.warning("prompt_optimization_failed", error=str(e), error_type=type(e).__name__, task=task_description[:CONTENT.QUERY_PREVIEW])
         return base_prompt
     except Exception as e:
-        # Unknown error during optimization; log and fall back to original
-        logger.warning("prompt_optimization_failed", error=str(e), task=task_description[:CONTENT.QUERY_PREVIEW])
+        # Broad catch intentional: LLM calls can fail with unpredictable errors
+        # (network issues, provider-specific exceptions, serialization errors, etc.)
+        # Optimization failure is non-critical - we gracefully fall back to base_prompt.
+        logger.warning("prompt_optimization_failed", error=str(e), error_type=type(e).__name__, task=task_description[:CONTENT.QUERY_PREVIEW])
         return base_prompt
 
 
@@ -430,7 +434,9 @@ async def call_deep_reasoner(
         try:
             callback.on_llm_start({"name": "call_deep_reasoner"}, [prompt])
         except Exception as e:
-            logger.warning("callback_on_llm_start_failed", error=str(e))
+            # Broad catch intentional: Callback failures should not crash the LLM call.
+            # Third-party callbacks may raise any exception; we log and continue.
+            logger.warning("callback_on_llm_start_failed", error=str(e), error_type=type(e).__name__)
 
     # Check if Quiet-STaR is enabled
     if state and state.get("working_memory", {}).get("quiet_star_enabled"):
@@ -476,7 +482,9 @@ async def call_deep_reasoner(
         try:
             callback.on_llm_end({"llm_output": {"token_usage": {"total_tokens": tokens}}})
         except Exception as e:
-            logger.warning("callback_on_llm_end_failed", error=str(e))
+            # Broad catch intentional: Callback failures should not crash the LLM call.
+            # Third-party callbacks may raise any exception; we log and continue.
+            logger.warning("callback_on_llm_end_failed", error=str(e), error_type=type(e).__name__)
 
     return text, tokens
 
@@ -500,7 +508,9 @@ async def call_fast_synthesizer(
             try:
                 callback.on_llm_start({"name": "call_fast_synthesizer"}, [prompt])
             except Exception as e:
-                logger.warning("callback_on_llm_start_failed", error=str(e))
+                # Broad catch intentional: Callback failures should not crash the LLM call.
+                # Third-party callbacks may raise any exception; we log and continue.
+                logger.warning("callback_on_llm_start_failed", error=str(e), error_type=type(e).__name__)
 
     # Get the LLM client using the centralized helper
     client = _get_llm_client(
@@ -529,7 +539,9 @@ async def call_fast_synthesizer(
         try:
             callback.on_llm_end({"llm_output": {"token_usage": {"total_tokens": tokens}}})
         except Exception as e:
-            logger.warning("callback_on_llm_end_failed", error=str(e))
+            # Broad catch intentional: Callback failures should not crash the LLM call.
+            # Third-party callbacks may raise any exception; we log and continue.
+            logger.warning("callback_on_llm_end_failed", error=str(e), error_type=type(e).__name__)
 
     return text, tokens
 

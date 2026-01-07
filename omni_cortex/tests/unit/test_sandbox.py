@@ -196,6 +196,44 @@ print(len(obj))
         assert is_valid is True
         assert error == ""
 
+    def test_blocked_type_class_creation(self):
+        """Test that dynamic class creation via type() is blocked."""
+        # TEST DATA: This code attempts sandbox escape via type() metaclass
+        code = "type('X', (), {'__init__': lambda s: None})"
+        is_valid, error = _validate_code(code)
+
+        assert is_valid is False
+        assert "type" in error.lower() or "not allowed" in error.lower()
+
+    def test_blocked_subclass_enumeration_via_tuple(self):
+        """Test that subclass enumeration via ().__class__.__bases__ is blocked."""
+        # TEST DATA: This code attempts to enumerate subclasses for sandbox escape
+        code = "().__class__.__bases__[0].__subclasses__()"
+        is_valid, error = _validate_code(code)
+
+        assert is_valid is False
+        # Should be blocked due to __bases__ or __subclasses__ access
+        assert "__bases__" in error or "__subclasses__" in error or "not allowed" in error.lower()
+
+    def test_blocked_subclass_enumeration_via_list(self):
+        """Test that subclass enumeration via [].__class__.__mro__ is blocked."""
+        # TEST DATA: This code attempts another subclass enumeration vector
+        code = "[].__class__.__mro__[1].__subclasses__()"
+        is_valid, error = _validate_code(code)
+
+        assert is_valid is False
+        # Should be blocked due to __mro__ or __subclasses__ access
+        assert "__mro__" in error or "__subclasses__" in error or "not allowed" in error.lower()
+
+    def test_blocked_breakpoint_debugger_access(self):
+        """Test that breakpoint() debugger access is blocked."""
+        # TEST DATA: This code attempts to access the debugger
+        code = "breakpoint()"
+        is_valid, error = _validate_code(code)
+
+        assert is_valid is False
+        assert "breakpoint" in error.lower() or "not allowed" in error.lower()
+
 
 class TestAllowedImports:
     """Tests for the ALLOWED_IMPORTS whitelist."""

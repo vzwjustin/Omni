@@ -42,7 +42,9 @@ async def call_langchain_tool(
         logger.info("tool_executed", tool_name=tool_name, success=True)
         return result
     except Exception as e:
-        logger.error("tool_execution_failed", tool_name=tool_name, error=str(e))
+        # Graceful degradation: Tool failures should not crash the reasoning pipeline.
+        # Return error message instead so the framework can continue with partial results.
+        logger.error("tool_execution_failed", tool_name=tool_name, error=str(e), error_type=type(e).__name__)
         return f"Tool execution failed: {str(e)}"
 
 

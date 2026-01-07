@@ -46,7 +46,10 @@ def get_vectorstore() -> Optional[Chroma]:
             )
             return _vectorstore
         except Exception as e:
-            logger.error("vectorstore_init_failed", error=str(e))
+            # Graceful degradation: vectorstore initialization failures should not
+            # crash the application. RAG features will be disabled but core
+            # functionality continues. This is intentional for vectorstore operations.
+            logger.error("vectorstore_init_failed", error=str(e), error_type=type(e).__name__)
             return None
 
 
@@ -60,7 +63,10 @@ def add_documents(texts: List[str], metadatas: Optional[List[Dict[str, Any]]] = 
         vs.add_texts(texts=texts, metadatas=metadatas)
         return len(texts)
     except Exception as e:
-        logger.error("vectorstore_add_failed", error=str(e))
+        # Graceful degradation: document ingestion failures should not crash the
+        # application. Failed documents are skipped and operation returns 0.
+        # This is intentional for vectorstore operations to maintain stability.
+        logger.error("vectorstore_add_failed", error=str(e), error_type=type(e).__name__)
         return 0
 
 

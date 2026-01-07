@@ -76,9 +76,17 @@ async def handle_reason(
             output += f"\n\n⚠️ {gate.recommendation.action.value}: {gate.recommendation.notes}"
 
     except Exception as e:
-        # Fallback to simple template mode if structured brief fails
+        # Graceful degradation: intentionally catching all exceptions to ensure
+        # the user always receives a usable response. If structured brief generation
+        # fails for any reason, we fall back to simple template mode rather than
+        # returning an error to the MCP client.
         err_detail = traceback.format_exc()
-        logger.warning(f"Structured brief generation failed: {e}\n{err_detail}")
+        logger.warning(
+            "Structured brief generation failed",
+            error_type=type(e).__name__,
+            error_message=str(e),
+            traceback=err_detail,
+        )
         print(f"BRIEF FAILED: {e}\n{err_detail}", file=sys.stderr)
 
         selected = router._check_vibe_dictionary(query)

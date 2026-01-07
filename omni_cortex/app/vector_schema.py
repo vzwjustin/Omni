@@ -231,8 +231,7 @@ class CodeAnalyzer:
                     imports.append(module)
         except SyntaxError as e:
             # Invalid Python - return empty imports (expected for broken files)
-            logger.debug("python_parse_failed_extracting_imports", error=str(e))
-            pass
+            logger.debug("python_parse_failed_extracting_imports", error=str(e), error_type=type(e).__name__)
         return imports
 
 
