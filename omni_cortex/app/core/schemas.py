@@ -354,6 +354,51 @@ class ClaudeCodeBrief(BaseModel):
 
         return "\n".join(lines)
 
+    def to_surgical_prompt(self) -> str:
+        """
+        Ultra token-efficient brief for Claude Max subscription optimization.
+        
+        Target: <500 tokens while maintaining full actionability.
+        Gemini pre-summarizes evidence to insights, not raw code.
+        """
+        lines = [f"[{self.task_type.value}] {self.objective}"]
+        
+        # One-line targets with line ranges if available
+        if self.repo_targets.files:
+            files_str = " ".join(self.repo_targets.files[:3])
+            lines.append(f"→ {files_str}")
+        
+        # Abbreviated numbered steps (max 4, truncated to 60 chars)
+        for i, step in enumerate(self.execution_plan[:4], 1):
+            step_text = step[:60] + "..." if len(step) > 60 else step
+            lines.append(f"{i}. {step_text}")
+        
+        # Single-line verify command
+        if self.verification.commands:
+            lines.append(f"✓ {self.verification.commands[0]}")
+        
+        # Key constraints (single line)
+        if self.constraints:
+            lines.append(f"⚠ {'; '.join(self.constraints[:2])}")
+        
+        # Evidence as pre-digested insights (Gemini summarized)
+        if self.evidence:
+            lines.append("---")
+            for e in self.evidence[:2]:
+                # Use relevance as the insight (Gemini has pre-summarized)
+                insight = e.relevance[:80] if len(e.relevance) > 80 else e.relevance
+                lines.append(f"• {insight}")
+        
+        # Stop conditions (abbreviated)
+        if self.stop_conditions:
+            lines.append(f"⛔ {self.stop_conditions[0][:60]}")
+        
+        return "\n".join(lines)
+
+    def token_estimate(self) -> int:
+        """Estimate token count for the surgical prompt."""
+        return len(self.to_surgical_prompt()) // 4
+
 
 # =============================================================================
 # PIPELINE STAGES
@@ -471,8 +516,12 @@ class GeminiRouterOutput(BaseModel):
     telemetry: Telemetry = Field(default_factory=Telemetry)
 
     def get_brief_prompt(self) -> str:
-        """Get the Claude Code brief as a formatted prompt."""
+        """Get the Claude Code brief as a formatted prompt (detailed)."""
         return self.claude_code_brief.to_prompt()
+
+    def get_surgical_prompt(self) -> str:
+        """Get ultra token-efficient brief for Claude Max optimization."""
+        return self.claude_code_brief.to_surgical_prompt()
 
     def get_pipeline_summary(self) -> str:
         """Get a summary of the pipeline for logging."""

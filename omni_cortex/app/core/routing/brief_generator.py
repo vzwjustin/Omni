@@ -25,6 +25,9 @@ if TYPE_CHECKING:
 
 logger = structlog.get_logger("brief_generator")
 
+# Claude Max token budget - keep briefs ultra-efficient
+MAX_CLAUDE_TOKENS = 500
+
 
 class StructuredBriefGenerator:
     """
@@ -226,13 +229,16 @@ class StructuredBriefGenerator:
             open_questions=open_questions
         )
 
+        # Enforce token budget for Claude Max efficiency
+        claude_brief = self._enforce_token_budget(claude_brief)
+
         # Save analysis to Chroma for future reference
         await save_task_analysis(query, gemini_analysis, framework_chain, category)
 
-        # Calculate telemetry
+        # Calculate telemetry - use surgical prompt for accurate Claude token estimate
         routing_latency = int((time.monotonic() - start_time) * 1000)
         inputs_estimate = len(query) + len(context or "") + len(code_snippet or "")
-        brief_estimate = len(claude_brief.to_prompt())
+        brief_estimate = claude_brief.token_estimate()  # Uses surgical prompt
 
         # Build full output
         output = GeminiRouterOutput(
@@ -579,6 +585,55 @@ class StructuredBriefGenerator:
             questions.append("Can you provide more context or examples?")
 
         return questions[:3]
+
+    def _enforce_token_budget(self, brief: "ClaudeCodeBrief") -> "ClaudeCodeBrief":
+        """
+        Enforce token budget for Claude Max efficiency.
+        
+        Progressively trims least-critical content until under MAX_CLAUDE_TOKENS.
+        Priority order (last trimmed first):
+        1. open_questions (least critical)
+        2. assumptions  
+        3. evidence (keep at least 1)
+        4. execution_plan (keep at least 3)
+        5. stop_conditions
+        """
+        token_count = brief.token_estimate()
+        
+        if token_count <= MAX_CLAUDE_TOKENS:
+            return brief
+        
+        logger.debug(
+            "enforcing_token_budget",
+            initial_tokens=token_count,
+            target=MAX_CLAUDE_TOKENS
+        )
+        
+        # Progressive trimming - least critical first
+        while token_count > MAX_CLAUDE_TOKENS:
+            if brief.open_questions:
+                brief.open_questions = brief.open_questions[:-1]
+            elif brief.assumptions:
+                brief.assumptions = brief.assumptions[:-1]
+            elif len(brief.evidence) > 1:
+                brief.evidence = brief.evidence[:-1]
+            elif len(brief.execution_plan) > 3:
+                brief.execution_plan = brief.execution_plan[:-1]
+            elif brief.stop_conditions:
+                brief.stop_conditions = brief.stop_conditions[:-1]
+            else:
+                # Can't trim further without losing core actionability
+                break
+            
+            token_count = brief.token_estimate()
+        
+        logger.debug(
+            "token_budget_enforced",
+            final_tokens=token_count,
+            under_budget=token_count <= MAX_CLAUDE_TOKENS
+        )
+        
+        return brief
 
 
 # Type hint for router reference
