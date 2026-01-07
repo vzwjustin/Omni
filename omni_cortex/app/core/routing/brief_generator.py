@@ -588,51 +588,29 @@ class StructuredBriefGenerator:
 
     def _enforce_token_budget(self, brief: "ClaudeCodeBrief") -> "ClaudeCodeBrief":
         """
-        Enforce token budget for Claude Max efficiency.
+        Log token usage for monitoring - NO content removal.
         
-        Progressively trims least-critical content until under MAX_CLAUDE_TOKENS.
-        Priority order (last trimmed first):
-        1. open_questions (least critical)
-        2. assumptions  
-        3. evidence (keep at least 1)
-        4. execution_plan (keep at least 3)
-        5. stop_conditions
+        Claude gets ALL information. Efficiency comes from formatting.
+        This just tracks usage for optimization insights.
         """
         token_count = brief.token_estimate()
         
-        if token_count <= MAX_CLAUDE_TOKENS:
-            return brief
+        if token_count > MAX_CLAUDE_TOKENS:
+            logger.info(
+                "token_budget_exceeded",
+                tokens=token_count,
+                budget=MAX_CLAUDE_TOKENS,
+                overage=token_count - MAX_CLAUDE_TOKENS,
+                note="Content preserved - Claude gets full context"
+            )
+        else:
+            logger.debug(
+                "token_budget_ok",
+                tokens=token_count,
+                budget=MAX_CLAUDE_TOKENS
+            )
         
-        logger.debug(
-            "enforcing_token_budget",
-            initial_tokens=token_count,
-            target=MAX_CLAUDE_TOKENS
-        )
-        
-        # Progressive trimming - least critical first
-        while token_count > MAX_CLAUDE_TOKENS:
-            if brief.open_questions:
-                brief.open_questions = brief.open_questions[:-1]
-            elif brief.assumptions:
-                brief.assumptions = brief.assumptions[:-1]
-            elif len(brief.evidence) > 1:
-                brief.evidence = brief.evidence[:-1]
-            elif len(brief.execution_plan) > 3:
-                brief.execution_plan = brief.execution_plan[:-1]
-            elif brief.stop_conditions:
-                brief.stop_conditions = brief.stop_conditions[:-1]
-            else:
-                # Can't trim further without losing core actionability
-                break
-            
-            token_count = brief.token_estimate()
-        
-        logger.debug(
-            "token_budget_enforced",
-            final_tokens=token_count,
-            under_budget=token_count <= MAX_CLAUDE_TOKENS
-        )
-        
+        # Never trim - return as-is
         return brief
 
 

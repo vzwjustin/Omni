@@ -356,42 +356,66 @@ class ClaudeCodeBrief(BaseModel):
 
     def to_surgical_prompt(self) -> str:
         """
-        Ultra token-efficient brief for Claude Max subscription optimization.
+        Token-efficient brief that preserves ALL information.
         
-        Target: <500 tokens while maintaining full actionability.
-        Gemini pre-summarizes evidence to insights, not raw code.
+        Efficiency comes from formatting, NOT content removal.
+        Claude gets everything it needs, just without prose fluff.
         """
         lines = [f"[{self.task_type.value}] {self.objective}"]
         
-        # One-line targets with line ranges if available
+        # Targets - all files, compact format
         if self.repo_targets.files:
-            files_str = " ".join(self.repo_targets.files[:3])
-            lines.append(f"→ {files_str}")
+            lines.append(f"→ {' '.join(self.repo_targets.files)}")
+        if self.repo_targets.areas:
+            lines.append(f"  areas: {', '.join(self.repo_targets.areas)}")
+        if self.repo_targets.do_not_touch:
+            lines.append(f"  avoid: {', '.join(self.repo_targets.do_not_touch)}")
         
-        # Abbreviated numbered steps (max 4, truncated to 60 chars)
-        for i, step in enumerate(self.execution_plan[:4], 1):
-            step_text = step[:60] + "..." if len(step) > 60 else step
-            lines.append(f"{i}. {step_text}")
+        # ALL execution steps - no truncation
+        if self.execution_plan:
+            lines.append("")
+            for i, step in enumerate(self.execution_plan, 1):
+                lines.append(f"{i}. {step}")
         
-        # Single-line verify command
-        if self.verification.commands:
-            lines.append(f"✓ {self.verification.commands[0]}")
+        # All verification commands and criteria
+        if self.verification.commands or self.verification.acceptance_criteria:
+            lines.append("")
+            if self.verification.commands:
+                lines.append(f"✓ Run: {' && '.join(self.verification.commands)}")
+            if self.verification.acceptance_criteria:
+                lines.append(f"✓ Pass: {'; '.join(self.verification.acceptance_criteria)}")
         
-        # Key constraints (single line)
+        # ALL constraints
         if self.constraints:
-            lines.append(f"⚠ {'; '.join(self.constraints[:2])}")
+            lines.append("")
+            lines.append(f"⚠ {'; '.join(self.constraints)}")
         
-        # Evidence as pre-digested insights (Gemini summarized)
+        # ALL evidence - full insights from Gemini's analysis
         if self.evidence:
-            lines.append("---")
-            for e in self.evidence[:2]:
-                # Use relevance as the insight (Gemini has pre-summarized)
-                insight = e.relevance[:80] if len(e.relevance) > 80 else e.relevance
-                lines.append(f"• {insight}")
+            lines.append("")
+            lines.append("Evidence:")
+            for e in self.evidence:
+                lines.append(f"  [{e.source_type.value}] {e.ref}")
+                lines.append(f"    → {e.relevance}")
+                # Include key content if short enough
+                if len(e.content) <= 200:
+                    lines.append(f"    {e.content}")
         
-        # Stop conditions (abbreviated)
+        # ALL assumptions
+        if self.assumptions:
+            lines.append("")
+            lines.append(f"Assumes: {'; '.join(self.assumptions)}")
+        
+        # ALL open questions
+        if self.open_questions:
+            lines.append(f"Questions: {'; '.join(self.open_questions)}")
+        
+        # ALL stop conditions
         if self.stop_conditions:
-            lines.append(f"⛔ {self.stop_conditions[0][:60]}")
+            lines.append("")
+            lines.append("Stop if:")
+            for s in self.stop_conditions:
+                lines.append(f"  ⛔ {s}")
         
         return "\n".join(lines)
 
