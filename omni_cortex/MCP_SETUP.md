@@ -31,7 +31,7 @@ Add to `~/.claude/.mcp.json`:
         "run", "--rm", "-i",
         "--env-file", "/path/to/omni_cortex/.env",
         "-v", "/path/to/omni_cortex/data:/app/data",
-        "omni_cortex-omni-cortex:latest"
+        "vzwjustin/omni-cortex:latest"
       ]
     }
   }
@@ -55,7 +55,7 @@ Add to Cursor settings (`Cmd+,` > search "MCP"):
         "run", "--rm", "-i",
         "--env-file", "/path/to/omni_cortex/.env",
         "-v", "/path/to/omni_cortex/data:/app/data",
-        "omni_cortex-omni-cortex:latest"
+        "vzwjustin/omni-cortex:latest"
       ]
     }
   }
@@ -77,7 +77,7 @@ Add to `.vscode/mcp.json` in your project:
         "run", "--rm", "-i",
         "--env-file", "${workspaceFolder}/../omni_cortex/.env",
         "-v", "${workspaceFolder}/../omni_cortex/data:/app/data",
-        "omni_cortex-omni-cortex:latest"
+        "vzwjustin/omni-cortex:latest"
       ]
     }
   }
@@ -101,7 +101,7 @@ Add to Windsurf MCP configuration:
         "run", "--rm", "-i",
         "--env-file", "/path/to/omni_cortex/.env",
         "-v", "/path/to/omni_cortex/data:/app/data",
-        "omni_cortex-omni-cortex:latest"
+        "vzwjustin/omni-cortex:latest"
       ]
     }
   }
@@ -118,7 +118,7 @@ For any MCP client that supports stdio transport:
 docker run --rm -i \
   --env-file /path/to/omni_cortex/.env \
   -v /path/to/omni_cortex/data:/app/data \
-  omni_cortex-omni-cortex:latest
+  vzwjustin/omni-cortex:latest
 ```
 
 ---

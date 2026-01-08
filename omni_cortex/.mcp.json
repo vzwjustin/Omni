@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "omni-cortex": {
-      "command": "docker",
+      "command": "/usr/local/bin/docker",
       "args": [
         "run",
         "--rm",
