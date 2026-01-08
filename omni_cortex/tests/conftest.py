@@ -200,7 +200,7 @@ def dangerous_import_code() -> str:
     """
     Return code with dangerous import that should be blocked by sandbox.
 
-    NOTE: This is TEST DATA for verifying the sandbox correctly blocks
+    This is TEST DATA for verifying the sandbox correctly blocks
     dangerous operations. The sandbox should reject this code.
     """
     # This string is used to test that the sandbox blocks dangerous imports
@@ -212,7 +212,7 @@ def dangerous_builtin_code() -> str:
     """
     Return code using dangerous builtins that should be blocked.
 
-    NOTE: This is TEST DATA for verifying the sandbox correctly blocks
+    This is TEST DATA for verifying the sandbox correctly blocks
     dangerous operations. The sandbox should reject this code.
     """
     return "open('/etc/passwd', 'r').read()"

@@ -7,7 +7,7 @@ Implements step-back prompting:
 3. Apply principles to the specific case
 4. Generate solution grounded in fundamentals
 
-This is a REAL framework with actual abstraction reasoning.
+This is a framework with actual abstraction reasoning.
 """
 
 import asyncio

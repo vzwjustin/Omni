@@ -8,7 +8,7 @@ Implements multi-agent expert consultation:
 4. Gating mechanism weighs expert contributions
 5. Synthesize weighted solution
 
-This is a REAL framework with actual multi-agent reasoning.
+This is a framework with actual multi-agent reasoning.
 """
 
 import asyncio

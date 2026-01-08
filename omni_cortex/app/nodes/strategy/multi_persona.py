@@ -7,7 +7,7 @@ Implements problem solving from multiple personas/viewpoints:
 3. Identify conflicting priorities
 4. Find balanced solution satisfying multiple viewpoints
 
-This is a REAL framework with actual multi-perspective reasoning.
+This is a framework with actual multi-perspective reasoning.
 """
 
 import asyncio

@@ -8,7 +8,7 @@ Implements genuine claim verification:
 4. Check for inconsistencies
 5. Revise solution based on findings
 
-This is a REAL framework with actual verification, not a prompt template.
+This is a framework with actual verification, not a prompt template.
 """
 
 import asyncio

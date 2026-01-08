@@ -8,7 +8,7 @@ Implements genuine multi-path exploration with backtracking:
 4. Prune low-scoring branches
 5. Select the best complete solution
 
-This is a REAL framework with actual tree search, not a prompt template.
+This is a framework with actual tree search, not a prompt template.
 """
 
 import asyncio

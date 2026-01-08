@@ -8,7 +8,7 @@ Implements Socratic method with question-answer agents:
 4. Iterative refinement through questioning
 5. Truth emerges through dialectic
 
-This is a REAL framework with actual multi-agent Socratic dialogue.
+This is a framework with actual multi-agent Socratic dialogue.
 """
 
 import asyncio

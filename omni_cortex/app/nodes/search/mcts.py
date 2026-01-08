@@ -7,7 +7,7 @@ Implements genuine MCTS for problem solving:
 3. Simulation: Rollout to estimate value
 4. Backpropagation: Update node statistics
 
-This is a REAL framework with actual tree search, not a prompt template.
+This is a framework with actual tree search, not a prompt template.
 """
 
 import asyncio

@@ -7,7 +7,7 @@ Implements recursive problem decomposition:
 3. Solve sub-problems in order
 4. Integrate solutions
 
-This is a REAL framework with actual decomposition and integration.
+This is a framework with actual decomposition and integration.
 """
 
 import asyncio

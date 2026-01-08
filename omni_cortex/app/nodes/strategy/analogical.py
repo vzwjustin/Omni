@@ -7,7 +7,7 @@ Implements reasoning by analogy:
 3. Map patterns to current problem
 4. Adapt and apply the analogical solution
 
-This is a REAL framework with actual analogy-based reasoning.
+This is a framework with actual analogy-based reasoning.
 """
 
 import asyncio

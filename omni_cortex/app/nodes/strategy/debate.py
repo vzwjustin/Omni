@@ -8,7 +8,7 @@ Implements multi-agent debate for problem solving:
 4. Synthesis of strongest arguments
 5. Final verdict based on debate
 
-This is a REAL framework with simulated multi-agent debate.
+This is a framework with simulated multi-agent debate.
 """
 
 import asyncio

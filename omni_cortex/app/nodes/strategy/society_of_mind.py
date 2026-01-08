@@ -7,7 +7,7 @@ Implements Minsky's Society of Mind with collaborative agents:
 3. Competitive and cooperative dynamics
 4. Emergent solution from agent interactions
 
-This is a REAL framework with actual multi-agent collaboration.
+This is a framework with actual multi-agent collaboration.
 """
 
 import asyncio

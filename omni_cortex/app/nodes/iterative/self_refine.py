@@ -7,7 +7,7 @@ Implements genuine iterative self-improvement:
 3. Refine based on critique
 4. Repeat until quality threshold or max iterations
 
-This is a REAL framework with actual refinement loops, not a prompt template.
+This is a framework with actual refinement loops, not a prompt template.
 """
 
 import asyncio

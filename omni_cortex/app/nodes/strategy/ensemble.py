@@ -8,7 +8,7 @@ Implements ensemble reasoning combining multiple approaches:
 4. Combine best elements (voting, averaging, selection)
 5. Meta-learner produces final solution
 
-This is a REAL framework with actual ensemble methods.
+This is a framework with actual ensemble methods.
 """
 
 import asyncio

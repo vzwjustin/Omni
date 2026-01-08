@@ -3,7 +3,7 @@ Program of Thoughts (PoT): Code-Based Reasoning
 
 Generates and executes Python scripts to compute answers
 rather than reasoning in text. Used for math, data, testing.
-(Headless Mode: Returns Reasoning Protocol for Client Execution)
+Returns Reasoning Protocol for Client Execution
 """
 
 import ast
@@ -88,7 +88,7 @@ def _safe_import(name, globals=None, locals=None, fromlist=(), level=0):
     return builtins.__import__(name, globals, locals, fromlist, level)
 
 # exec() for sandboxed code execution
-# NOTE: This is intentionally using exec() - the sandbox security comes from:
+# This is intentionally using exec() - the sandbox security comes from:
 # 1. AST validation blocking dangerous patterns
 # 2. Restricted builtins (no type(), getattr(), etc.)
 # 3. Timeout protection

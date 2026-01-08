@@ -49,7 +49,7 @@ class GraphState(TypedDict, total=False):
     Refactored to flatten the structure for backward compatibility with existing nodes,
     while internally supporting the composed types if needed in future refactors.
     
-    NOTE: Currently flattened to maintain compatibility with existing
+    Currently flattened to maintain compatibility with existing
     node implementations like `state['query']` or `state['working_memory']`.
     """
     # Input fields

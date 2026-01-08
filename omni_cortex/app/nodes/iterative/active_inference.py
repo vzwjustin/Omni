@@ -8,7 +8,7 @@ Implements a genuine hypothesis-test-update loop for debugging:
 4. UPDATE: Refine hypothesis based on prediction-observation mismatch
 5. ITERATE: Until confident or max iterations reached
 
-This is a REAL framework, not a prompt template.
+This is a framework, not a prompt template.
 """
 
 import asyncio

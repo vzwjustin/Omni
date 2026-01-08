@@ -8,7 +8,7 @@ Tests the app.nodes.code.pot module sandbox including:
 - Timeout handling for long-running code
 - Allowed imports and builtins whitelist
 
-NOTE: This test file intentionally contains strings representing dangerous code
+This test file intentionally contains strings representing dangerous code
 patterns. These strings are TEST DATA used to verify the sandbox correctly
 BLOCKS such patterns. The dangerous code is never actually executed.
 """

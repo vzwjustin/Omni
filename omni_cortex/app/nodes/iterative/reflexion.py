@@ -9,7 +9,7 @@ Implements genuine learning from failure:
 5. Re-attempt with lessons applied
 6. Iterate until success or max attempts
 
-This is a REAL framework with actual reflection loops, not a prompt template.
+This is a framework with actual reflection loops, not a prompt template.
 """
 
 import asyncio
