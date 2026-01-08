@@ -2,41 +2,78 @@
 Graph State Management for LangGraph Workflows
 
 Defines the state structure that flows through reasoning frameworks.
+Refactored to use composition and strictly typed sub-states.
 """
 
-from typing import TypedDict, Optional, Any
+from typing import TypedDict, Optional, Any, List, Dict
 from dataclasses import dataclass, field
+
+
+class InputState(TypedDict, total=False):
+    """Immutable input parameters."""
+    query: str
+    code_snippet: Optional[str]
+    file_list: List[str]
+    ide_context: Optional[str]
+    preferred_framework: Optional[str]
+    max_iterations: int
+
+
+class ReasoningState(TypedDict, total=False):
+    """Internal working state for the reasoning engine."""
+    selected_framework: str
+    framework_chain: List[str]
+    routing_category: str
+    task_type: str
+    complexity_estimate: float
+    working_memory: Dict[str, Any]
+    reasoning_steps: List[Dict[str, Any]]
+    step_counter: int
+    tokens_used: int
+    quiet_thoughts: List[str]
+    episodic_memory: List[Dict[str, Any]]
+
+
+class OutputState(TypedDict, total=False):
+    """Final results."""
+    final_code: Optional[str]
+    final_answer: Optional[str]
+    confidence_score: float
+    error: Optional[str]
 
 
 class GraphState(TypedDict, total=False):
     """
     Central state object passed through LangGraph nodes.
-
-    Uses TypedDict for LangGraph compatibility while maintaining
-    full type hints for IDE support.
+    
+    Refactored to flatten the structure for backward compatibility with existing nodes,
+    while internally supporting the composed types if needed in future refactors.
+    
+    NOTE: Currently flattened to maintain compatibility with existing
+    node implementations like `state['query']` or `state['working_memory']`.
     """
-
     # Input fields
     query: str
     code_snippet: Optional[str]
-    file_list: list[str]
+    file_list: List[str]
     ide_context: Optional[str]
     preferred_framework: Optional[str]
     max_iterations: int
 
     # Routing & Framework Selection
     selected_framework: str
-    framework_chain: list[str]  # Chain of frameworks for pipeline execution
-    routing_category: str  # Category from hierarchical routing
-    task_type: str  # "debug", "architecture", "algorithm", "refactor", "docs", "unknown"
+    framework_chain: List[str]
+    routing_category: str
+    task_type: str
     complexity_estimate: float
 
-    # Working Memory (short-term, current task)
-    working_memory: dict[str, Any]
-    reasoning_steps: list[dict[str, Any]]
+    # Working Memory
+    working_memory: Dict[str, Any]
+    reasoning_steps: List[Dict[str, Any]]
+    step_counter: int
 
-    # Episodic Memory (long-term, cross-task patterns)
-    episodic_memory: list[dict[str, Any]]
+    # Episodic Memory
+    episodic_memory: List[Dict[str, Any]]
 
     # Output fields
     final_code: Optional[str]
@@ -45,7 +82,7 @@ class GraphState(TypedDict, total=False):
     tokens_used: int
 
     # Quiet-STaR internal thoughts
-    quiet_thoughts: list[str]
+    quiet_thoughts: List[str]
 
     # Error handling
     error: Optional[str]
@@ -155,6 +192,7 @@ def create_initial_state(
         # Working memory
         working_memory={},
         reasoning_steps=[],
+        step_counter=0,
 
         # Episodic memory
         episodic_memory=[],

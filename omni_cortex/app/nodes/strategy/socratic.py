@@ -12,6 +12,7 @@ This is a REAL framework with actual multi-agent Socratic dialogue.
 """
 
 import asyncio
+import re
 import structlog
 from dataclasses import dataclass
 

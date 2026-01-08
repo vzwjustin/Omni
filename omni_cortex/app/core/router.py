@@ -13,16 +13,15 @@ from typing import Optional, List, Tuple
 from ..state import GraphState
 from .constants import CONTENT
 from .errors import RoutingError, FrameworkNotFoundError
-from .vibe_dictionary import VIBE_DICTIONARY, match_vibes
+from .vibe_dictionary import VIBE_DICTIONARY
 from .routing import (
     CATEGORIES,
-    CATEGORY_VIBES,
     FRAMEWORKS,
-    PATTERNS,
-    HEURISTIC_MAP,
     get_framework_info,
     infer_task_type,
 )
+from .routing.complexity import ComplexityEstimator
+from .routing.vibes import VibeMatcher
 
 logger = structlog.get_logger("router")
 
@@ -43,46 +42,12 @@ class HyperRouter:
 
     # Re-export class-level constants for backward compatibility
     CATEGORIES = CATEGORIES
-    CATEGORY_VIBES = CATEGORY_VIBES
     FRAMEWORKS = FRAMEWORKS
-    PATTERNS = PATTERNS
-    HEURISTIC_MAP = HEURISTIC_MAP
 
     def __init__(self):
-        self._compiled_patterns = {
-            task_type: [re.compile(p, re.IGNORECASE) for p in patterns]
-            for task_type, patterns in PATTERNS.items()
-        }
+        self._complexity_estimator = ComplexityEstimator()
+        self._vibe_matcher = VibeMatcher()
         self._brief_generator = None
-
-    # ==========================================================================
-    # HIERARCHICAL ROUTING - Stage 1: Category Selection
-    # ==========================================================================
-
-    def _route_to_category(self, query: str) -> Tuple[str, float]:
-        """
-        Fast first-stage routing to a category.
-        Returns (category_name, confidence_score).
-        """
-        query_lower = query.lower()
-        scores = {}
-
-        for category, vibes in CATEGORY_VIBES.items():
-            score = 0.0
-            for vibe in vibes:
-                if vibe in query_lower:
-                    # Weight by phrase length
-                    word_count = len(vibe.split())
-                    score += word_count if word_count >= 2 else 0.5
-            if score > 0:
-                scores[category] = score
-
-        if not scores:
-            return "exploration", 0.3  # Default fallback
-
-        best = max(scores, key=scores.get)
-        confidence = min(scores[best] / 5.0, 1.0)  # Normalize to 0-1
-        return best, confidence
 
     # ==========================================================================
     # HIERARCHICAL ROUTING - Stage 2: Specialist Agent Selection
@@ -267,7 +232,7 @@ REASONING: Brief explanation of your choice
         from ..core.settings import get_settings
 
         # Stage 1: Route to category
-        category, confidence = self._route_to_category(query)
+        category, confidence = self._vibe_matcher.route_to_category(query)
 
         # Stage 2: Specialist agent selection
         llm_enabled = get_settings().llm_provider not in ("pass-through", "none", "")
@@ -286,7 +251,7 @@ REASONING: Brief explanation of your choice
         else:
             # High confidence, no LLM - use vibe matching
             cat_frameworks = CATEGORIES[category]["frameworks"]
-            vibe_match = self._check_vibe_dictionary(query)
+            vibe_match = self._vibe_matcher.check_vibe_dictionary(query)
 
             if vibe_match and vibe_match in cat_frameworks:
                 chain = [vibe_match]
@@ -329,7 +294,7 @@ REASONING: Brief explanation of your choice
             )
 
         # Legacy fallback: direct vibe matching
-        vibe_match = self._check_vibe_dictionary(query)
+        vibe_match = self._vibe_matcher.check_vibe_dictionary(query)
         if vibe_match:
             return vibe_match, f"Matched vibe: {query[:CONTENT.QUERY_PREVIEW]}..."
 
@@ -343,23 +308,9 @@ REASONING: Brief explanation of your choice
                 return framework
         return None
 
-    def _check_vibe_dictionary(self, query: str) -> Optional[str]:
-        """Quick check against vibe dictionary with weighted scoring."""
-        return match_vibes(query)
-
     def _heuristic_select(self, query: str, code_snippet: Optional[str] = None) -> str:
         """Fast heuristic selection (fallback)."""
-        combined = query + (" " + code_snippet if code_snippet else "")
-
-        scores = {}
-        for task_type, patterns in self._compiled_patterns.items():
-            scores[task_type] = sum(1 for p in patterns if p.search(combined))
-
-        if max(scores.values()) > 0:
-            task_type = max(scores, key=scores.get)
-            return HEURISTIC_MAP.get(task_type, "self_discover")
-
-        return "self_discover"
+        return self._vibe_matcher.heuristic_select(query, code_snippet)
 
     def estimate_complexity(
         self,
@@ -368,29 +319,7 @@ REASONING: Brief explanation of your choice
         file_list: Optional[list[str]] = None
     ) -> float:
         """Estimate task complexity on 0-1 scale."""
-        complexity = 0.3
-
-        if len(query.split()) > 50:
-            complexity += 0.15
-        if len(query.split()) > 100:
-            complexity += 0.1
-
-        if code_snippet:
-            lines = code_snippet.count('\n') + 1
-            if lines > 50:
-                complexity += 0.1
-            if lines > 200:
-                complexity += 0.15
-
-        if file_list and len(file_list) > 5:
-            complexity += 0.1
-
-        indicators = [r"complex", r"difficult", r"tricky", r"interdependent", r"legacy", r"distributed"]
-        for ind in indicators:
-            if re.search(ind, query, re.IGNORECASE):
-                complexity += 0.05
-
-        return min(complexity, 1.0)
+        return self._complexity_estimator.estimate(query, code_snippet, file_list)
 
     async def route(self, state: GraphState, use_ai: bool = True) -> GraphState:
         """

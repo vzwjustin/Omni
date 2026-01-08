@@ -152,7 +152,21 @@ class CollectionManager:
             collection_names: Collections to search (default: all)
             k: Number of results per collection
             filter_dict: Metadata filters (e.g., {"category": "framework"})
+            raise_on_error: If True, raise on total search failure
+            
+        Returns:
+            List of matching documents
+            
+        Raises:
+            ValueError: If inputs are invalid
+            RAGError: If raise_on_error=True and all searches fail
         """
+        # Input validation
+        if not query or not query.strip():
+            raise ValueError("query cannot be empty")
+        if k <= 0:
+            raise ValueError(f"k must be positive, got {k}")
+            
         if collection_names is None:
             collection_names = list(self.COLLECTIONS.keys())
 
@@ -179,7 +193,7 @@ class CollectionManager:
                 all_results.extend(results)
                 logger.debug("search_complete", collection=coll_name, results=len(results))
             except (RAGError, EmbeddingError) as e:
-                # Log and continue for RAG errors in multi-collection search
+                # Re-raise our custom errors for multi-collection search
                 logger.error(
                     "search_failed",
                     collection=coll_name,
@@ -188,11 +202,20 @@ class CollectionManager:
                     correlation_id=get_correlation_id()
                 )
                 errors.append(f"{coll_name}: {e}")
-            except Exception as e:
-                # Intentional broad catch: search failures in one collection should not
-                # block searching other collections - graceful degradation for RAG
+            except (ValueError, TypeError, KeyError) as e:
+                # Catch common errors from invalid filter_dict or malformed data
                 logger.error(
-                    "search_failed",
+                    "search_validation_failed",
+                    collection=coll_name,
+                    error=str(e),
+                    correlation_id=get_correlation_id()
+                )
+                errors.append(f"{coll_name}: validation error")
+            except Exception as e:
+                # Final catch for unexpected errors (network, Chroma internals)
+                # Graceful degradation: don't fail entire search if one collection errors
+                logger.error(
+                    "search_unexpected_error",
                     collection=coll_name,
                     error=str(e),
                     error_type=type(e).__name__,
@@ -255,7 +278,30 @@ class CollectionManager:
         metadatas: List[Dict[str, Any]],
         collection_name: str = "frameworks"
     ) -> int:
-        """Add documents to a specific collection."""
+        """Add documents to a specific collection.
+        
+        Args:
+            texts: List of document texts to add
+            metadatas: List of metadata dicts (must match texts length)
+            collection_name: Target collection name
+            
+        Returns:
+            Number of documents added
+            
+        Raises:
+            ValueError: If inputs are invalid
+            RAGError: If document addition fails
+        """
+        # Input validation
+        if not texts:
+            raise ValueError("texts cannot be empty")
+        if not isinstance(texts, list):
+            raise ValueError("texts must be a list")
+        if metadatas and len(metadatas) != len(texts):
+            raise ValueError(f"metadatas length ({len(metadatas)}) must match texts length ({len(texts)})")
+        if not collection_name or not collection_name.strip():
+            raise ValueError("collection_name cannot be empty")
+            
         collection = self.get_collection(collection_name)
         if not collection:
             return 0
@@ -267,9 +313,17 @@ class CollectionManager:
             return len(texts)
         except EmbeddingError:
             raise  # Re-raise embedding errors
+        except (ValueError, TypeError) as e:
+            # Catch validation errors from Chroma/LangChain
+            logger.error(
+                "add_documents_validation_failed",
+                collection=collection_name,
+                error=str(e),
+                correlation_id=get_correlation_id()
+            )
+            raise RAGError(f"Invalid document data for {collection_name}: {e}") from e
         except Exception as e:
-            # Intentional broad catch: document ingestion errors from Chroma should be
-            # wrapped as RAGError for consistent error handling upstream
+            # Broader catch for unexpected Chroma errors (network, disk, etc.)
             logger.error(
                 "add_documents_failed",
                 collection=collection_name,

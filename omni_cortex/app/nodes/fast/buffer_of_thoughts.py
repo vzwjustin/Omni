@@ -10,6 +10,7 @@ Maintains a thought buffer with:
 """
 
 import asyncio
+import re
 import structlog
 from dataclasses import dataclass
 

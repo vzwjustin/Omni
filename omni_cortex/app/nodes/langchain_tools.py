@@ -3,12 +3,17 @@ LangChain Tools Integration for Framework Nodes
 
 Makes LangChain tools available within reasoning framework nodes
 for enhanced capabilities like code execution, documentation search, etc.
+
+Refactored to include security checks for dangerous tools.
 """
 
 from typing import Optional, List, Any
 from ..langchain_integration import AVAILABLE_TOOLS
 from ..state import GraphState
+from ..core.settings import get_settings
+from ..core.errors import SecurityError
 import structlog
+import os
 
 logger = structlog.get_logger("langchain-tools")
 
@@ -35,6 +40,33 @@ async def call_langchain_tool(
     if not tool:
         logger.warning("tool_not_found", tool_name=tool_name)
         return f"Tool '{tool_name}' not found"
+
+    # SECURITY CHECK: Sandbox enforcement for dangerous tools
+    if tool_name == "execute_code":
+        # Check environment setting
+        settings = get_settings()
+        
+        # STRICT ENFORCEMENT: Unless explicitly overridden by env var, BLOCK unsafe execution.
+        # This prevents accidental RCE in production environments.
+        allow_unsafe = os.environ.get("ALLOW_UNSAFE_CODE_EXECUTION", "false").lower() == "true"
+        
+        # In a real production system, we would check for a sandbox provider here.
+        # For now, we block by default.
+        if not allow_unsafe:
+            logger.error(
+                "security_violation_blocked",
+                tool="execute_code",
+                reason="Unsafe code execution blocked. Set ALLOW_UNSAFE_CODE_EXECUTION=true to override (DEV ONLY)."
+            )
+            return "SecurityError: Unsafe code execution is blocked in this environment. Use a sandboxed provider."
+
+        # If allowed, log a critical warning
+        logger.warning(
+            "executing_code_locally_unsafe",
+            tool="execute_code",
+            input_preview=str(tool_input)[:100],
+            hint="Ensure this is running in a containerized environment or use a sandbox provider."
+        )
 
     try:
         # Execute the tool

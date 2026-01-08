@@ -41,6 +41,10 @@ class SandboxSecurityError(ExecutionError):
     """Code blocked by sandbox security checks."""
 
 
+# Alias for backward compatibility
+SecurityError = SandboxSecurityError
+
+
 class SandboxTimeoutError(ExecutionError):
     """Code execution exceeded timeout."""
 
@@ -65,6 +69,10 @@ class CollectionNotFoundError(RAGError):
 
 class EmbeddingError(RAGError):
     """Embedding generation failed."""
+
+
+class ContextRetrievalError(RAGError):
+    """Context retrieval failed (file discovery, doc search, etc)."""
 
 
 # LLM errors

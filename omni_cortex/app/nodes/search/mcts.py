@@ -13,6 +13,7 @@ This is a REAL framework with actual tree search, not a prompt template.
 import asyncio
 import math
 import random
+import re
 import structlog
 from dataclasses import dataclass, field
 from typing import Optional

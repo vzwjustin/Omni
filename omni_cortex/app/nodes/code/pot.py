@@ -196,7 +196,10 @@ async def _safe_execute(code: str, timeout: float = 5.0) -> Dict[str, Any]:
     restricted_builtins = SAFE_BUILTINS.copy()
     # Add the safe import wrapper so 'import' statements work for allowed modules
     restricted_builtins['__import__'] = _safe_import
-    safe_globals = {"__builtins__": restricted_builtins}
+    safe_globals = {
+        "__builtins__": restricted_builtins,
+        "__name__": "__main__",  # Required for class definitions
+    }
 
     # Add allowed imports (skip if not available on system - not all are required)
     for module_name in ALLOWED_IMPORTS:

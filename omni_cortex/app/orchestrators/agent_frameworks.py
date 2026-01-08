@@ -6,6 +6,7 @@ Frameworks for multi-step autonomous agent behavior.
 
 from typing import Dict, Any
 from ..core.sampling import ClientSampler, extract_score
+from ..core.constants import CONTENT
 
 
 async def rewoo(sampler: ClientSampler, query: str, context: str) -> Dict[str, Any]:

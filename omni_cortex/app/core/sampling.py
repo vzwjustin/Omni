@@ -346,11 +346,11 @@ def extract_score(text: str, default: float = 0.5) -> float:
     """
     # Try to find score/rating patterns
     patterns = [
-        r'(?:score|rating):\s*(\d+(?:\.\d+)?)\s*/\s*(\d+)',  # "Score: 8/10"
-        r'(?:score|rating):\s*(\d+(?:\.\d+)?)',  # "Score: 8.5"
-        r'(\d+(?:\.\d+)?)\s*/\s*(\d+)',  # "8/10"
-        r'(\d+(?:\.\d+)?)\s+out of\s+(\d+)',  # "8 out of 10"
-        r'^(\d+(?:\.\d+)?)$',  # Just "8.5"
+        r'(?:score|rating):\s*(-?\d+(?:\.\d+)?)\s*/\s*(\d+)',  # "Score: 8/10" or "-5/10"
+        r'(?:score|rating):\s*(-?\d+(?:\.\d+)?)',  # "Score: 8.5" or "-5"
+        r'(-?\d+(?:\.\d+)?)\s*/\s*(\d+)',  # "8/10"
+        r'(-?\d+(?:\.\d+)?)\s+out of\s+(\d+)',  # "8 out of 10"
+        r'^(-?\d+(?:\.\d+)?)$',  # Just "8.5"
     ]
 
     text_lower = text.lower().strip()

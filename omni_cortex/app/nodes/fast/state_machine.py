@@ -7,6 +7,7 @@ Complex multi-turn implementation with proper reasoning loops.
 """
 
 import asyncio
+import re
 import structlog
 from dataclasses import dataclass, field
 from typing import Optional, List

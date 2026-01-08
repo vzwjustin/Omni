@@ -118,7 +118,7 @@ def create_framework_node(definition: FrameworkDefinition) -> Callable:
 
     @quiet_star
     async def framework_node(state: GraphState) -> GraphState:
-        """Generated framework node for {name}."""
+        # Docstring is set dynamically after function creation (see line 170)
         query = state.get("query", "")
         code_context = format_code_context(
             state.get("code_snippet"),
@@ -303,8 +303,43 @@ def generate_all_nodes() -> Dict[str, Callable]:
     return nodes
 
 
-# Generate all nodes at import time
-GENERATED_NODES: Dict[str, Callable] = generate_all_nodes()
+# =============================================================================
+# Lazy-loaded Nodes Registry (improves cold start performance)
+# =============================================================================
+
+_GENERATED_NODES: Optional[Dict[str, Callable]] = None
+
+
+def get_generated_nodes() -> Dict[str, Callable]:
+    """
+    Get all framework nodes with lazy initialization.
+    
+    Nodes are generated on first access rather than at import time,
+    improving cold start performance for the MCP server.
+    """
+    global _GENERATED_NODES
+    if _GENERATED_NODES is None:
+        _GENERATED_NODES = generate_all_nodes()
+    return _GENERATED_NODES
+
+
+# Backward compatibility alias - Note: this triggers generation on first access
+# New code should use get_generated_nodes() for clarity
+def _get_nodes_proxy():
+    """Proxy for backward compatibility with GENERATED_NODES access."""
+    return get_generated_nodes()
+
+
+# For backward compatibility, we generate on import as before
+# but only when this file is actually accessed (Python's module system)
+GENERATED_NODES: Dict[str, Callable] = {}  # Placeholder, populated lazily
+
+
+def __getattr__(name: str):
+    """Module-level __getattr__ for lazy GENERATED_NODES access."""
+    if name == "GENERATED_NODES":
+        return get_generated_nodes()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 # =============================================================================
@@ -313,9 +348,10 @@ GENERATED_NODES: Dict[str, Callable] = generate_all_nodes()
 
 def get_node(name: str) -> Optional[Callable]:
     """Get a framework node by name."""
-    return GENERATED_NODES.get(name)
+    return get_generated_nodes().get(name)
 
 
 def list_nodes() -> list[str]:
     """List all available framework node names."""
-    return list(GENERATED_NODES.keys())
+    return list(get_generated_nodes().keys())
+

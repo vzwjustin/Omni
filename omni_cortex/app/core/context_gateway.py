@@ -256,12 +256,27 @@ class ContextGateway:
         # context.to_claude_prompt() returns rich, structured context
     """
 
-    def __init__(self):
-        # Composition: delegate to specialized components
-        self._query_analyzer = QueryAnalyzer()
-        self._file_discoverer = FileDiscoverer()
-        self._doc_searcher = DocumentationSearcher()
-        self._code_searcher = CodeSearcher()
+    def __init__(
+        self,
+        query_analyzer: Optional[QueryAnalyzer] = None,
+        file_discoverer: Optional[FileDiscoverer] = None,
+        doc_searcher: Optional[DocumentationSearcher] = None,
+        code_searcher: Optional[CodeSearcher] = None,
+    ):
+        """
+        Initialize ContextGateway with optional dependency injection.
+        
+        Args:
+            query_analyzer: Custom QueryAnalyzer instance (for testing)
+            file_discoverer: Custom FileDiscoverer instance (for testing)
+            doc_searcher: Custom DocumentationSearcher instance (for testing)
+            code_searcher: Custom CodeSearcher instance (for testing)
+        """
+        # Use provided instances or create defaults (dependency injection pattern)
+        self._query_analyzer = query_analyzer or QueryAnalyzer()
+        self._file_discoverer = file_discoverer or FileDiscoverer()
+        self._doc_searcher = doc_searcher or DocumentationSearcher()
+        self._code_searcher = code_searcher or CodeSearcher()
 
     async def prepare_context(
         self,
@@ -294,46 +309,53 @@ class ContextGateway:
         """
         logger.info("context_gateway_start", query=query[:CONTENT.QUERY_LOG])
 
-        # Run analysis tasks in parallel using specialized components
-        tasks = [
-            self._query_analyzer.analyze(query, code_context),
-            self._file_discoverer.discover(query, workspace_path, file_list, max_files),
-        ]
+        # Phase 1: Discovery & Search (Parallel with named tasks)
+        # Run discovery tasks with explicit naming for cleaner result handling
+        
+        # Create named coroutines for parallel execution
+        async def _discover_files():
+            return await self._file_discoverer.discover(query, workspace_path, file_list, max_files)
+        
+        async def _search_docs():
+            if search_docs:
+                return await self._doc_searcher.search_web(query)
+            return None
+        
+        async def _search_code():
+            if workspace_path:
+                return await self._code_searcher.search(query, workspace_path)
+            return None
+        
+        # Execute all discovery tasks in parallel
+        file_result, doc_result, code_result = await asyncio.gather(
+            _discover_files(),
+            _search_docs(),
+            _search_code(),
+            return_exceptions=True,
+        )
+        
+        # Process file discovery results
+        converted_files = []
+        if isinstance(file_result, Exception):
+            logger.warning("file_discovery_failed", error=str(file_result))
+        elif file_result:
+            converted_files = [
+                FileContext(
+                    path=f.path,
+                    relevance_score=f.relevance_score,
+                    summary=f.summary,
+                    key_elements=f.key_elements,
+                    line_count=f.line_count,
+                    size_kb=f.size_kb,
+                )
+                for f in file_result
+            ]
 
-        if search_docs:
-            tasks.append(self._doc_searcher.search_web(query))
-
-        # Add code search if workspace is provided
-        if workspace_path:
-            tasks.append(self._code_searcher.search(query, workspace_path))
-
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        # Parse results
-        query_analysis = results[0] if not isinstance(results[0], Exception) else {}
-        file_contexts = results[1] if not isinstance(results[1], Exception) else []
-
-        # Convert file contexts from component dataclass to gateway dataclass
-        converted_files = [
-            FileContext(
-                path=f.path,
-                relevance_score=f.relevance_score,
-                summary=f.summary,
-                key_elements=f.key_elements,
-                line_count=f.line_count,
-                size_kb=f.size_kb,
-            )
-            for f in file_contexts
-        ]
-
-        # Documentation and code search are optional
-        next_idx = 2
+        # Process documentation search results
         doc_contexts = []
-        code_search_results = []
-
-        if search_docs:
-            raw_docs = results[next_idx] if not isinstance(results[next_idx], Exception) else []
-            # Convert doc contexts
+        if isinstance(doc_result, Exception):
+            logger.warning("doc_search_failed", error=str(doc_result))
+        elif doc_result:
             doc_contexts = [
                 DocumentationContext(
                     source=d.source,
@@ -341,13 +363,14 @@ class ContextGateway:
                     snippet=d.snippet,
                     relevance_score=d.relevance_score,
                 )
-                for d in raw_docs
+                for d in doc_result
             ]
-            next_idx += 1
 
-        if workspace_path and next_idx < len(results):
-            raw_code = results[next_idx] if not isinstance(results[next_idx], Exception) else []
-            # Convert code search contexts
+        # Process code search results
+        code_search_results = []
+        if isinstance(code_result, Exception):
+            logger.warning("code_search_failed", error=str(code_result))
+        elif code_result:
             code_search_results = [
                 CodeSearchContext(
                     search_type=c.search_type,
@@ -356,13 +379,37 @@ class ContextGateway:
                     file_count=c.file_count,
                     match_count=c.match_count,
                 )
-                for c in raw_code
+                for c in code_result
             ]
 
-        # Handle exceptions
-        for i, result in enumerate(results):
-            if isinstance(result, Exception):
-                logger.warning("context_task_failed", task=i, error=str(result))
+        # Phase 2: Analysis (Sequential - uses discovery context)
+        # Construct documentation context string for the analyzer
+        docs_context_str = ""
+        if doc_contexts:
+            docs_context_str += "DOCUMENTATION FOUND:\n"
+            for d in doc_contexts[:3]:
+                docs_context_str += f"- {d.title} ({d.source}): {d.snippet[:200]}...\n"
+        
+        if converted_files:
+            docs_context_str += "\nRELEVANT FILES:\n"
+            for f in converted_files[:5]:
+                docs_context_str += f"- {f.path}: {f.summary}\n"
+
+        try:
+            query_analysis = await self._query_analyzer.analyze(
+                query,
+                code_context,
+                documentation_context=docs_context_str if docs_context_str else None
+            )
+        except Exception as e:
+            logger.error("query_analysis_failed", error=str(e))
+            query_analysis = {
+                "task_type": "general",
+                "summary": query,
+                "complexity": "medium",
+                "framework": "reason_flux",
+                "framework_reason": "Fallback due to analysis failure"
+            }
 
         # Build structured context
         context = StructuredContext(

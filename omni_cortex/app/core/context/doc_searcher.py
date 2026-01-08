@@ -131,30 +131,65 @@ Focus on actionable, technical content."""
 
             if NEW_GENAI_PACKAGE:
                 # New google-genai package uses Client.models.generate_content
-                # Note: Grounding may require different configuration in new API
+                # Use Google Search Grounding tool
+                google_search_tool = types.Tool(
+                    google_search=types.GoogleSearch()
+                )
+                
                 response = await asyncio.to_thread(
                     model.models.generate_content,
                     model=self.settings.routing_model or "gemini-2.0-flash",
                     contents=prompt,
-                    config=types.GenerateContentConfig(temperature=0.3)
+                    config=types.GenerateContentConfig(
+                        temperature=0.3,
+                        tools=[google_search_tool]
+                    )
                 )
                 text = response.text if hasattr(response, 'text') else str(response)
+                
+                # Check for grounding metadata if available
+                source_urls = []
+                if hasattr(response, 'candidates') and response.candidates:
+                    candidate = response.candidates[0]
+                    if hasattr(candidate, 'grounding_metadata') and candidate.grounding_metadata:
+                        # Extract URLs from grounding metadata
+                        metadata = candidate.grounding_metadata
+                        if hasattr(metadata, 'grounding_chunks'):
+                            for chunk in metadata.grounding_chunks:
+                                if hasattr(chunk, 'web'):
+                                    source_urls.append(chunk.web.uri)
+                        
             else:
                 # Legacy google.generativeai package
+                # Model is already configured with tools in _get_search_model
                 response = await asyncio.to_thread(
                     model.generate_content,
                     prompt,
                     generation_config={"temperature": 0.3}
                 )
                 text = response.text
+                
+                # Attempt to extract sources from legacy response if available
+                # (Note: Legacy API structure might differ, this is a best-effort check)
+                source_urls = []
+                if hasattr(response, 'candidates') and response.candidates:
+                    # Legacy extraction logic would go here if needed
+                    pass
 
             # Parse response into documentation contexts
             docs = []
 
             # For now, return as single context if there's content
             if text and len(text) > 50:
+                # Format sources if available
+                source_label = "Google Search (Gemini Grounded)"
+                if source_urls:
+                    # Deduplicate and limit URLs
+                    unique_urls = list(dict.fromkeys(source_urls))[:3]
+                    source_label += f" - Sources: {', '.join(unique_urls)}"
+
                 docs.append(DocumentationContext(
-                    source="Google Search (Gemini Grounded)",
+                    source=source_label,
                     title="Documentation Search Results",
                     snippet=text[:CONTENT.SNIPPET_MAX],
                     relevance_score=0.8

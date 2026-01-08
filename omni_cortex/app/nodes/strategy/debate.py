@@ -12,6 +12,7 @@ This is a REAL framework with simulated multi-agent debate.
 """
 
 import asyncio
+import re
 import structlog
 from dataclasses import dataclass
 

@@ -7,6 +7,7 @@ No external API calls - client does all reasoning locally.
 
 from typing import Dict, Any
 from ..core.sampling import ClientSampler, extract_score
+from ..core.constants import CONTENT
 
 
 async def tree_of_thoughts(sampler: ClientSampler, query: str, context: str) -> Dict[str, Any]:

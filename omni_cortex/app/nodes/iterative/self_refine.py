@@ -11,6 +11,7 @@ This is a REAL framework with actual refinement loops, not a prompt template.
 """
 
 import asyncio
+import re
 import structlog
 from dataclasses import dataclass
 

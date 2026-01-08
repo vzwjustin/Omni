@@ -6,6 +6,7 @@ Frameworks that use loops, refinement, and progressive improvement.
 
 from typing import Dict, Any
 from ..core.sampling import ClientSampler
+from ..core.constants import CONTENT
 
 
 async def active_inference(sampler: ClientSampler, query: str, context: str) -> Dict[str, Any]:

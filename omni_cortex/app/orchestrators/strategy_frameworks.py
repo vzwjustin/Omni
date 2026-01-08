@@ -6,6 +6,7 @@ High-level planning and architectural reasoning frameworks.
 
 from typing import Dict, Any
 from ..core.sampling import ClientSampler
+from ..core.constants import CONTENT
 
 
 async def reason_flux(sampler: ClientSampler, query: str, context: str) -> Dict[str, Any]:
@@ -351,7 +352,7 @@ Context: {context}"""
 
 Integrate all pieces into a cohesive, working solution."""
 
-    composed = await sampler.request_sample(composed_prompt, temperature=0.4)
+    composed = await sampler.request_sample(compose_prompt, temperature=0.4)
 
     # Step 5: Verify integration
     verify_prompt = f"""Verify all pieces integrate correctly:
@@ -479,7 +480,7 @@ Provide structured plan."""
 
 Implement according to the plan. Note any deviations and explain why."""
 
-    solution = await sampler.request_sample(solution_prompt, temperature=0.4)
+    solution = await sampler.request_sample(solve_prompt, temperature=0.4)
 
     # Phase 3: Verify against plan
     verify_prompt = f"""VERIFICATION:

@@ -11,6 +11,7 @@ This is a REAL framework with actual decomposition and integration.
 """
 
 import asyncio
+import re
 import structlog
 from dataclasses import dataclass, field
 from typing import Optional

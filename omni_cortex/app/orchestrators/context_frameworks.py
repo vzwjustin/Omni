@@ -6,6 +6,7 @@ Frameworks for understanding, exploration, and contextual reasoning.
 
 from typing import Dict, Any
 from ..core.sampling import ClientSampler
+from ..core.constants import CONTENT
 
 
 async def chain_of_note(sampler: ClientSampler, query: str, context: str) -> Dict[str, Any]:

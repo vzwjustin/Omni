@@ -12,7 +12,7 @@ _correlation_id: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
 def get_correlation_id() -> str:
     """Get current correlation ID, generating one if needed."""
     cid = _correlation_id.get()
-    if cid is None:
+    if not cid:
         cid = str(uuid.uuid4())[:8]  # Short ID for readability
         _correlation_id.set(cid)
     return cid

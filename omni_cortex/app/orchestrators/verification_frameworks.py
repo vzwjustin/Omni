@@ -6,6 +6,7 @@ Frameworks for validation, consistency checking, and quality assurance.
 
 from typing import Dict, Any
 from ..core.sampling import ClientSampler, extract_score
+from ..core.constants import CONTENT
 
 
 async def self_consistency(sampler: ClientSampler, query: str, context: str) -> Dict[str, Any]:

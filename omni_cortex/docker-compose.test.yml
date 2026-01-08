@@ -1,0 +1,21 @@
+version: "3.9"
+
+services:
+  test:
+    build: .
+    image: omni-cortex-test:latest
+    container_name: omni-cortex-test
+    environment:
+      - LLM_PROVIDER=pass-through
+      - EMBEDDING_PROVIDER=openai
+      - ENABLE_AUTO_INGEST=false
+      - LEAN_MODE=false
+      - LOG_LEVEL=DEBUG
+      - PYTHONPATH=/app
+    volumes:
+      - .:/app
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        pip install pytest==8.3.4 pytest-asyncio==0.24.0 pytest-cov==6.0.0
+        python -m pytest -v tests/

@@ -11,6 +11,7 @@ Optimized for speed over depth - useful for time-sensitive tasks.
 """
 
 import asyncio
+import re
 import structlog
 from dataclasses import dataclass
 

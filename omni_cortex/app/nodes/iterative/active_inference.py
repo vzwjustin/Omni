@@ -12,6 +12,7 @@ This is a REAL framework, not a prompt template.
 """
 
 import asyncio
+import re
 import structlog
 from typing import Optional
 from dataclasses import dataclass

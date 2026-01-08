@@ -10,6 +10,7 @@ Generate hypothetical documents for better retrieval:
 """
 
 import asyncio
+import re
 import structlog
 from dataclasses import dataclass
 

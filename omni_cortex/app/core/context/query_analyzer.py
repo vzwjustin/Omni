@@ -38,6 +38,48 @@ except ImportError:
 logger = structlog.get_logger("context.query_analyzer")
 
 
+def _sanitize_prompt_input(text: str, max_length: int = 50000) -> str:
+    """
+    Sanitize user input before interpolating into LLM prompts.
+    
+    Prevents prompt injection by:
+    1. Truncating to max_length to prevent context flooding
+    2. Escaping control sequences that could hijack prompt structure
+    3. Removing null bytes and other dangerous characters
+    
+    Args:
+        text: Raw user input
+        max_length: Maximum allowed length
+        
+    Returns:
+        Sanitized string safe for prompt interpolation
+    """
+    if not text:
+        return ""
+    
+    # Truncate first to avoid processing huge inputs
+    text = text[:max_length]
+    
+    # Remove null bytes and other control characters (except newlines/tabs)
+    text = "".join(c for c in text if c == '\n' or c == '\t' or (ord(c) >= 32 and ord(c) < 127) or ord(c) > 127)
+    
+    # Escape common prompt injection patterns
+    # These sequences could be used to break out of the prompt structure
+    injection_patterns = [
+        ("```", "` ` `"),  # Break code blocks
+        ("QUERY:", "[QUERY]"),  # Prevent fake section headers
+        ("CODE CONTEXT:", "[CODE CONTEXT]"),
+        ("DOCUMENTATION CONTEXT:", "[DOCUMENTATION CONTEXT]"),
+        ("Respond in JSON", "[Respond in JSON]"),
+        ("Be specific", "[Be specific]"),
+    ]
+    
+    for pattern, replacement in injection_patterns:
+        text = text.replace(pattern, replacement)
+    
+    return text
+
+
 class QueryAnalyzer:
     """
     Analyzes queries using Gemini to understand intent.
@@ -85,7 +127,8 @@ class QueryAnalyzer:
     async def analyze(
         self,
         query: str,
-        code_context: Optional[str] = None
+        code_context: Optional[str] = None,
+        documentation_context: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Analyze a query to understand intent and plan execution.
@@ -93,6 +136,7 @@ class QueryAnalyzer:
         Args:
             query: The user's request
             code_context: Optional code snippets for context
+            documentation_context: Optional documentation/URL context found by search
 
         Returns:
             Dictionary with analysis results:
@@ -111,11 +155,18 @@ class QueryAnalyzer:
         """
         client = self._get_client()
 
+        # Sanitize all user-provided inputs before prompt interpolation
+        safe_query = _sanitize_prompt_input(query, max_length=10000)
+        safe_code_context = _sanitize_prompt_input(code_context, max_length=CONTENT.SNIPPET_MAX) if code_context else ""
+        safe_doc_context = _sanitize_prompt_input(documentation_context, max_length=10000) if documentation_context else ""
+
         prompt = f"""Analyze this coding task and provide structured analysis.
 
-QUERY: {query}
+QUERY: {safe_query}
 
-{f"CODE CONTEXT:{chr(10)}{code_context[:CONTENT.SNIPPET_MAX]}" if code_context else ""}
+{f"CODE CONTEXT:{chr(10)}{safe_code_context}" if safe_code_context else ""}
+
+{f"DOCUMENTATION CONTEXT:{chr(10)}{safe_doc_context}" if safe_doc_context else ""}
 
 Respond in JSON format:
 {{
@@ -178,26 +229,27 @@ Be specific and actionable. Focus on what Claude needs to execute effectively.""
                 if thinking_blocks:
                     logger.debug("gemini_thinking", thoughts=len(thinking_blocks))
                 
-                text = full_response
+                # With response_mime_type="application/json", the text IS valid JSON
+                result = json.loads(full_response)
+                
             else:  # Fallback to old package
+                # Old package also supports response_mime_type in generation_config
                 response = await asyncio.to_thread(
                     client.generate_content,
                     prompt,
-                    generation_config={"temperature": 0.3}
+                    generation_config={
+                        "temperature": 0.3,
+                        "response_mime_type": "application/json"
+                    }
                 )
-                text = response.text
+                result = json.loads(response.text)
 
-            # Extract JSON from response
-            json_match = re.search(r'\{[\s\S]*\}', text)
-            if json_match:
-                result = json.loads(json_match.group())
-                logger.debug(
-                    "query_analysis_complete",
-                    task_type=result.get("task_type"),
-                    complexity=result.get("complexity")
-                )
-                return result
-            return {}
+            logger.debug(
+                "query_analysis_complete",
+                task_type=result.get("task_type"),
+                complexity=result.get("complexity")
+            )
+            return result
         except (LLMError, ProviderNotConfiguredError):
             raise  # Re-raise custom LLM errors
         except Exception as e:

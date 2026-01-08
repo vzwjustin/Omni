@@ -10,6 +10,7 @@ Combines tree search with language agents:
 """
 
 import asyncio
+import re
 import structlog
 from dataclasses import dataclass, field
 from typing import Optional

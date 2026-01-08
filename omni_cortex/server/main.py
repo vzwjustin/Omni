@@ -525,6 +525,10 @@ def create_server() -> Server:
             clear_correlation_id()
             logger.info("call_tool_end", tool=name)
 
+    # Attach handlers to server for testing access
+    server.list_tools_handler = list_tools
+    server.call_tool_handler = call_tool
+
     return server
 
 

@@ -16,7 +16,7 @@ import re
 import structlog
 from typing import Callable, Optional, Any
 from ..core.settings import get_settings
-from ..core.constants import CONTENT
+from ..core.constants import CONTENT, FRAMEWORK
 from ..core.errors import LLMError, ProviderNotConfiguredError
 from ..core.context_gateway import ContextGateway, StructuredContext
 from ..state import GraphState
@@ -40,7 +40,6 @@ DEFAULT_OPTIMIZATION_TOKENS = 2000
 DEFAULT_OPTIMIZATION_TEMP = 0.3
 
 # Granular token limits for specific use cases
-# These are used throughout framework nodes for different operations
 TOKENS_SCORE_PARSING = 32       # Parse numerical scores (0.0-1.0)
 TOKENS_SHORT_RESPONSE = 64       # Very short responses (satisfaction, quality)
 TOKENS_QUESTION = 256            # Generate questions or critiques
@@ -49,6 +48,8 @@ TOKENS_DETAILED = 768            # Detailed solutions or reasoning
 TOKENS_COMPREHENSIVE = 1024      # Comprehensive analysis
 TOKENS_EXTENDED = 1536           # Extended reasoning
 TOKENS_FULL = 2048               # Full synthesis or final answers
+
+# Memory bounding configuration moved to state_utils.py
 
 
 # =============================================================================
@@ -572,19 +573,52 @@ def add_reasoning_step(
     observation: Optional[str] = None,
     score: Optional[float] = None
 ) -> None:
-    """Add a reasoning step to the state trace."""
+    """
+    Add a reasoning step to the state trace with memory bounding.
+
+    Maintains a rolling window of reasoning steps to prevent OOM in long loops.
+    """
     # Ensure reasoning_steps exists
     if "reasoning_steps" not in state or state["reasoning_steps"] is None:
         state["reasoning_steps"] = []
-    step_num = len(state["reasoning_steps"]) + 1
-    state["reasoning_steps"].append({
+
+    # Use a persistent step counter in state if available, else derive
+    if "step_counter" not in state:
+        state["step_counter"] = len(state["reasoning_steps"])
+
+    state["step_counter"] += 1
+    step_num = state["step_counter"]
+
+    new_step = {
         "step_number": step_num,
         "framework_node": framework,
         "thought": thought,
         "action": action,
         "observation": observation,
         "score": score
-    })
+    }
+
+    state["reasoning_steps"].append(new_step)
+
+    # Implement rolling window memory bounding
+    # Keep first 5 steps (context) + last 45 steps (recent memory)
+    # Use a larger hard cap for memory bounding than the logical depth limit
+    MEMORY_BOUND = 50
+    if len(state["reasoning_steps"]) > MEMORY_BOUND:
+        initial_context = state["reasoning_steps"][:5]
+        recent_memory = state["reasoning_steps"][-(MEMORY_BOUND - 5):]
+
+        state["reasoning_steps"] = initial_context + recent_memory
+
+        # Insert truncation marker
+        state["reasoning_steps"].insert(5, {
+            "step_number": -1,
+            "framework_node": "system",
+            "thought": f"... {step_num - MEMORY_BOUND} intermediate steps truncated for memory efficiency ...",
+            "action": "truncate_memory",
+            "observation": None,
+            "score": None
+        })
 
 
 def extract_code_blocks(text: str) -> list[str]:

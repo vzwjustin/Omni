@@ -4,6 +4,8 @@ Memory Manager - Thread-Safe Memory Store
 Provides LRU-evicting memory store with async-safe access.
 """
 
+from __future__ import annotations
+
 import asyncio
 from collections import OrderedDict
 
@@ -11,7 +13,7 @@ from .omni_memory import OmniCortexMemory
 from ..core.constants import LIMITS
 
 # Global memory store (keyed by thread_id) with simple LRU eviction
-_memory_store: "OrderedDict[str, OmniCortexMemory]" = OrderedDict()
+_memory_store: OrderedDict[str, OmniCortexMemory] = OrderedDict()
 _memory_store_lock = asyncio.Lock()
 
 MAX_MEMORY_THREADS = LIMITS.MAX_MEMORY_THREADS
@@ -38,6 +40,6 @@ def get_memory_store_lock() -> asyncio.Lock:
     return _memory_store_lock
 
 
-def get_memory_store() -> "OrderedDict[str, OmniCortexMemory]":
+def get_memory_store() -> OrderedDict[str, OmniCortexMemory]:
     """Get the memory store for external use (use with lock)."""
     return _memory_store

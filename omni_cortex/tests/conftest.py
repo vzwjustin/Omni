@@ -295,10 +295,10 @@ def mcp_server(mock_collection_manager):
 @pytest.fixture
 def tool_handler(mcp_server):
     """Get the tool handler from the MCP server."""
-    return mcp_server._tool_handlers.get("call_tool")
+    return mcp_server.call_tool_handler
 
 
 @pytest.fixture
 def list_tools_handler(mcp_server):
     """Get the list_tools handler from the MCP server."""
-    return mcp_server._tool_handlers.get("list_tools")
+    return mcp_server.list_tools_handler

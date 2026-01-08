@@ -10,6 +10,7 @@ Graph-based retrieval augmented generation:
 """
 
 import asyncio
+import re
 import structlog
 from dataclasses import dataclass, field
 
@@ -123,7 +124,7 @@ REL_2: [entity_id] [relation] [entity_id] - [description]
                         description=desc
                     ))
             except Exception as e:
-        logger.debug("score_parsing_failed", response=score_response[:50] if "score_response" in locals() else response[:50], error=str(e))
+                logger.debug("rel_parsing_failed", error=str(e))
                 pass
     
     return relationships
@@ -151,7 +152,7 @@ RELEVANT_IDS: [comma-separated IDs]
         ids = [int(x) for x in re.findall(r'\d+', response)]
         return ids[:5]
     except Exception as e:
-        logger.debug("score_parsing_failed", response=score_response[:50] if "score_response" in locals() else response[:50], error=str(e))
+        logger.debug("id_parsing_failed", error=str(e))
         return [1, 2, 3]
 
 

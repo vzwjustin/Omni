@@ -11,6 +11,7 @@ This is a REAL framework with actual analogy-based reasoning.
 """
 
 import asyncio
+import re
 import structlog
 from dataclasses import dataclass
 

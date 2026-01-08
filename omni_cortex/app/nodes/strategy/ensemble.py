@@ -12,6 +12,7 @@ This is a REAL framework with actual ensemble methods.
 """
 
 import asyncio
+import re
 import structlog
 from dataclasses import dataclass
 from typing import Optional

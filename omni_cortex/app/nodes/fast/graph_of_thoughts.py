@@ -10,6 +10,7 @@ Creates a graph of interconnected thoughts with:
 """
 
 import asyncio
+import re
 import structlog
 from dataclasses import dataclass, field
 from typing import Optional
@@ -116,7 +117,7 @@ DEPENDENCIES:
                         if dep_id <= len(nodes):
                             nodes[dep_id - 1].successors.append(thought_id)
             except Exception as e:
-        logger.debug("score_parsing_failed", response=score_response[:50] if "score_response" in locals() else response[:50], error=str(e))
+                logger.debug("dep_parsing_failed", error=str(e))
                 pass
 
 

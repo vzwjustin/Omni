@@ -5,18 +5,20 @@ Discovers and ranks relevant files in a workspace using:
 - File listing with smart filtering
 - LLM-based relevance scoring
 - Key element extraction
+
+Refactored to offload blocking I/O to thread pool and use scandir for performance.
 """
 
 import asyncio
 import json
-import re
 import structlog
+import os
 from pathlib import Path
 from typing import List, Optional
 
 from ..settings import get_settings
 from ..constants import CONTENT, WORKSPACE
-from ..errors import LLMError, ProviderNotConfiguredError, OmniCortexError
+from ..errors import LLMError, ProviderNotConfiguredError, OmniCortexError, ContextRetrievalError
 from ..correlation import get_correlation_id
 
 # Try to import Google AI (new package with thinking mode)
@@ -36,7 +38,6 @@ except ImportError:
         types = None
 
 logger = structlog.get_logger("context.file_discoverer")
-
 
 # Import dataclass from parent - will be available after refactor
 # For now, define inline to avoid circular imports
@@ -152,29 +153,44 @@ Maximum {max_files} files."""
             response = await asyncio.to_thread(
                 model.generate_content,
                 prompt,
-                generation_config={"temperature": 0.2}
+                generation_config={
+                    "temperature": 0.2,
+                    "response_mime_type": "application/json"
+                }
             )
 
-            text = response.text
-            json_match = re.search(r'\[[\s\S]*\]', text)
-            if json_match:
-                files_data = json.loads(json_match.group())
-                result = [
-                    FileContext(
-                        path=f["path"],
-                        relevance_score=f.get("relevance_score", 0.5),
-                        summary=f.get("summary", ""),
-                        key_elements=f.get("key_elements", []),
-                    )
-                    for f in files_data[:max_files]
-                ]
-                logger.debug(
-                    "file_discovery_complete",
-                    files_found=len(result),
-                    top_file=result[0].path if result else None
+            # With JSON mode, response.text should be valid JSON
+            files_data = json.loads(response.text)
+            
+            # Ensure it's a list (handle case where model might wrap in object)
+            if isinstance(files_data, dict) and "files" in files_data:
+                files_data = files_data["files"]
+            elif isinstance(files_data, dict):
+                # Try to find any list value
+                for val in files_data.values():
+                    if isinstance(val, list):
+                        files_data = val
+                        break
+            
+            if not isinstance(files_data, list):
+                logger.warning("file_discovery_invalid_format", format=type(files_data))
+                return []
+
+            result = [
+                FileContext(
+                    path=f["path"],
+                    relevance_score=f.get("relevance_score", 0.5),
+                    summary=f.get("summary", ""),
+                    key_elements=f.get("key_elements", []),
                 )
-                return result
-            return []
+                for f in files_data[:max_files]
+            ]
+            logger.debug(
+                "file_discovery_complete",
+                files_found=len(result),
+                top_file=result[0].path if result else None
+            )
+            return result
         except (LLMError, ProviderNotConfiguredError):
             raise  # Re-raise custom LLM errors
         except Exception as e:
@@ -191,45 +207,53 @@ Maximum {max_files} files."""
 
     async def _list_workspace_files(self, workspace_path: str) -> List[str]:
         """
-        List relevant files in workspace.
-
-        Excludes common non-code directories and filters by extension.
+        List relevant files in workspace asynchronously.
+        Offloads blocking I/O to a thread to prevent event loop starvation.
         """
-        exclude_patterns = set(WORKSPACE.EXCLUDE_DIRS)
-        include_extensions = set(WORKSPACE.CODE_EXTENSIONS)
-
-        # Also include dockerfile extension check
-        special_filenames = {"dockerfile", "makefile"}
-
-        files = []
         try:
-            workspace = Path(workspace_path)
-            for path in workspace.rglob("*"):
-                if path.is_file():
-                    # Check exclusions
-                    if any(ex in str(path) for ex in exclude_patterns):
-                        continue
-                    # Check extensions or special names
-                    if (path.suffix.lower() in include_extensions or
-                            path.name.lower() in special_filenames):
-                        rel_path = str(path.relative_to(workspace))
-                        files.append(rel_path)
-                        if len(files) >= WORKSPACE.MAX_FILES_SCAN:
-                            break
-        except OmniCortexError:
-            raise  # Re-raise custom errors
+            return await asyncio.to_thread(self._sync_list_files, workspace_path)
         except Exception as e:
-            # Graceful degradation: File listing is best-effort for discovery.
-            # Filesystem errors (permissions, broken symlinks, etc.) should not
-            # crash the entire discovery process - we return whatever files we
-            # successfully collected before the error occurred.
+            # Differentiate catastrophic failure from partial failure
             logger.error(
                 "workspace_listing_failed",
                 error=str(e),
                 error_type=type(e).__name__,
                 correlation_id=get_correlation_id()
             )
-            # File system errors are not fatal - return what we have
+            # Raise structured error for retry/handling logic upstream
+            raise ContextRetrievalError(f"Failed to access workspace: {e}") from e
 
-        logger.debug("workspace_files_listed", count=len(files))
+    def _sync_list_files(self, workspace_path: str) -> List[str]:
+        """
+        Synchronous implementation of file listing using os.scandir for performance.
+        Strictly separated for thread safety.
+        """
+        exclude_patterns = set(WORKSPACE.EXCLUDE_DIRS)
+        include_extensions = set(WORKSPACE.CODE_EXTENSIONS)
+        special_filenames = {"dockerfile", "makefile"}
+        files = []
+        
+        try:
+            # Use os.walk which uses scandir internally (faster than glob)
+            # Top-down iteration allows us to modify dirnames in-place to prune traversal
+            for root, dirs, filenames in os.walk(workspace_path, topdown=True):
+                # Modify dirs in-place to skip excluded directories
+                # This prevents descending into excluded directories entirely
+                dirs[:] = [d for d in dirs if d not in exclude_patterns and not any(ex in d for ex in exclude_patterns)]
+                
+                for filename in filenames:
+                    # Check extensions or special names
+                    ext = os.path.splitext(filename)[1].lower()
+                    if (ext in include_extensions or filename.lower() in special_filenames):
+                        full_path = os.path.join(root, filename)
+                        rel_path = os.path.relpath(full_path, workspace_path)
+                        files.append(rel_path)
+                        
+                        if len(files) >= WORKSPACE.MAX_FILES_SCAN:
+                            return files
+                            
+        except OSError:
+            # Raise to caller (async wrapper) if root dir is bad
+            raise
+                
         return files
