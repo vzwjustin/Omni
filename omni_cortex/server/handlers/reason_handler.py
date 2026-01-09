@@ -8,11 +8,13 @@ Integrates with ContextGateway for automatic context preparation.
 import logging
 import sys
 import traceback
+import uuid
 
 from mcp.types import TextContent
 
 from app.core.audit import log_tool_call
 from app.core.context_gateway import get_context_gateway
+from app.core.metrics_manager import get_metrics_manager
 from ..framework_prompts import FRAMEWORKS
 from .validation import (
     ValidationError,
@@ -38,6 +40,11 @@ async def handle_reason(
     Returns:
         List with single TextContent containing structured brief
     """
+    # Initialize metrics tracking
+    metrics = get_metrics_manager()
+    session_id = str(uuid.uuid4())
+    selected_framework = "unknown"
+
     # Validate inputs
     try:
         query = validate_query(arguments.get("query"), required=True)
@@ -93,6 +100,12 @@ async def handle_reason(
         gate = router_output.integrity_gate
         telemetry = router_output.telemetry
 
+        # Extract framework for metrics
+        selected_framework = pipeline.stages[0].framework_id if pipeline.stages else "unknown"
+
+        # Start metrics tracking
+        metrics.start_session(session_id, selected_framework, query)
+
         # Compact header - single line metadata
         stages = "→".join([s.framework_id for s in pipeline.stages])
         signals = ",".join([s.type.value for s in router_output.detected_signals[:3]]) if router_output.detected_signals else ""
@@ -108,6 +121,15 @@ async def handle_reason(
         # Gate warning only if not proceeding
         if gate.recommendation.action.value != "PROCEED":
             output += f"\n\n⚠️ {gate.recommendation.action.value}: {gate.recommendation.notes}"
+
+        # Complete metrics tracking (estimate tokens)
+        estimated_tokens = len(output) // 4  # Rough estimate
+        metrics.complete_session(
+            session_id,
+            status="completed",
+            tokens_used=estimated_tokens,
+            result=f"{selected_framework} pipeline completed"
+        )
 
         # Audit log successful call
         log_tool_call(
@@ -137,6 +159,11 @@ async def handle_reason(
         if not selected or selected not in FRAMEWORKS:
             selected = "self_discover"
 
+        selected_framework = selected
+
+        # Start metrics tracking for fallback
+        metrics.start_session(session_id, selected_framework, query)
+
         fw_info = router.get_framework_info(selected)
         complexity = router.estimate_complexity(query, context if context != "None provided" else None)
 
@@ -152,6 +179,15 @@ async def handle_reason(
         output += f"Best for: {', '.join(fw_info.get('best_for', fw.get('best_for', [])))}\n"
         output += "\n---\n\n"
         output += prompt
+
+        # Complete metrics tracking for fallback
+        estimated_tokens = len(output) // 4
+        metrics.complete_session(
+            session_id,
+            status="completed",
+            tokens_used=estimated_tokens,
+            result=f"{selected_framework} fallback mode"
+        )
 
         # Audit log fallback (still successful, but with degraded mode)
         log_tool_call(

@@ -64,6 +64,12 @@ class OmniCortexSettings(BaseSettings):
     use_langchain_llm: bool = Field(default=False, alias="USE_LANGCHAIN_LLM")
     lean_mode: bool = Field(default=True, alias="LEAN_MODE")
 
+    # Dashboard (Experimental)
+    enable_dashboard: bool = Field(default=False, alias="ENABLE_DASHBOARD")
+    dashboard_host: str = Field(default="127.0.0.1", alias="DASHBOARD_HOST")
+    dashboard_port: int = Field(default=8080, alias="DASHBOARD_PORT")
+    dashboard_metrics_retention: int = Field(default=1000, ge=100, le=10000, alias="DASHBOARD_METRICS_RETENTION")
+
     # Paths
     checkpoint_path: Path = Field(default=Path("/app/data/checkpoints.sqlite"), alias="CHECKPOINT_PATH")
     watch_root: Optional[Path] = Field(default=None, alias="WATCH_ROOT")
