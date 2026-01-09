@@ -8,6 +8,7 @@ Implements intelligent token budget management with:
 - Gemini-based content ranking and optimization
 """
 
+import asyncio
 import structlog
 from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass
@@ -452,14 +453,22 @@ class GeminiContentRanker:
     def __init__(self):
         """Initialize GeminiContentRanker with settings."""
         self._settings = get_settings()
+        self._use_new_api = types is not None  # Track which API version we're using
 
         # Configure Gemini
         if not GOOGLE_AI_AVAILABLE:
             self._model = None
-            logger.warning("gemini_ranker_no_package", msg="google-generativeai not installed, ranking will use fallback")
+            logger.warning("gemini_ranker_no_package", msg="google-genai not installed, ranking will use fallback")
         elif self._settings.google_api_key:
-            genai.configure(api_key=self._settings.google_api_key)
-            self._model = genai.GenerativeModel("gemini-2.0-flash-exp")
+            if self._use_new_api:
+                # New google-genai package (preferred)
+                self._model = genai.Client(api_key=self._settings.google_api_key)
+                logger.info("gemini_ranker_initialized", api_version="new (google-genai)")
+            else:
+                # Fallback to deprecated google.generativeai package
+                genai.configure(api_key=self._settings.google_api_key)
+                self._model = genai.GenerativeModel("gemini-2.0-flash-exp")
+                logger.info("gemini_ranker_initialized", api_version="legacy (google.generativeai)")
         else:
             self._model = None
             logger.warning("gemini_ranker_no_api_key", msg="Gemini API key not configured, ranking will use fallback")
@@ -508,8 +517,21 @@ Documentation sources:
 {chr(10).join(doc_summaries)}
 
 Ranking (indices only, comma-separated):"""
-            
-            response = await self._model.generate_content_async(prompt)
+
+            # Use appropriate API based on which package is available
+            if self._use_new_api:
+                # New google-genai API
+                model_name = self._settings.routing_model or "gemini-2.0-flash-exp"
+                response = await asyncio.to_thread(
+                    self._model.models.generate_content,
+                    model=model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(temperature=0.3)
+                )
+            else:
+                # Legacy google.generativeai API
+                response = await self._model.generate_content_async(prompt)
+
             ranking_text = response.text.strip()
             
             # Parse ranking indices
@@ -591,8 +613,21 @@ Code search results:
 {combined_results}
 
 Summary:"""
-            
-            response = await self._model.generate_content_async(prompt)
+
+            # Use appropriate API based on which package is available
+            if self._use_new_api:
+                # New google-genai API
+                model_name = self._settings.routing_model or "gemini-2.0-flash-exp"
+                response = await asyncio.to_thread(
+                    self._model.models.generate_content,
+                    model=model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(temperature=0.3)
+                )
+            else:
+                # Legacy google.generativeai API
+                response = await self._model.generate_content_async(prompt)
+
             summary = response.text.strip()
             
             # Ensure summary fits within max_length
