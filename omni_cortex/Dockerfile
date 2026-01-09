@@ -1,7 +1,10 @@
 # Omni-Cortex MCP Server
-# Pass-through MCP - calling LLM does the reasoning
+# Multi-stage build with cloud test execution
 
-FROM python:3.13-slim
+# =============================================================================
+# Stage 1: Base - shared between test and production
+# =============================================================================
+FROM python:3.13-slim AS base
 
 # Metadata
 LABEL maintainer="Omni-Cortex Team"
@@ -21,10 +24,6 @@ RUN apt-get update && \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Create non-root user for security
-RUN groupadd --gid 1000 cortex && \
-    useradd --uid 1000 --gid cortex --shell /bin/bash --create-home cortex
-
 # Set working directory
 WORKDIR /app
 
@@ -33,7 +32,42 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
-COPY --chown=cortex:cortex . .
+COPY . .
+
+# =============================================================================
+# Stage 2: Test - runs tests in Build Cloud
+# Usage: docker buildx build --target test ...
+# =============================================================================
+FROM base AS test
+
+# Install test dependencies
+RUN pip install --no-cache-dir pytest==8.3.4 pytest-asyncio==0.24.0 pytest-cov==6.0.0
+
+# Set test environment
+ENV LLM_PROVIDER=pass-through \
+    EMBEDDING_PROVIDER=openai \
+    ENABLE_AUTO_INGEST=false \
+    LEAN_MODE=false \
+    LOG_LEVEL=DEBUG \
+    PYTHONPATH=/app
+
+# Run tests - this executes during build!
+RUN python -m pytest tests/ -v --tb=short 2>&1 | tee /app/test-results.txt; \
+    RESULT=$?; \
+    echo "Test exit code: $RESULT" >> /app/test-results.txt; \
+    exit $RESULT
+
+# =============================================================================
+# Stage 3: Production - final lightweight image
+# =============================================================================
+FROM base AS production
+
+# Create non-root user for security
+RUN groupadd --gid 1000 cortex && \
+    useradd --uid 1000 --gid cortex --shell /bin/bash --create-home cortex
+
+# Set ownership
+RUN chown -R cortex:cortex /app
 
 # Create data directory for persistent memory
 RUN mkdir -p /app/data && chown -R cortex:cortex /app/data
@@ -47,9 +81,6 @@ USER cortex
 
 # MCP servers use stdio, not HTTP ports
 # No EXPOSE needed
-
-# No health check for stdio-based server
-# Health is checked via successful stdio communication
 
 # Run startup script which handles ingestion and starts server
 ENTRYPOINT ["/app/scripts/startup.sh"]
