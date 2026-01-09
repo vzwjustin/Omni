@@ -102,20 +102,23 @@ async def clean_memory_store():
     Fixture to ensure clean memory store before and after tests.
 
     Clears the global _memory_store to prevent test pollution.
+
+    Note: Uses threading.Lock (not asyncio.Lock) for cross-thread protection.
+    The lock is acquired synchronously since all operations inside are synchronous.
     """
     _memory_store = get_memory_store()
     _memory_store_lock = get_memory_store_lock()
 
     original_store = dict(_memory_store)
 
-    # Clear before test
-    async with _memory_store_lock:
+    # Clear before test (synchronous lock - threading.Lock)
+    with _memory_store_lock:
         _memory_store.clear()
 
     yield _memory_store
 
-    # Restore after test
-    async with _memory_store_lock:
+    # Restore after test (synchronous lock - threading.Lock)
+    with _memory_store_lock:
         _memory_store.clear()
         _memory_store.update(original_store)
 

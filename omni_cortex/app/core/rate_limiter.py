@@ -3,9 +3,27 @@ Rate Limiter for Omni-Cortex MCP Tools
 
 Provides token bucket rate limiting with configurable limits per tool category.
 Uses asyncio-native design with no external dependencies.
+
+Thread Safety Model:
+--------------------
+This module uses a hybrid locking strategy:
+
+1. threading.Lock (_rate_limiter_lock): Protects singleton creation of the
+   global RateLimiter instance. Used because asyncio.Lock() cannot be created
+   at module level (no event loop exists yet) and because we need cross-thread
+   protection for the singleton pattern.
+
+2. asyncio.Lock (RateLimiter._lock): Used within the RateLimiter instance for
+   async-safe access to token buckets during check_rate_limit(). This is created
+   inside __init__ when an event loop is typically available.
+
+This separation allows:
+- Safe module-level singleton pattern (threading.Lock)
+- Efficient async operations within the rate limiter (asyncio.Lock)
 """
 
 import asyncio
+import threading
 import time
 from dataclasses import dataclass, field
 from typing import Dict, Optional
@@ -227,17 +245,31 @@ class RateLimiter:
 
 # Global rate limiter instance (lazy initialization)
 _rate_limiter: Optional[RateLimiter] = None
-_rate_limiter_lock = asyncio.Lock()
+# threading.Lock for module-level singleton protection - works across threads
+# and can be created at module load time (unlike asyncio.Lock which needs an event loop)
+_rate_limiter_lock = threading.Lock()
 
 
 async def get_rate_limiter() -> RateLimiter:
-    """Get the global rate limiter instance (async-safe)."""
+    """
+    Get the global rate limiter instance (thread-safe singleton).
+
+    Uses threading.Lock (not asyncio.Lock) for singleton protection because:
+    - asyncio.Lock cannot be created at module level (no event loop yet)
+    - threading.Lock provides true cross-thread protection
+    - The critical section contains only synchronous operations (settings read, object creation)
+
+    The RateLimiter instance itself uses asyncio.Lock internally for its async operations.
+    """
     global _rate_limiter
-    
+
+    # Fast path: already initialized (no lock needed for read due to GIL)
     if _rate_limiter is not None:
         return _rate_limiter
-    
-    async with _rate_limiter_lock:
+
+    # Slow path: acquire lock and double-check
+    with _rate_limiter_lock:
+        # Double-check pattern: another thread may have initialized while we waited
         if _rate_limiter is None:
             settings = get_settings()
             config = RateLimitConfig(
@@ -248,5 +280,5 @@ async def get_rate_limiter() -> RateLimiter:
                 global_rpm=getattr(settings, "rate_limit_global_rpm", 200),
             )
             _rate_limiter = RateLimiter(config)
-    
+
     return _rate_limiter

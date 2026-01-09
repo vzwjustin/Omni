@@ -464,6 +464,8 @@ class HyperRouter:
                 query=query[:CONTENT.QUERY_LOG] if query else ""
             )
 
+        if "reasoning_steps" not in state:
+            state["reasoning_steps"] = []
         state["reasoning_steps"].append({
             "step": "routing",
             "framework": framework_chain[0] if framework_chain else "self_discover",

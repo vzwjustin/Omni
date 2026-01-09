@@ -210,7 +210,9 @@ async def retrieve_context(query: str, thread_id: str = None) -> str:
     _memory_store = get_memory_store()
     _memory_store_lock = get_memory_store_lock()
 
-    async with _memory_store_lock:
+    # Use threading.Lock (not asyncio.Lock) for cross-thread protection.
+    # All operations inside are synchronous (dict access, list slicing).
+    with _memory_store_lock:
         if thread_id and thread_id in _memory_store:
             mem = _memory_store[thread_id]
             if mem.messages:

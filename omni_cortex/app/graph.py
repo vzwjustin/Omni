@@ -444,7 +444,8 @@ def create_reasoning_graph(checkpointer=None) -> StateGraph:
 # =============================================================================
 
 _checkpointer: AsyncSqliteSaver | None = None
-_checkpointer_lock = None  # Lazy init to avoid event loop issues
+_checkpointer_lock: asyncio.Lock | None = None
+_checkpointer_init_lock = asyncio.Lock()  # Module-level lock to protect lazy init
 
 
 async def get_checkpointer() -> AsyncSqliteSaver:
@@ -455,15 +456,17 @@ async def get_checkpointer() -> AsyncSqliteSaver:
     Call cleanup_checkpointer() on shutdown to properly close connections.
     """
     global _checkpointer, _checkpointer_lock
-    import asyncio
-    
-    # Lazy init lock in async context
-    if _checkpointer_lock is None:
-        _checkpointer_lock = asyncio.Lock()
-    
+
+    # Fast path: checkpointer already initialized
     if _checkpointer is not None:
         return _checkpointer
-    
+
+    # Use module-level lock to safely initialize the asyncio.Lock
+    async with _checkpointer_init_lock:
+        # Double-check after acquiring lock
+        if _checkpointer_lock is None:
+            _checkpointer_lock = asyncio.Lock()
+
     async with _checkpointer_lock:
         if _checkpointer is None:
             # Ensure directory exists

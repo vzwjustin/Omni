@@ -25,6 +25,9 @@ import structlog
 from .settings import get_settings
 from .errors import LLMError, SamplerTimeout, SamplerCircuitOpen
 
+# Import from canonical location to avoid duplication
+from ..nodes.common import extract_code_blocks
+
 logger = structlog.get_logger("sampling")
 
 # Get settings
@@ -374,13 +377,6 @@ def extract_score(text: str, default: float = 0.5) -> float:
 
     # Couldn't parse - return default
     return default
-
-
-def extract_code_blocks(text: str) -> list[str]:
-    """Extract code blocks from markdown-formatted text."""
-    pattern = r"```(?:\w+)?\n(.*?)```"
-    matches = re.findall(pattern, text, re.DOTALL)
-    return [m.strip() for m in matches]
 
 
 def extract_json_object(text: str) -> Optional[dict]:
