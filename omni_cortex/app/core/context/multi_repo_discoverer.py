@@ -215,33 +215,50 @@ class MultiRepoFileDiscoverer(FileDiscoverer):
     def _create_repo_info(self, repo_path: str, workspace_path: str) -> Optional[RepoInfo]:
         """
         Create RepoInfo object for a repository.
-        
+
         Args:
             repo_path: Path to repository
             workspace_path: Path to workspace root
-        
+
         Returns:
             RepoInfo object or None if repo is inaccessible
         """
         try:
-            repo = Path(repo_path)
-            
+            # Validate and normalize paths to prevent path traversal
+            repo = Path(repo_path).resolve()
+            workspace = Path(workspace_path).resolve()
+
+            # Security: Ensure repo_path is within workspace_path
+            # Prevents path traversal attacks
+            try:
+                repo.relative_to(workspace)
+            except ValueError:
+                logger.warning(
+                    "repo_path_outside_workspace",
+                    repo_path=str(repo),
+                    workspace_path=str(workspace)
+                )
+                return None
+
+            # Convert back to string for subprocess calls
+            repo_path_validated = str(repo)
+
             # Get repository name
             name = repo.name
-            
+
             # Get git root (should be repo_path)
-            git_root = repo_path
-            
+            git_root = repo_path_validated
+
             # Load .gitignore patterns
-            ignore_patterns = self._load_gitignore_patterns(repo_path)
-            
+            ignore_patterns = self._load_gitignore_patterns(repo_path_validated)
+
             # Check access permissions
             access_permissions = {
-                "read": os.access(repo_path, os.R_OK),
-                "write": os.access(repo_path, os.W_OK),
-                "execute": os.access(repo_path, os.X_OK),
+                "read": os.access(repo_path_validated, os.R_OK),
+                "write": os.access(repo_path_validated, os.W_OK),
+                "execute": os.access(repo_path_validated, os.X_OK),
             }
-            
+
             # Get last commit info
             last_commit = None
             branch = None
@@ -249,18 +266,18 @@ class MultiRepoFileDiscoverer(FileDiscoverer):
                 # Get current branch
                 result = subprocess.run(
                     ['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
-                    cwd=repo_path,
+                    cwd=repo_path_validated,
                     capture_output=True,
                     text=True,
                     timeout=5
                 )
                 if result.returncode == 0:
                     branch = result.stdout.strip()
-                
+
                 # Get last commit hash
                 result = subprocess.run(
                     ['git', 'rev-parse', 'HEAD'],
-                    cwd=repo_path,
+                    cwd=repo_path_validated,
                     capture_output=True,
                     text=True,
                     timeout=5
@@ -269,11 +286,11 @@ class MultiRepoFileDiscoverer(FileDiscoverer):
                     last_commit = result.stdout.strip()
             except (subprocess.TimeoutExpired, FileNotFoundError):
                 pass
-            
+
             is_accessible = access_permissions["read"] and access_permissions["execute"]
-            
+
             return RepoInfo(
-                path=repo_path,
+                path=repo_path_validated,
                 name=name,
                 git_root=git_root,
                 ignore_patterns=ignore_patterns,

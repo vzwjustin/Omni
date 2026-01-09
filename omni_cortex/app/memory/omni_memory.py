@@ -4,6 +4,7 @@ OmniCortexMemory - Unified Memory System
 Provides short-term conversation memory using LangChain 1.0+ message types.
 """
 
+import threading
 from typing import Any, List, Dict
 from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
 import structlog
@@ -26,21 +27,23 @@ class OmniCortexMemory:
         self.messages: List[BaseMessage] = []
         self.framework_history: List[str] = []
         self.max_messages = max_messages
+        self._lock = threading.Lock()  # Protect concurrent modifications
 
     def add_exchange(self, query: str, answer: str, framework: str) -> None:
-        """Add a query-answer exchange to memory."""
-        self.messages.append(HumanMessage(content=query))
-        self.messages.append(AIMessage(content=answer))
+        """Add a query-answer exchange to memory (thread-safe)."""
+        with self._lock:
+            self.messages.append(HumanMessage(content=query))
+            self.messages.append(AIMessage(content=answer))
 
-        # Trim to max size
-        if len(self.messages) > self.max_messages:
-            self.messages = self.messages[-self.max_messages:]
+            # Trim to max size
+            if len(self.messages) > self.max_messages:
+                self.messages = self.messages[-self.max_messages:]
 
-        self.framework_history.append(framework)
-        # Trim framework history to match message limit (prevent unbounded growth)
-        if len(self.framework_history) > self.max_messages:
-            self.framework_history = self.framework_history[-self.max_messages:]
-        logger.info("memory_updated", thread_id=self.thread_id, framework=framework)
+            self.framework_history.append(framework)
+            # Trim framework history to match message limit (prevent unbounded growth)
+            if len(self.framework_history) > self.max_messages:
+                self.framework_history = self.framework_history[-self.max_messages:]
+            logger.info("memory_updated", thread_id=self.thread_id, framework=framework)
 
     def get_context(self) -> Dict[str, Any]:
         """Get full memory context for prompting."""

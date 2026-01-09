@@ -226,33 +226,62 @@ Maximum {max_files} files."""
         """
         Synchronous implementation of file listing using os.scandir for performance.
         Strictly separated for thread safety.
+
+        Security: Validates all paths to prevent path traversal attacks.
         """
         exclude_patterns = set(WORKSPACE.EXCLUDE_DIRS)
         include_extensions = set(WORKSPACE.CODE_EXTENSIONS)
         special_filenames = {"dockerfile", "makefile"}
         files = []
-        
+
+        # Security: Normalize and validate workspace path
+        try:
+            workspace_path_resolved = Path(workspace_path).resolve()
+            if not workspace_path_resolved.exists():
+                logger.warning("workspace_path_not_found", path=workspace_path)
+                return []
+            if not workspace_path_resolved.is_dir():
+                logger.warning("workspace_path_not_directory", path=workspace_path)
+                return []
+        except (OSError, ValueError) as e:
+            logger.warning("workspace_path_invalid", path=workspace_path, error=str(e))
+            return []
+
         try:
             # Use os.walk which uses scandir internally (faster than glob)
             # Top-down iteration allows us to modify dirnames in-place to prune traversal
-            for root, dirs, filenames in os.walk(workspace_path, topdown=True):
+            for root, dirs, filenames in os.walk(str(workspace_path_resolved), topdown=True):
                 # Modify dirs in-place to skip excluded directories
                 # This prevents descending into excluded directories entirely
                 dirs[:] = [d for d in dirs if d not in exclude_patterns and not any(ex in d for ex in exclude_patterns)]
-                
+
                 for filename in filenames:
                     # Check extensions or special names
                     ext = os.path.splitext(filename)[1].lower()
                     if (ext in include_extensions or filename.lower() in special_filenames):
-                        full_path = os.path.join(root, filename)
-                        rel_path = os.path.relpath(full_path, workspace_path)
+                        full_path = Path(root) / filename
+
+                        # Security: Validate file is within workspace (prevent symlink attacks)
+                        try:
+                            full_path_resolved = full_path.resolve()
+                            full_path_resolved.relative_to(workspace_path_resolved)
+                        except (ValueError, OSError):
+                            # File is outside workspace or inaccessible - skip it
+                            logger.debug(
+                                "skipping_file_outside_workspace",
+                                file=str(full_path),
+                                workspace=str(workspace_path_resolved)
+                            )
+                            continue
+
+                        rel_path = os.path.relpath(str(full_path_resolved), str(workspace_path_resolved))
                         files.append(rel_path)
-                        
+
                         if len(files) >= WORKSPACE.MAX_FILES_SCAN:
                             return files
-                            
+
         except OSError:
             # Raise to caller (async wrapper) if root dir is bad
             raise
-                
+
         return files

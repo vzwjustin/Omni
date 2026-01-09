@@ -46,42 +46,70 @@ logger = structlog.get_logger("context.query_analyzer")
 def _sanitize_prompt_input(text: str, max_length: int = 50000) -> str:
     """
     Sanitize user input before interpolating into LLM prompts.
-    
+
     Prevents prompt injection by:
     1. Truncating to max_length to prevent context flooding
-    2. Escaping control sequences that could hijack prompt structure
-    3. Removing null bytes and other dangerous characters
-    
+    2. Unicode normalization to prevent lookalike bypasses
+    3. Case-insensitive pattern detection
+    4. Escaping control sequences that could hijack prompt structure
+    5. Removing null bytes and other dangerous characters
+
     Args:
         text: Raw user input
         max_length: Maximum allowed length
-        
+
     Returns:
         Sanitized string safe for prompt interpolation
     """
+    import unicodedata
+    import re
+
     if not text:
         return ""
-    
+
     # Truncate first to avoid processing huge inputs
     text = text[:max_length]
-    
+
+    # Unicode normalization to prevent lookalike character bypasses
+    # NFKC normalization converts compatibility characters to canonical form
+    text = unicodedata.normalize('NFKC', text)
+
+    # Remove zero-width characters that could be used to bypass patterns
+    # Zero-width space, zero-width joiner, zero-width non-joiner, etc.
+    zero_width_chars = [
+        '\u200B',  # Zero-width space
+        '\u200C',  # Zero-width non-joiner
+        '\u200D',  # Zero-width joiner
+        '\u2060',  # Word joiner
+        '\uFEFF',  # Zero-width no-break space
+    ]
+    for char in zero_width_chars:
+        text = text.replace(char, '')
+
     # Remove null bytes and other control characters (except newlines/tabs)
     text = "".join(c for c in text if c == '\n' or c == '\t' or (ord(c) >= 32 and ord(c) < 127) or ord(c) > 127)
-    
-    # Escape common prompt injection patterns
+
+    # Escape common prompt injection patterns (case-insensitive)
     # These sequences could be used to break out of the prompt structure
     injection_patterns = [
-        ("```", "` ` `"),  # Break code blocks
-        ("QUERY:", "[QUERY]"),  # Prevent fake section headers
-        ("CODE CONTEXT:", "[CODE CONTEXT]"),
-        ("DOCUMENTATION CONTEXT:", "[DOCUMENTATION CONTEXT]"),
-        ("Respond in JSON", "[Respond in JSON]"),
-        ("Be specific", "[Be specific]"),
+        (r'```', '` ` `'),  # Break code blocks
+        (r'query\s*:', '[QUERY]'),  # Prevent fake section headers
+        (r'code\s+context\s*:', '[CODE CONTEXT]'),
+        (r'documentation\s+context\s*:', '[DOCUMENTATION CONTEXT]'),
+        (r'respond\s+in\s+json', '[Respond in JSON]'),
+        (r'be\s+specific', '[Be specific]'),
+        (r'ignore\s+(previous|all|above)', '[IGNORE]'),  # Ignore instructions
+        (r'system\s*:', '[SYSTEM]'),  # System role injection
+        (r'assistant\s*:', '[ASSISTANT]'),  # Assistant role injection
+        (r'<\|.*?\|>', ''),  # Special tokens used by some models
     ]
-    
+
     for pattern, replacement in injection_patterns:
-        text = text.replace(pattern, replacement)
-    
+        text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
+
+    # Remove consecutive newlines (limit to 2) to prevent structure manipulation
+    text = re.sub(r'\n{3,}', '\n\n', text)
+
     return text
 
 

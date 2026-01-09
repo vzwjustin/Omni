@@ -13,6 +13,7 @@ import hashlib
 import os
 import re
 import structlog
+import threading
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional, Dict, Any, List, Callable, Awaitable
@@ -124,8 +125,10 @@ class ContextCache:
         # File system watchers
         self._observers: Dict[str, Observer] = {}
         
-        # Workspaces marked for invalidation (thread-safe queue)
+        # Workspaces marked for invalidation (needs lock protection)
+        # Using threading.Lock because accessed from watchdog thread (not async)
         self._invalidation_queue: List[str] = []
+        self._invalidation_lock = threading.Lock()  # Protects invalidation queue
 
         # Thundering herd protection: Prevent multiple concurrent regenerations
         self._pending_regenerations: Dict[str, asyncio.Lock] = {}
@@ -565,20 +568,25 @@ class ContextCache:
     
     def _mark_workspace_for_invalidation(self, workspace_path: str) -> None:
         """
-        Mark workspace for invalidation (thread-safe).
-        
+        Mark workspace for invalidation (thread-safe with lock protection).
+
         Args:
             workspace_path: Path to workspace
         """
-        if workspace_path not in self._invalidation_queue:
-            self._invalidation_queue.append(workspace_path)
+        with self._invalidation_lock:
+            if workspace_path not in self._invalidation_queue:
+                self._invalidation_queue.append(workspace_path)
     
     def _process_invalidation_queue(self) -> None:
-        """Process pending workspace invalidations."""
-        while self._invalidation_queue:
-            workspace_path = self._invalidation_queue.pop(0)
-            # Note: This is synchronous, but invalidation is fast
-            # In production, consider using asyncio.create_task
+        """Process pending workspace invalidations (thread-safe)."""
+        while True:
+            # Pop one item with lock held (brief critical section)
+            with self._invalidation_lock:
+                if not self._invalidation_queue:
+                    break
+                workspace_path = self._invalidation_queue.pop(0)
+
+            # Process outside lock (longer operation)
             try:
                 # Compute new fingerprint
                 if workspace_path in self._workspace_fingerprints:
