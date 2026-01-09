@@ -57,6 +57,12 @@ tenacity>=8.0.0
 structlog>=24.0.0
 
 # =============================================================================
+# Dashboard (Experimental - Optional)
+# =============================================================================
+fastapi>=0.115.0  # Web framework for dashboard API
+uvicorn>=0.32.0   # ASGI server for dashboard
+
+# =============================================================================
 # Dataset Ingestion (Optional)
 # =============================================================================
 pandas>=2.0.0  # For CSV parsing in bug-fix datasets
