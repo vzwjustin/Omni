@@ -132,8 +132,8 @@ MISSING: [What's missing or wrong, if anything]
                 match = re.search(r'(\d+\.?\d*)', line)
                 if match:
                     score = max(0.0, min(1.0, float(match.group(1))))
-            except ValueError:
-                pass
+            except ValueError as e:
+                logger.debug("value_parsing_failed", error=str(e))
         elif line.startswith("EVALUATION:"):
             evaluation = line[11:].strip()
     

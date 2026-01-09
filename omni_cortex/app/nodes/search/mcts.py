@@ -161,8 +161,8 @@ Respond with ONLY a decimal number between 0.0 and 1.0.
         match = re.search(r'(\d+\.?\d*)', response.strip())
         if match:
             return max(0.0, min(1.0, float(match.group(1))))
-    except ValueError:
-        pass
+    except ValueError as e:
+        logger.debug("value_parsing_failed", response=response.strip()[:50], error=str(e))
     
     return 0.5
 

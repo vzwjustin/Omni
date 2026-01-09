@@ -264,7 +264,7 @@ async def pal_node(state: GraphState) -> GraphState:
 
 ## Statistics
 - Computational steps: {len(computational_steps)}
-- Lines of code generated: {sum(len(s.code.split('\\n')) for s in computational_steps)}
+- Lines of code generated: {sum(s.code.count(chr(10)) + 1 for s in computational_steps)}
 """
 
     state["final_answer"] = final_answer

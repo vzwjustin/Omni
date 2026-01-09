@@ -292,6 +292,76 @@ Return ONLY the optimized prompt, no explanations."""
 # LLM Client Wrappers
 # =============================================================================
 
+def _create_google_client(settings, model_name: str, temperature: float, max_tokens: int) -> Any:
+    if not settings.google_api_key:
+        raise ProviderNotConfiguredError(
+            "LLM_PROVIDER=google but GOOGLE_API_KEY is not set",
+            details={"provider": "google", "env_var": "GOOGLE_API_KEY"}
+        )
+    from langchain_google_genai import ChatGoogleGenerativeAI
+    return ChatGoogleGenerativeAI(
+        model=model_name,
+        google_api_key=settings.google_api_key,
+        temperature=temperature,
+        max_output_tokens=max_tokens
+    )
+
+
+def _create_anthropic_client(settings, model_name: str, temperature: float, max_tokens: int) -> Any:
+    if not settings.anthropic_api_key:
+        raise ProviderNotConfiguredError(
+            "LLM_PROVIDER=anthropic but ANTHROPIC_API_KEY is not set",
+            details={"provider": "anthropic", "env_var": "ANTHROPIC_API_KEY"}
+        )
+    from langchain_anthropic import ChatAnthropic
+    return ChatAnthropic(
+        model=model_name,
+        api_key=settings.anthropic_api_key,
+        temperature=temperature,
+        max_tokens=max_tokens
+    )
+
+
+def _create_openai_client(settings, model_name: str, temperature: float, max_tokens: int) -> Any:
+    if not settings.openai_api_key:
+        raise ProviderNotConfiguredError(
+            "LLM_PROVIDER=openai but OPENAI_API_KEY is not set",
+            details={"provider": "openai", "env_var": "OPENAI_API_KEY"}
+        )
+    from langchain_openai import ChatOpenAI
+    return ChatOpenAI(
+        model=model_name,
+        api_key=settings.openai_api_key,
+        temperature=temperature,
+        max_tokens=max_tokens
+    )
+
+
+def _create_openrouter_client(settings, model_name: str, temperature: float, max_tokens: int) -> Any:
+    if not settings.openrouter_api_key:
+        raise ProviderNotConfiguredError(
+            "LLM_PROVIDER=openrouter but OPENROUTER_API_KEY is not set",
+            details={"provider": "openrouter", "env_var": "OPENROUTER_API_KEY"}
+        )
+    from langchain_openai import ChatOpenAI
+    return ChatOpenAI(
+        model=model_name,
+        api_key=settings.openrouter_api_key,
+        base_url=settings.openrouter_base_url,
+        temperature=temperature,
+        max_tokens=max_tokens
+    )
+
+
+# Provider Registry
+PROVIDER_FACTORIES = {
+    "google": _create_google_client,
+    "anthropic": _create_anthropic_client,
+    "openai": _create_openai_client,
+    "openrouter": _create_openrouter_client,
+}
+
+
 def _get_llm_client(
     model_type: str,
     temperature: float,
@@ -300,7 +370,7 @@ def _get_llm_client(
     """
     Create and return an LLM client based on provider configuration.
 
-    Centralizes all provider selection logic to eliminate duplication.
+    Centralizes all provider selection logic using a strategy pattern.
 
     Args:
         model_type: Either "deep_reasoning" or "fast_synthesis" to select the model
@@ -308,12 +378,13 @@ def _get_llm_client(
         max_tokens: Maximum tokens for response
 
     Returns:
-        Configured LangChain chat client (ChatAnthropic or ChatOpenAI)
+        Configured LangChain chat client (ChatAnthropic, ChatOpenAI, or ChatGoogleGenerativeAI)
 
     Raises:
         ProviderNotConfiguredError: If no valid provider is configured or pass-through mode is active
     """
-    provider = get_settings().llm_provider.lower()
+    settings = get_settings()
+    provider = settings.llm_provider.lower()
 
     # Handle explicit pass-through mode
     if provider == "pass-through":
@@ -324,20 +395,9 @@ def _get_llm_client(
             details={"provider": "pass-through", "mode": "disabled"}
         )
 
-    # Select the appropriate model name based on type
-    settings = get_settings()
-    if model_type == "deep_reasoning":
-        base_model = settings.deep_reasoning_model
-    else:
-        base_model = settings.fast_synthesis_model
-
-    # Helper to strip provider prefix from model name (e.g., "anthropic/claude-3" -> "claude-3")
-    def strip_prefix(model: str) -> str:
-        return model.split("/")[-1] if "/" in model else model
-
     # Determine effective provider: explicit setting takes priority, then auto-detect
     effective_provider = None
-    if provider in ("google", "anthropic", "openai", "openrouter"):
+    if provider in PROVIDER_FACTORIES:
         effective_provider = provider
     elif settings.google_api_key:
         effective_provider = "google"
@@ -354,81 +414,48 @@ def _get_llm_client(
             details={"provider": "none", "hint": "Set LLM_PROVIDER and corresponding API key"}
         )
 
-    # Create client based on effective provider
-    if effective_provider == "google":
-        if not settings.google_api_key:
-            raise ProviderNotConfiguredError(
-                "LLM_PROVIDER=google but GOOGLE_API_KEY is not set",
-                details={"provider": "google", "env_var": "GOOGLE_API_KEY"}
-            )
-        from langchain_google_genai import ChatGoogleGenerativeAI
-        # Google uses model name like "gemini-2.0-flash" (strip google/ prefix if present)
-        model_name = strip_prefix(base_model)
-        return ChatGoogleGenerativeAI(
-            model=model_name,
-            google_api_key=settings.google_api_key,
-            temperature=temperature,
-            max_output_tokens=max_tokens
-        )
-    elif effective_provider == "anthropic":
-        if not settings.anthropic_api_key:
-            raise ProviderNotConfiguredError(
-                "LLM_PROVIDER=anthropic but ANTHROPIC_API_KEY is not set",
-                details={"provider": "anthropic", "env_var": "ANTHROPIC_API_KEY"}
-            )
-        from langchain_anthropic import ChatAnthropic
-        return ChatAnthropic(
-            model=strip_prefix(base_model),
-            api_key=settings.anthropic_api_key,
-            temperature=temperature,
-            max_tokens=max_tokens
-        )
-    elif effective_provider == "openai":
-        if not settings.openai_api_key:
-            raise ProviderNotConfiguredError(
-                "LLM_PROVIDER=openai but OPENAI_API_KEY is not set",
-                details={"provider": "openai", "env_var": "OPENAI_API_KEY"}
-            )
-        from langchain_openai import ChatOpenAI
-        return ChatOpenAI(
-            model=strip_prefix(base_model),
-            api_key=settings.openai_api_key,
-            temperature=temperature,
-            max_tokens=max_tokens
-        )
-    elif effective_provider == "openrouter":
-        if not settings.openrouter_api_key:
-            raise ProviderNotConfiguredError(
-                "LLM_PROVIDER=openrouter but OPENROUTER_API_KEY is not set",
-                details={"provider": "openrouter", "env_var": "OPENROUTER_API_KEY"}
-            )
-        from langchain_openai import ChatOpenAI
-        # OpenRouter uses full model path (no stripping)
-        return ChatOpenAI(
-            model=base_model,
-            api_key=settings.openrouter_api_key,
-            base_url=settings.openrouter_base_url,
-            temperature=temperature,
-            max_tokens=max_tokens
+    factory = PROVIDER_FACTORIES.get(effective_provider)
+    if not factory:
+        raise ProviderNotConfiguredError(
+            f"Unknown provider: {effective_provider}",
+            details={"provider": effective_provider}
         )
 
-    # This should never be reached due to the check above, but satisfies type checker
-    raise ProviderNotConfiguredError(
-        f"Unknown provider: {effective_provider}",
-        details={"provider": effective_provider}
-    )
+    # Select the appropriate model name based on type
+    if model_type == "deep_reasoning":
+        base_model = settings.deep_reasoning_model
+    else:
+        base_model = settings.fast_synthesis_model
+
+    # Helper to strip provider prefix from model name (e.g., "anthropic/claude-3" -> "claude-3")
+    # OpenRouter needs the full path, others might prefer stripped
+    model_name = base_model
+    if effective_provider != "openrouter" and "/" in base_model:
+        model_name = base_model.split("/")[-1]
+
+    return factory(settings, model_name, temperature, max_tokens)
 
 
 def _estimate_tokens(text: str) -> int:
     """
-    Estimate token count from text.
+    Estimate token count from text using a character-based heuristic.
 
-    Note: This is a rough heuristic (1 token ~ 4 characters). For accurate
-    counting, consider using tiktoken for OpenAI models or the anthropic
-    tokenizer for Claude models. The estimate is sufficient for tracking
-    approximate usage but should not be relied upon for precise billing
-    or context window management.
+    This function assumes approximately 4 characters per token, which is a common
+    heuristic for English text with BPE tokenizers (like GPT-4's).
+
+    Args:
+        text (str): The input text to estimate.
+
+    Returns:
+        int: The estimated number of tokens. Returns 0 for empty strings.
+
+    Note:
+        This is not a replacement for a real tokenizer (like `tiktoken`).
+        Use this only for rough logging or bounding, not for precise billing
+        or context window management.
     """
+    if not text:
+        return 0
     return len(text) // 4
 
 

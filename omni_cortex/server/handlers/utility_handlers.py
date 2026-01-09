@@ -12,6 +12,7 @@ from mcp.types import TextContent
 
 from app.langchain_integration import get_memory, save_to_langchain_memory
 from app.core.context_gateway import get_context_gateway
+from app.core.audit import log_tool_call
 from app.core.context_utils import (
     count_tokens,
     compress_content,
@@ -123,6 +124,37 @@ async def handle_save_context(arguments: dict) -> list[TextContent]:
 async def handle_execute_code(arguments: dict) -> list[TextContent]:
     """Execute Python code in sandboxed environment."""
     from app.nodes.code.pot import _safe_execute
+    from app.core.settings import get_settings
+    import time
+    
+    # Code execution rate limiter state (sliding window)
+    if not hasattr(handle_execute_code, "_executions"):
+        handle_execute_code._executions = []
+    
+    settings = get_settings()
+    max_rpm = settings.rate_limit_execute_rpm
+    now = time.time()
+    window_start = now - 60  # 1-minute sliding window
+    
+    # Clean old entries
+    handle_execute_code._executions = [t for t in handle_execute_code._executions if t > window_start]
+    
+    # Check rate limit
+    if len(handle_execute_code._executions) >= max_rpm:
+        wait_time = int(handle_execute_code._executions[0] - window_start) + 1
+        logger.warning(
+            "execute_code_rate_limited",
+            executions_in_window=len(handle_execute_code._executions),
+            limit=max_rpm,
+            wait_seconds=wait_time
+        )
+        return [TextContent(type="text", text=json.dumps({
+            "success": False,
+            "error": f"Rate limit exceeded: {max_rpm} executions/minute. Try again in {wait_time}s."
+        }))]
+    
+    # Record this execution
+    handle_execute_code._executions.append(now)
 
     # Validate inputs
     try:
@@ -188,6 +220,12 @@ async def handle_prepare_context(arguments: dict) -> list[TextContent]:
             "output_format"
         )
     except ValidationError as e:
+        log_tool_call(
+            tool_name="prepare_context",
+            arguments=arguments,
+            success=False,
+            error=str(e)
+        )
         return [TextContent(type="text", text=json.dumps({
             "error": f"Validation error: {str(e)}"
         }, indent=2))]
@@ -202,6 +240,13 @@ async def handle_prepare_context(arguments: dict) -> list[TextContent]:
             search_docs=search_docs,
         )
 
+        # Audit log successful call
+        log_tool_call(
+            tool_name="prepare_context",
+            arguments=arguments,
+            success=True
+        )
+
         if output_format == "json":
             return [TextContent(type="text", text=json.dumps(context.to_dict(), indent=2))]
         else:
@@ -214,6 +259,12 @@ async def handle_prepare_context(arguments: dict) -> list[TextContent]:
         # missing credentials). We log with error_type for diagnostics and provide
         # a hint about common configuration issues rather than exposing raw errors.
         logger.error("context_gateway_failed", error=str(e), error_type=type(e).__name__)
+        log_tool_call(
+            tool_name="prepare_context",
+            arguments=arguments,
+            success=False,
+            error=str(e)
+        )
         return [TextContent(type="text", text=json.dumps({
             "error": str(e),
             "hint": "Ensure GOOGLE_API_KEY is set for Gemini-powered context preparation"

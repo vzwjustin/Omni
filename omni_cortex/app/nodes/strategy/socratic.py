@@ -156,8 +156,8 @@ QUALITY: [0.0-1.0]
                 match = re.search(r'(\d+\.?\d*)', line)
                 if match:
                     quality = max(0.0, min(1.0, float(match.group(1))))
-            except ValueError:
-                pass
+            except ValueError as e:
+                logger.debug("value_parsing_failed", error=str(e))
     
     return critique, quality
 

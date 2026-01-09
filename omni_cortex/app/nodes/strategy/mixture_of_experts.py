@@ -134,8 +134,8 @@ CONFIDENCE: [0.0-1.0 how confident you are in this domain]
                 match = re.search(r'(\d+\.?\d*)', line)
                 if match:
                     confidence = max(0.0, min(1.0, float(match.group(1))))
-            except ValueError:
-                pass
+            except ValueError as e:
+                logger.debug("confidence_parsing_failed", line=line[:50], error=str(e))
     
     return analysis, confidence
 
@@ -186,8 +186,8 @@ WEIGHT_5: [0.0-1.0]
                 match = re.search(r'(\d+\.?\d*)', line)
                 if match:
                     weights.append(max(0.0, min(1.0, float(match.group(1)))))
-            except ValueError:
-                pass
+            except ValueError as e:
+                logger.debug("value_parsing_failed", error=str(e))
     
     # Ensure we have weights for all experts
     while len(weights) < len(experts):

@@ -24,14 +24,18 @@ class OmniCortexSettings(BaseSettings):
     mcp_server_host: str = Field(default="0.0.0.0", alias="MCP_SERVER_HOST")
     mcp_server_port: int = Field(default=8000, alias="MCP_SERVER_PORT")
 
+    # Model Defaults
+    DEFAULT_MODEL_NAME: str = "gemini-3-flash-preview"
+    DEFAULT_EMBEDDING_MODEL: str = "text-embedding-3-small"
+
     # Routing
-    routing_model: str = Field(default="gemini-3-flash-preview", alias="ROUTING_MODEL")
+    routing_model: str = Field(default=DEFAULT_MODEL_NAME, alias="ROUTING_MODEL")
     routing_temperature: float = Field(default=0.7, ge=0.0, le=2.0, alias="ROUTING_TEMPERATURE")
 
     # LLM
     llm_provider: str = Field(default="google", alias="LLM_PROVIDER")
-    deep_reasoning_model: str = Field(default="gemini-3-flash-preview", alias="DEEP_REASONING_MODEL")
-    fast_synthesis_model: str = Field(default="gemini-3-flash-preview", alias="FAST_SYNTHESIS_MODEL")
+    deep_reasoning_model: str = Field(default=DEFAULT_MODEL_NAME, alias="DEEP_REASONING_MODEL")
+    fast_synthesis_model: str = Field(default=DEFAULT_MODEL_NAME, alias="FAST_SYNTHESIS_MODEL")
     openrouter_base_url: str = Field(default="https://openrouter.ai/api/v1", alias="OPENROUTER_BASE_URL")
 
     # Memory
@@ -45,7 +49,7 @@ class OmniCortexSettings(BaseSettings):
     chroma_persist_dir: Path = Field(default=Path("/app/data/chroma"), alias="CHROMA_PERSIST_DIR")
     rag_default_k: int = Field(default=5, ge=1, le=50, alias="RAG_DEFAULT_K")
     embedding_provider: str = Field(default="openrouter", alias="EMBEDDING_PROVIDER")
-    embedding_model: str = Field(default="text-embedding-3-small", alias="EMBEDDING_MODEL")
+    embedding_model: str = Field(default=DEFAULT_EMBEDDING_MODEL, alias="EMBEDDING_MODEL")
 
     # Framework Limits
     max_reasoning_depth: int = Field(default=10, ge=1, le=100, alias="MAX_REASONING_DEPTH")
@@ -74,6 +78,8 @@ class OmniCortexSettings(BaseSettings):
     rate_limit_memory_rpm: int = Field(default=120, ge=1, le=1000, alias="RATE_LIMIT_MEMORY_RPM")
     rate_limit_utility_rpm: int = Field(default=120, ge=1, le=1000, alias="RATE_LIMIT_UTILITY_RPM")
     rate_limit_global_rpm: int = Field(default=200, ge=1, le=2000, alias="RATE_LIMIT_GLOBAL_RPM")
+    # Code execution has stricter limits due to resource consumption risk
+    rate_limit_execute_rpm: int = Field(default=10, ge=1, le=60, alias="RATE_LIMIT_EXECUTE_RPM")
 
     @field_validator("chroma_persist_dir", mode="before")
     @classmethod

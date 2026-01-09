@@ -4,50 +4,118 @@ Embedding Providers for Omni-Cortex
 Supports: Gemini (free), OpenAI, OpenRouter, HuggingFace (local)
 """
 
+import hashlib
+import time
+from collections import OrderedDict
 from typing import Any
+
 import structlog
 
 from ..core.settings import get_settings
 
 logger = structlog.get_logger("embeddings")
 
+# Cache configuration
+EMBEDDING_CACHE_MAX_SIZE = 1000
+
 
 class GeminiEmbeddings:
     """LangChain-compatible wrapper for Gemini embeddings (FREE tier)."""
 
     def __init__(self, api_key: str):
-        import google.generativeai as genai
-        genai.configure(api_key=api_key)
-        self._genai = genai
-        self.model = "models/text-embedding-004"
+        # Try new google-genai package first, fall back to deprecated
+        try:
+            from google import genai
+            self._client = genai.Client(api_key=api_key)
+            self._use_new_api = True
+        except ImportError:
+            import google.generativeai as genai
+            genai.configure(api_key=api_key)
+            self._genai = genai
+            self._use_new_api = False
+        self.model = "text-embedding-004"
+
+        # LRU cache for embed_query (OrderedDict-based)
+        self._cache: OrderedDict[str, list] = OrderedDict()
+        self._cache_max_size = EMBEDDING_CACHE_MAX_SIZE
+
+    def _get_cache_key(self, text: str) -> str:
+        """Generate a hash key for cache lookup."""
+        return hashlib.sha256(text.encode('utf-8')).hexdigest()[:16]
 
     def embed_documents(self, texts: list) -> list:
         """Embed a list of documents."""
         if not texts:
             return []
+
+        start_time = time.perf_counter()
         results = []
         # Batch in groups of 100 (Gemini API limit)
         for i in range(0, len(texts), 100):
             batch = texts[i:i+100]
-            result = self._genai.embed_content(
-                model=self.model,
-                content=batch,
-                task_type="retrieval_document"
-            )
-            if isinstance(result['embedding'][0], list):
-                results.extend(result['embedding'])
+            if self._use_new_api:
+                result = self._client.models.embed_content(
+                    model=self.model,
+                    contents=batch,
+                )
+                # New API returns EmbedContentResponse with embeddings list
+                for emb in result.embeddings:
+                    results.append(emb.values)
             else:
-                results.append(result['embedding'])
+                result = self._genai.embed_content(
+                    model=f"models/{self.model}",
+                    content=batch,
+                    task_type="retrieval_document"
+                )
+                if isinstance(result['embedding'][0], list):
+                    results.extend(result['embedding'])
+                else:
+                    results.append(result['embedding'])
+
+        duration_ms = (time.perf_counter() - start_time) * 1000
+        logger.info("embedding_complete", provider="gemini", texts=len(texts), duration_ms=round(duration_ms, 2))
         return results
 
     def embed_query(self, text: str) -> list:
-        """Embed a single query."""
-        result = self._genai.embed_content(
-            model=self.model,
-            content=text,
-            task_type="retrieval_query"
-        )
-        return result['embedding']
+        """Embed a single query with LRU caching."""
+        hash_key = self._get_cache_key(text)
+
+        # Check cache first
+        if hash_key in self._cache:
+            # Move to end (most recently used)
+            self._cache.move_to_end(hash_key)
+            logger.debug("embedding_cache_hit", text_hash=hash_key)
+            return self._cache[hash_key]
+
+        logger.debug("embedding_cache_miss", text_hash=hash_key)
+
+        # Cache miss - compute embedding
+        start_time = time.perf_counter()
+
+        if self._use_new_api:
+            result = self._client.models.embed_content(
+                model=self.model,
+                contents=text,
+            )
+            embedding = result.embeddings[0].values
+        else:
+            result = self._genai.embed_content(
+                model=f"models/{self.model}",
+                content=text,
+                task_type="retrieval_query"
+            )
+            embedding = result['embedding']
+
+        duration_ms = (time.perf_counter() - start_time) * 1000
+        logger.info("embedding_complete", provider="gemini", texts=1, duration_ms=round(duration_ms, 2))
+
+        # Add to cache with LRU eviction
+        self._cache[hash_key] = embedding
+        if len(self._cache) > self._cache_max_size:
+            # Remove oldest (first) item
+            self._cache.popitem(last=False)
+
+        return embedding
 
 
 def get_embeddings() -> Any:

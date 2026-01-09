@@ -228,8 +228,8 @@ NOTES: [Any final observations]
     if match:
         try:
             score = max(0.0, min(1.0, float(match.group(1))))
-        except ValueError:
-            pass
+        except ValueError as e:
+            logger.debug("score_parsing_failed", line=match.group(1) if match else "", error=str(e))
     
     return response, score
 

@@ -6,13 +6,20 @@ Supports framework chaining for complex multi-step tasks.
 Designed for vibe coders and senior engineers who just want it to work.
 """
 
-import re
+import json
 import structlog
+from functools import lru_cache
 from typing import Optional, List, Tuple
 
 from ..state import GraphState
 from .constants import CONTENT
-from .errors import RoutingError, FrameworkNotFoundError
+from .errors import (
+    RoutingError,
+    FrameworkNotFoundError,
+    LLMError,
+    ProviderNotConfiguredError,
+    RateLimitError,
+)
 from .vibe_dictionary import VIBE_DICTIONARY
 from .routing import (
     CATEGORIES,
@@ -24,6 +31,44 @@ from .routing.complexity import ComplexityEstimator
 from .routing.vibes import VibeMatcher
 
 logger = structlog.get_logger("router")
+
+
+# ==========================================================================
+# PROMPT TEMPLATES
+# ==========================================================================
+
+SPECIALIST_PROMPT_TEMPLATE = """You are the **{specialist}** - a specialist agent for {category_description}.
+
+TASK: {query}
+{context_section}
+
+## Available Frameworks (pick 1 or chain multiple):
+{framework_descriptions}
+
+## Pre-defined Chains (for complex tasks):
+{chain_descriptions}
+
+## When to Chain (IMPORTANT):
+Use a chain of 2-4 frameworks when the task has ANY of these signals:
+- Multiple distinct phases (e.g., "first... then... finally...")
+- Requires both analysis AND implementation
+- Mentions verification, testing, or review as a final step
+- Involves understanding before changing
+- Security-sensitive changes that need audit
+- Complex debugging that needs hypothesis -> test -> verify
+
+Single framework only for: quick fixes, simple questions, one-step tasks.
+
+## Instructions:
+1. Analyze the task - look for multi-phase signals
+2. For SIMPLE tasks: recommend a single framework
+3. For COMPLEX tasks: recommend a chain of 2-4 frameworks in logical order
+
+Respond EXACTLY in this format:
+COMPLEXITY: simple|complex
+FRAMEWORKS: framework1 -> framework2 -> framework3
+REASONING: Brief explanation of your choice
+"""
 
 
 class HyperRouter:
@@ -53,10 +98,13 @@ class HyperRouter:
     # HIERARCHICAL ROUTING - Stage 2: Specialist Agent Selection
     # ==========================================================================
 
-    def _get_specialist_prompt(self, category: str, query: str, context: str = "") -> str:
+    @lru_cache(maxsize=16)
+    def _get_specialist_prompt_template(self, category: str) -> tuple:
         """
-        Generate a specialist agent prompt for framework selection within a category.
-        The specialist can recommend single frameworks or chains.
+        Generate the static parts of a specialist agent prompt for a category.
+        Returns (template, specialist_name) to be formatted with query/context.
+
+        Cached by category only to prevent cache thrashing from unique queries.
         """
         cat_info = CATEGORIES.get(category, CATEGORIES["exploration"])
         frameworks = cat_info["frameworks"]
@@ -75,38 +123,30 @@ class HyperRouter:
         for pattern_name, chain in chain_patterns.items():
             chain_descriptions.append(f"  - {pattern_name}: {' -> '.join(chain)}")
 
-        return f"""You are the **{specialist}** - a specialist agent for {cat_info['description']}.
+        chain_desc_text = "\n".join(chain_descriptions) if chain_descriptions else "  (none - single framework recommended)"
+        fw_desc_text = "\n".join(fw_descriptions)
+        
+        return (specialist, fw_desc_text, chain_desc_text)
 
-TASK: {query}
-{f'CONTEXT: {context}' if context else ''}
+    def _get_specialist_prompt(self, category: str, query: str, context: str = "") -> str:
+        """
+        Generate a specialist agent prompt for framework selection within a category.
+        The specialist can recommend single frameworks or chains.
 
-## Available Frameworks (pick 1 or chain multiple):
-{chr(10).join(fw_descriptions)}
+        Uses cached template parts for efficiency.
+        """
+        specialist, fw_desc_text, chain_desc_text = self._get_specialist_prompt_template(category)
+        context_section = f"CONTEXT: {context}" if context else ""
+        cat_info = CATEGORIES.get(category, CATEGORIES["exploration"])
 
-## Pre-defined Chains (for complex tasks):
-{chr(10).join(chain_descriptions) if chain_descriptions else '  (none - single framework recommended)'}
-
-## When to Chain (IMPORTANT):
-Use a chain of 2-4 frameworks when the task has ANY of these signals:
-- Multiple distinct phases (e.g., "first... then... finally...")
-- Requires both analysis AND implementation
-- Mentions verification, testing, or review as a final step
-- Involves understanding before changing
-- Security-sensitive changes that need audit
-- Complex debugging that needs hypothesis -> test -> verify
-
-Single framework only for: quick fixes, simple questions, one-step tasks.
-
-## Instructions:
-1. Analyze the task - look for multi-phase signals
-2. For SIMPLE tasks: recommend a single framework
-3. For COMPLEX tasks: recommend a chain of 2-4 frameworks in logical order
-
-Respond EXACTLY in this format:
-COMPLEXITY: simple|complex
-FRAMEWORKS: framework1 -> framework2 -> framework3
-REASONING: Brief explanation of your choice
-"""
+        return SPECIALIST_PROMPT_TEMPLATE.format(
+            specialist=specialist,
+            category_description=cat_info["description"],
+            query=query,
+            context_section=context_section,
+            framework_descriptions=fw_desc_text,
+            chain_descriptions=chain_desc_text,
+        )
 
     async def _select_with_specialist(
         self,
@@ -131,13 +171,42 @@ REASONING: Brief explanation of your choice
             context += f"\nIDE Context: {ide_context}"
 
         # Check for chain pattern match first (fast path)
+        chain_match = self._check_chain_patterns(query, chain_patterns)
+        if chain_match:
+            return chain_match
+
+        # Try specialist agent for nuanced selection
+        result = await self._invoke_specialist_agent(category, query, context)
+        if result:
+            return result
+
+        # Default: pick first framework in category (graceful fallback)
+        fallback_reason = f"[Fallback] Local pattern match for {category}"
+        return [frameworks[0]], fallback_reason
+
+    def _check_chain_patterns(
+        self,
+        query: str,
+        chain_patterns: dict
+    ) -> Optional[Tuple[List[str], str]]:
+        """Check if query matches any predefined chain pattern."""
         query_lower = query.lower()
         for pattern_name, chain in chain_patterns.items():
             pattern_words = pattern_name.replace("_", " ").split()
             if all(word in query_lower for word in pattern_words):
                 return chain, f"Matched chain pattern: {pattern_name}"
+        return None
 
-        # Try specialist agent for nuanced selection
+    async def _invoke_specialist_agent(
+        self,
+        category: str,
+        query: str,
+        context: str
+    ) -> Optional[Tuple[List[str], str]]:
+        """
+        Invoke the specialist LLM agent for framework selection.
+        Returns None on failure to allow graceful fallback.
+        """
         try:
             from ..langchain_integration import get_chat_model
 
@@ -145,75 +214,74 @@ REASONING: Brief explanation of your choice
             llm = get_chat_model("fast")
             response = await llm.ainvoke(prompt)
 
-            # Handle different response formats
-            content = response.content if hasattr(response, "content") else str(response)
-            if isinstance(content, list):
-                response_text = content[0].get('text', str(content)) if content else ""
-            else:
-                response_text = content
+            response_text = self._extract_response_text(response)
+            return self._parse_specialist_response(response_text)
 
-            # Parse response
-            frameworks_line = ""
-            reasoning = ""
-            for line in response_text.split("\n"):
-                if line.startswith("FRAMEWORKS:"):
-                    frameworks_line = line.replace("FRAMEWORKS:", "").strip()
-                elif line.startswith("REASONING:"):
-                    reasoning = line.replace("REASONING:", "").strip()
+        except RateLimitError as e:
+            logger.warning(
+                "gemini_billing_issue",
+                error=repr(e),
+                hint="Using local pattern matching. Add GOOGLE_API_KEY with credits for AI routing."
+            )
+        except ProviderNotConfiguredError as e:
+            logger.warning(
+                "gemini_auth_issue",
+                error=repr(e),
+                hint="Set GOOGLE_API_KEY for Gemini-powered routing."
+            )
+        except LLMError as e:
+            logger.warning("specialist_selection_failed", error=repr(e))
+        except json.JSONDecodeError as e:
+            logger.warning(
+                "specialist_response_parse_error",
+                error=str(e)[:100],
+                hint="LLM returned malformed response"
+            )
+        except (AttributeError, TypeError, KeyError) as e:
+            # Response format errors from unexpected LLM output structure
+            wrapped_error = LLMError(
+                f"Unexpected response format: {str(e)[:100]}",
+                details={"category": category, "original_error": type(e).__name__}
+            )
+            logger.warning("specialist_response_format_error", error=repr(wrapped_error))
 
-            if frameworks_line:
-                # Parse chain: "fw1 -> fw2 -> fw3" or "fw1"
-                selected = [fw.strip() for fw in frameworks_line.replace("->", ",").replace("→", ",").split(",")]
-                selected = [fw for fw in selected if fw in FRAMEWORKS]
-                if selected:
-                    return selected, reasoning or f"Specialist selected: {frameworks_line}"
+        return None
 
-        except Exception as e:
-            # INTENTIONAL BROAD CATCH: Routing must degrade gracefully to maintain system
-            # availability. Any LLM/API failure should fall back to pattern matching rather
-            # than crash the routing pipeline. This is a critical reliability boundary.
-            #
-            # We wrap known error types in our exception hierarchy for observability,
-            # then continue with fallback behavior.
-            from .errors import RateLimitError, ProviderNotConfiguredError, LLMError
-            
-            error_msg = str(e).lower()
-            error_type = type(e).__name__
+    def _extract_response_text(self, response) -> str:
+        """Extract text content from LLM response, handling various formats."""
+        content = response.content if hasattr(response, "content") else str(response)
+        if isinstance(content, list):
+            return content[0].get("text", str(content)) if content else ""
+        return content
 
-            # Categorize and log with structured exceptions
-            if "insufficient" in error_msg or "quota" in error_msg or "billing" in error_msg:
-                wrapped_error = RateLimitError(
-                    "Gemini quota exceeded",
-                    details={"category": category, "original_error": error_type}
-                )
-                logger.warning(
-                    "gemini_billing_issue",
-                    error=repr(wrapped_error),
-                    hint="Using local pattern matching. Add GOOGLE_API_KEY with credits for AI routing."
-                )
-            elif "api_key" in error_msg or "unauthorized" in error_msg:
-                wrapped_error = ProviderNotConfiguredError(
-                    "Gemini API key missing or invalid",
-                    details={"category": category}
-                )
-                logger.warning(
-                    "gemini_auth_issue",
-                    error=repr(wrapped_error),
-                    hint="Set GOOGLE_API_KEY for Gemini-powered routing."
-                )
-            else:
-                wrapped_error = LLMError(
-                    f"Specialist selection failed: {str(e)[:100]}",
-                    details={"category": category, "original_error": error_type}
-                )
-                logger.warning(
-                    "specialist_selection_failed",
-                    error=repr(wrapped_error)
-                )
+    def _parse_specialist_response(
+        self,
+        response_text: str
+    ) -> Optional[Tuple[List[str], str]]:
+        """Parse the specialist agent response to extract frameworks and reasoning."""
+        frameworks_line = ""
+        reasoning = ""
 
-        # Default: pick first framework in category (graceful fallback)
-        fallback_reason = f"[Fallback] Local pattern match for {category}"
-        return [frameworks[0]], fallback_reason
+        for line in response_text.split("\n"):
+            if line.startswith("FRAMEWORKS:"):
+                frameworks_line = line.replace("FRAMEWORKS:", "").strip()
+            elif line.startswith("REASONING:"):
+                reasoning = line.replace("REASONING:", "").strip()
+
+        if not frameworks_line:
+            return None
+
+        # Parse chain: "fw1 -> fw2 -> fw3" or "fw1"
+        selected = [
+            fw.strip()
+            for fw in frameworks_line.replace("->", ",").replace("→", ",").split(",")
+        ]
+        selected = [fw for fw in selected if fw in FRAMEWORKS]
+
+        if not selected:
+            return None
+
+        return selected, reasoning or f"Specialist selected: {frameworks_line}"
 
     async def select_framework_chain(
         self,

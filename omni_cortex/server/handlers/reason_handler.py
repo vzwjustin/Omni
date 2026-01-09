@@ -10,6 +10,7 @@ import traceback
 
 from mcp.types import TextContent
 
+from app.core.audit import log_tool_call
 from ..framework_prompts import FRAMEWORKS
 from .validation import (
     ValidationError,
@@ -41,6 +42,12 @@ async def handle_reason(
         context = validate_context(arguments.get("context"))
         thread_id = validate_thread_id(arguments.get("thread_id"), required=False)
     except ValidationError as e:
+        log_tool_call(
+            tool_name="reason",
+            arguments=arguments,
+            success=False,
+            error=str(e)
+        )
         return [TextContent(type="text", text=f"Validation error: {str(e)}")]
 
     # Generate structured brief using the new protocol
@@ -74,6 +81,14 @@ async def handle_reason(
         # Gate warning only if not proceeding
         if gate.recommendation.action.value != "PROCEED":
             output += f"\n\n⚠️ {gate.recommendation.action.value}: {gate.recommendation.notes}"
+
+        # Audit log successful call
+        log_tool_call(
+            tool_name="reason",
+            arguments=arguments,
+            thread_id=thread_id,
+            success=True
+        )
 
     except Exception as e:
         # Graceful degradation: intentionally catching all exceptions to ensure
@@ -110,5 +125,14 @@ async def handle_reason(
         output += f"Best for: {', '.join(fw_info.get('best_for', fw.get('best_for', [])))}\n"
         output += "\n---\n\n"
         output += prompt
+
+        # Audit log fallback (still successful, but with degraded mode)
+        log_tool_call(
+            tool_name="reason",
+            arguments=arguments,
+            thread_id=thread_id,
+            success=True,
+            error=f"fallback_mode: {type(e).__name__}"
+        )
 
     return [TextContent(type="text", text=output)]

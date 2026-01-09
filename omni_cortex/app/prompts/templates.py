@@ -56,3 +56,58 @@ Existing code:
 
 Generate improved code:""")
 ])
+
+
+# Procoder Framework Prompts
+PROCODER_ANALYSIS_TEMPLATE = """Analyze this problem using Professional code generation methodology.
+
+PROBLEM: {query}
+CONTEXT: {code_context}
+
+What are the key aspects to address?
+
+ANALYSIS:
+"""
+
+PROCODER_STRATEGY_TEMPLATE = """Based on analysis, generate strategy for Professional code generation.
+
+ANALYSIS: {analysis}
+PROBLEM: {query}
+
+What's the execution plan?
+
+STRATEGY:
+"""
+
+PROCODER_ITERATION_TEMPLATE = """Execute iteration {iteration} of Professional code generation.
+
+STRATEGY: {strategy}
+PROBLEM: {query}
+CONTEXT: {code_context}
+{prev_context}
+
+Execute this iteration:
+
+OUTPUT:
+"""
+
+PROCODER_SCORE_TEMPLATE = """Rate quality of this iteration (0.0-1.0).
+
+OUTPUT: {output}
+PROBLEM: {query}
+
+SCORE:
+"""
+
+PROCODER_SYNTHESIS_TEMPLATE = """Synthesize final answer from Professional code generation iterations.
+
+ANALYSIS: {analysis}
+
+ITERATIONS:
+{iterations_summary}
+
+PROBLEM: {query}
+CONTEXT: {code_context}
+
+FINAL ANSWER:
+"""

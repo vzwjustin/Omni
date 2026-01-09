@@ -229,8 +229,8 @@ SYNTHESIS: [your synthesized solution]
                 match = re.search(r'(\d+\.?\d*)', line)
                 if match:
                     winner_score = max(0.0, min(1.0, float(match.group(1))))
-            except ValueError:
-                pass
+            except ValueError as e:
+                logger.debug("score_parsing_failed", line=line[:50], error=str(e))
         elif line.startswith("SYNTHESIS:"):
             synthesis = line.split(":", 1)[-1].strip()
     

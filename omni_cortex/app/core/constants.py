@@ -141,6 +141,9 @@ class LLMParams:
     TOP_P: float = 1.0                  # nucleus sampling
     TOP_K: int = 40                     # top-k sampling
 
+    # Token budgets
+    CONTEXT_TOKEN_BUDGET: int = 50000   # max tokens for prepared context
+
 
 @dataclass(frozen=True)
 class ServerConfig:

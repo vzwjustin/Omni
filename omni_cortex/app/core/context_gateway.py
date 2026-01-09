@@ -21,12 +21,13 @@ This module uses composition with specialized components:
 """
 
 import asyncio
+import re
 import threading
 import structlog
 from dataclasses import dataclass, field
 from typing import Optional, List, Dict, Any
 
-from .constants import CONTENT
+from .constants import CONTENT, LLM
 from .context import (
     QueryAnalyzer,
     FileDiscoverer,
@@ -128,7 +129,7 @@ class StructuredContext:
     dependencies: List[str] = field(default_factory=list)  # External deps to consider
 
     # Token Budget (Gemini optimizes to stay under this)
-    token_budget: int = 50000  # Max tokens for Claude prompt
+    token_budget: int = LLM.CONTEXT_TOKEN_BUDGET  # Max tokens for Claude prompt
     actual_tokens: int = 0  # Actual token count after generation
 
     def to_claude_prompt(self) -> str:
@@ -278,6 +279,59 @@ class ContextGateway:
         self._doc_searcher = doc_searcher or DocumentationSearcher()
         self._code_searcher = code_searcher or CodeSearcher()
 
+    def _fallback_analyze(self, query: str) -> Dict[str, Any]:
+        """
+        Fallback analyzer using pattern matching when Gemini is unavailable.
+
+        Uses regex patterns to detect task types based on keywords in the query.
+        This provides graceful degradation when the LLM-based analyzer fails.
+
+        Args:
+            query: The user's query string
+
+        Returns:
+            Dictionary with task_type, summary, complexity, framework, and framework_reason
+        """
+        query_lower = query.lower()
+
+        # Pattern definitions: (regex_pattern, task_type, framework)
+        patterns = [
+            (r'\b(debug|error|fix|bug|crash|exception|traceback|issue)\b',
+             "debug", "self_debugging"),
+            (r'\b(implement|add|create|build|new|feature|develop)\b',
+             "implement", "reason_flux"),
+            (r'\b(refactor|clean|improve|optimize|restructure|simplify)\b',
+             "refactor", "chain_of_verification"),
+            (r'\b(explain|how|what|why|understand|describe|clarify)\b',
+             "explain", "chain_of_note"),
+        ]
+
+        # Check patterns in order of priority
+        for pattern, task_type, framework in patterns:
+            if re.search(pattern, query_lower):
+                framework_reasons = {
+                    "debug": "Pattern-based routing: debugging task detected",
+                    "implement": "Pattern-based routing: implementation task detected",
+                    "refactor": "Pattern-based routing: refactoring task detected",
+                    "explain": "Pattern-based routing: explanation task detected",
+                }
+                return {
+                    "task_type": task_type,
+                    "summary": query,
+                    "complexity": "medium",
+                    "framework": framework,
+                    "framework_reason": framework_reasons.get(task_type, "Fallback pattern matching"),
+                }
+
+        # Default fallback
+        return {
+            "task_type": "general",
+            "summary": query,
+            "complexity": "medium",
+            "framework": "reason_flux",
+            "framework_reason": "Fallback: no specific pattern matched, using general-purpose reasoning",
+        }
+
     async def prepare_context(
         self,
         query: str,
@@ -402,14 +456,8 @@ class ContextGateway:
                 documentation_context=docs_context_str if docs_context_str else None
             )
         except Exception as e:
-            logger.error("query_analysis_failed", error=str(e))
-            query_analysis = {
-                "task_type": "general",
-                "summary": query,
-                "complexity": "medium",
-                "framework": "reason_flux",
-                "framework_reason": "Fallback due to analysis failure"
-            }
+            logger.warning("query_analysis_failed_using_fallback", error=str(e))
+            query_analysis = self._fallback_analyze(query)
 
         # Build structured context
         context = StructuredContext(

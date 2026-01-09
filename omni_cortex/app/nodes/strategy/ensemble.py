@@ -161,8 +161,8 @@ CONFIDENCE: [0.0-1.0]
         match = re.search(r'(\d+\.?\d*)', conf_response)
         if match:
             confidence = max(0.0, min(1.0, float(match.group(1))))
-    except ValueError:
-        pass
+    except ValueError as e:
+        logger.debug("confidence_parsing_failed", response=conf_response[:50], error=str(e))
     
     return response.strip(), confidence
 
@@ -202,8 +202,8 @@ QUALITY: [0.0-1.0]
                 match = re.search(r'(\d+\.?\d*)', eval_response)
                 if match:
                     evaluations.append(float(match.group(1)))
-            except ValueError:
-                pass
+            except ValueError as e:
+                logger.debug("value_parsing_failed", error=str(e))
         
         # Average cross-validation score
         avg_eval = sum(evaluations) / len(evaluations) if evaluations else 0.7

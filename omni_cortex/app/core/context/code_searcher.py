@@ -8,6 +8,7 @@ Searches the codebase using:
 
 import asyncio
 import os
+import shutil
 import structlog
 from dataclasses import dataclass
 from typing import List, Optional
@@ -17,13 +18,15 @@ from ..constants import CONTENT, SEARCH
 from ..errors import LLMError, ProviderNotConfiguredError, OmniCortexError
 from ..correlation import get_correlation_id
 
-# Try to import Google AI for query extraction
+# Try to import Google AI for query extraction (using new google-genai package)
 try:
-    import google.generativeai as genai
+    from google import genai
+    from google.genai import types
     GOOGLE_AI_AVAILABLE = True
 except ImportError:
     GOOGLE_AI_AVAILABLE = False
     genai = None
+    types = None
 
 logger = structlog.get_logger("context.code_searcher")
 
@@ -53,13 +56,13 @@ class CodeSearcher:
         self._model = None
         self._search_cmd = None
 
-    def _get_model(self):
-        """Get or create Gemini model for query extraction."""
+    def _get_client(self):
+        """Get or create Gemini client for query extraction."""
         if self._model is None:
             if not GOOGLE_AI_AVAILABLE:
                 raise ProviderNotConfiguredError(
-                    "google-generativeai not installed",
-                    details={"provider": "google", "package": "google-generativeai"}
+                    "google-genai not installed",
+                    details={"provider": "google", "package": "google-genai"}
                 )
 
             api_key = self.settings.google_api_key
@@ -69,10 +72,7 @@ class CodeSearcher:
                     details={"provider": "google", "env_var": "GOOGLE_API_KEY"}
                 )
 
-            genai.configure(api_key=api_key)
-            self._model = genai.GenerativeModel(
-                self.settings.routing_model or "gemini-2.0-flash"
-            )
+            self._model = genai.Client(api_key=api_key)
         return self._model
 
     def _detect_search_command(self) -> Optional[str]:
@@ -81,9 +81,9 @@ class CodeSearcher:
             return self._search_cmd
 
         # Try ripgrep first (faster)
-        if os.system("which rg > /dev/null 2>&1") == 0:
+        if shutil.which("rg"):
             self._search_cmd = "rg"
-        elif os.system("which grep > /dev/null 2>&1") == 0:
+        elif shutil.which("grep"):
             self._search_cmd = "grep"
         else:
             self._search_cmd = ""  # Empty string means none available
@@ -141,7 +141,8 @@ class CodeSearcher:
     async def _extract_search_queries(self, query: str) -> List[str]:
         """Extract specific search terms from the user's query."""
         try:
-            model = self._get_model()
+            client = self._get_client()
+            model = self.settings.routing_model or "gemini-3-flash-preview"
             prompt = f"""Extract 1-3 specific code search queries from this task:
 
 {query}
@@ -158,9 +159,10 @@ login_required
 JWT"""
 
             response = await asyncio.to_thread(
-                model.generate_content,
-                prompt,
-                generation_config={"temperature": 0.2}
+                client.models.generate_content,
+                model=model,
+                contents=prompt,
+                config=types.GenerateContentConfig(temperature=0.2)
             )
             search_queries = [
                 line.strip()

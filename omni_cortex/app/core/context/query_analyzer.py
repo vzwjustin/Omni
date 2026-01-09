@@ -189,7 +189,7 @@ Be specific and actionable. Focus on what Claude needs to execute effectively.""
         try:
             # Use new API with thinking mode if available
             if types:  # New google-genai package
-                model = self.settings.routing_model or "gemini-2.0-flash-thinking-exp-01-21"
+                model = self.settings.routing_model or "gemini-3-flash-preview"
                 
                 contents = [
                     types.Content(
@@ -198,39 +198,37 @@ Be specific and actionable. Focus on what Claude needs to execute effectively.""
                     ),
                 ]
                 
-                # Enable HIGH thinking mode for deep analysis
-                config = types.GenerateContentConfig(
-                    thinking_config=types.ThinkingConfig(
-                        thinking_level="HIGH",
-                    ),
-                    temperature=0.3,
-                    response_mime_type="application/json"
+                # Enable thinking config for models that support it:
+                # - Models with "thinking" in name (legacy experimental)
+                # - Gemini 3 models (all support thinking mode)
+                is_thinking_model = "thinking" in model.lower() or "gemini-3" in model.lower()
+                
+                if is_thinking_model:
+                    # Enable HIGH thinking mode for deep analysis
+                    config = types.GenerateContentConfig(
+                        thinking_config=types.ThinkingConfig(
+                            thinking_level="HIGH",
+                        ),
+                        temperature=0.3,
+                        response_mime_type="application/json"
+                    )
+                else:
+                    # Standard config for non-thinking models
+                    config = types.GenerateContentConfig(
+                        temperature=0.3,
+                        response_mime_type="application/json"
+                    )
+                
+                # Use non-streaming API (simpler and works with async)
+                response = await asyncio.to_thread(
+                    client.models.generate_content,
+                    model=model,
+                    contents=contents,
+                    config=config,
                 )
-                
-                # Stream response to capture thinking
-                full_response = ""
-                thinking_blocks = []
-                
-                async def _stream():
-                    nonlocal full_response, thinking_blocks
-                    async for chunk in client.models.generate_content_stream(
-                        model=model,
-                        contents=contents,
-                        config=config,
-                    ):
-                        if hasattr(chunk, 'thinking'):
-                            thinking_blocks.append(chunk.thinking)
-                        if hasattr(chunk, 'text'):
-                            full_response += chunk.text
-                
-                await _stream()
-                
-                # Log thinking process
-                if thinking_blocks:
-                    logger.debug("gemini_thinking", thoughts=len(thinking_blocks))
-                
-                # With response_mime_type="application/json", the text IS valid JSON
-                result = json.loads(full_response)
+
+                # With response_mime_type="application/json", text IS valid JSON
+                result = json.loads(response.text)
                 
             else:  # Fallback to old package
                 # Old package also supports response_mime_type in generation_config

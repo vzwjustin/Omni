@@ -103,8 +103,8 @@ WEAKNESS_3: [Third weakness]
                 match = re.search(r'(\d+\.?\d*)', line)
                 if match:
                     quality = max(0.0, min(1.0, float(match.group(1))))
-            except ValueError:
-                pass
+            except ValueError as e:
+                logger.debug("value_parsing_failed", error=str(e))
         elif line.startswith("WEAKNESS_"):
             w = line.split(":", 1)[-1].strip()
             if w:

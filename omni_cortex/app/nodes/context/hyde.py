@@ -130,7 +130,6 @@ RELEVANCE: [0.0-1.0]
             return max(0.0, min(1.0, float(match.group(1))))
     except Exception as e:
         logger.debug("score_parsing_failed", response=score_response[:50] if "score_response" in locals() else response[:50], error=str(e))
-        pass
     
     return 0.7
 

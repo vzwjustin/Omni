@@ -138,7 +138,7 @@ Focus on actionable, technical content."""
                 
                 response = await asyncio.to_thread(
                     model.models.generate_content,
-                    model=self.settings.routing_model or "gemini-2.0-flash",
+                    model=self.settings.routing_model or "gemini-3-flash-preview",
                     contents=prompt,
                     config=types.GenerateContentConfig(
                         temperature=0.3,

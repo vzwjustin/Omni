@@ -19,6 +19,7 @@ class GeminiRoutingWrapper:
     """
     Wrapper to make native Gemini SDK compatible with LangChain-style ainvoke().
     Enables Google Search grounding for fresh context.
+    Uses deprecated google.generativeai package (fallback).
     """
 
     def __init__(self, model: Any) -> None:
@@ -35,6 +36,41 @@ class GeminiRoutingWrapper:
     def __repr__(self) -> str:
         model_name = getattr(self.model, 'model_name', 'unknown')
         return f"GeminiRoutingWrapper(model={model_name})"
+
+
+class GeminiRoutingWrapperNew:
+    """
+    Wrapper using new google-genai package.
+    Enables Google Search grounding for fresh context.
+    """
+
+    def __init__(self, client: Any, model_name: str) -> None:
+        self._client = client
+        self._model_name = model_name
+
+    async def ainvoke(self, prompt: str) -> Any:
+        """Async invoke with search grounding."""
+        from google.genai import types
+
+        # Google Search grounding tool
+        google_search_tool = types.Tool(
+            google_search=types.GoogleSearch()
+        )
+
+        response = await asyncio.to_thread(
+            self._client.models.generate_content,
+            model=self._model_name,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                temperature=0.7,
+                max_output_tokens=4096,
+                tools=[google_search_tool]
+            )
+        )
+        return GeminiResponse(response)
+
+    def __repr__(self) -> str:
+        return f"GeminiRoutingWrapperNew(model={self._model_name})"
 
 
 class GeminiResponse:
@@ -84,23 +120,38 @@ def get_routing_model() -> GeminiRoutingWrapper:
             "Gemini does task analysis so Claude Code can focus on execution."
         )
 
-    import google.generativeai as genai
+    # Try new google-genai package first
+    try:
+        from google import genai
+        from google.genai import types
 
-    genai.configure(api_key=settings.google_api_key)
+        client = genai.Client(api_key=settings.google_api_key)
 
-    # Use fast model for routing - Gemini 3 Flash is ideal
-    model_name = settings.routing_model
-    if "/" in model_name:
-        model_name = model_name.split("/")[-1]
+        # Use fast model for routing - Gemini 3 Flash is ideal
+        model_name = settings.routing_model
+        if "/" in model_name:
+            model_name = model_name.split("/")[-1]
 
-    # Create model with Google Search grounding enabled
-    model = genai.GenerativeModel(
-        model_name=model_name,
-        generation_config=genai.GenerationConfig(
-            temperature=0.7,
-            max_output_tokens=4096,
-        ),
-        tools=[genai.Tool(google_search=genai.GoogleSearch())]
-    )
+        # Create a wrapper that uses the new client API
+        return GeminiRoutingWrapperNew(client, model_name)
 
-    return GeminiRoutingWrapper(model)
+    except ImportError:
+        # Fallback to deprecated package
+        import google.generativeai as genai
+
+        genai.configure(api_key=settings.google_api_key)
+
+        model_name = settings.routing_model
+        if "/" in model_name:
+            model_name = model_name.split("/")[-1]
+
+        model = genai.GenerativeModel(
+            model_name=model_name,
+            generation_config=genai.GenerationConfig(
+                temperature=0.7,
+                max_output_tokens=4096,
+            ),
+            tools=[genai.Tool(google_search=genai.GoogleSearch())]
+        )
+
+        return GeminiRoutingWrapper(model)

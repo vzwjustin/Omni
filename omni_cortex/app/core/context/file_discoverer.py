@@ -69,13 +69,13 @@ class FileDiscoverer:
         self.settings = get_settings()
         self._model = None
 
-    def _get_model(self):
-        """Get or create Gemini model for analysis."""
+    def _get_client(self):
+        """Get or create Gemini client for analysis."""
         if self._model is None:
             if not GOOGLE_AI_AVAILABLE:
                 raise ProviderNotConfiguredError(
-                    "google-generativeai not installed",
-                    details={"provider": "google", "package": "google-generativeai"}
+                    "google-genai not installed",
+                    details={"provider": "google", "package": "google-genai"}
                 )
 
             api_key = self.settings.google_api_key
@@ -85,10 +85,7 @@ class FileDiscoverer:
                     details={"provider": "google", "env_var": "GOOGLE_API_KEY"}
                 )
 
-            genai.configure(api_key=api_key)
-            self._model = genai.GenerativeModel(
-                self.settings.routing_model or "gemini-2.0-flash"
-            )
+            self._model = genai.Client(api_key=api_key)
         return self._model
 
     async def discover(
@@ -113,7 +110,8 @@ class FileDiscoverer:
         if not workspace_path and not file_list:
             return []
 
-        model = self._get_model()
+        client = self._get_client()
+        model_name = self.settings.routing_model or "gemini-3-flash-preview"
 
         # Get file listing
         files_to_analyze = []
@@ -151,12 +149,13 @@ Maximum {max_files} files."""
 
         try:
             response = await asyncio.to_thread(
-                model.generate_content,
-                prompt,
-                generation_config={
-                    "temperature": 0.2,
-                    "response_mime_type": "application/json"
-                }
+                client.models.generate_content,
+                model=model_name,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    temperature=0.2,
+                    response_mime_type="application/json"
+                )
             )
 
             # With JSON mode, response.text should be valid JSON

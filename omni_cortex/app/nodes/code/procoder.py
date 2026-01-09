@@ -21,6 +21,13 @@ from ..common import (
     format_code_context,
     prepare_context_with_gemini,
 )
+from ...prompts.templates import (
+    PROCODER_ANALYSIS_TEMPLATE,
+    PROCODER_STRATEGY_TEMPLATE,
+    PROCODER_ITERATION_TEMPLATE,
+    PROCODER_SCORE_TEMPLATE,
+    PROCODER_SYNTHESIS_TEMPLATE,
+)
 
 logger = structlog.get_logger("procoder")
 
@@ -39,15 +46,10 @@ class ReasoningState:
 
 async def _analyze_problem(query: str, code_context: str, state: GraphState) -> str:
     """Analyze problem for Professional code generation approach."""
-    prompt = f"""Analyze this problem using Professional code generation methodology.
-
-PROBLEM: {query}
-CONTEXT: {code_context[:800]}
-
-What are the key aspects to address?
-
-ANALYSIS:
-"""
+    prompt = PROCODER_ANALYSIS_TEMPLATE.format(
+        query=query,
+        code_context=code_context[:800]
+    )
     
     response, _ = await call_fast_synthesizer(prompt, state, max_tokens=512)
     return response.strip()
@@ -55,15 +57,10 @@ ANALYSIS:
 
 async def _generate_strategy(analysis: str, query: str, state: GraphState) -> str:
     """Generate execution strategy."""
-    prompt = f"""Based on analysis, generate strategy for Professional code generation.
-
-ANALYSIS: {analysis}
-PROBLEM: {query}
-
-What's the execution plan?
-
-STRATEGY:
-"""
+    prompt = PROCODER_STRATEGY_TEMPLATE.format(
+        analysis=analysis,
+        query=query
+    )
     
     response, _ = await call_fast_synthesizer(prompt, state, max_tokens=512)
     return response.strip()
@@ -77,28 +74,21 @@ async def _execute_iteration(iteration: int, strategy: str, previous_states: Lis
         for ps in previous_states[-2:]:
             prev_context += f"Iteration {ps.iteration}: {ps.output_data[:100]}...\n"
     
-    prompt = f"""Execute iteration {iteration} of Professional code generation.
-
-STRATEGY: {strategy}
-PROBLEM: {query}
-CONTEXT: {code_context[:600]}
-{prev_context}
-
-Execute this iteration:
-
-OUTPUT:
-"""
+    prompt = PROCODER_ITERATION_TEMPLATE.format(
+        iteration=iteration,
+        strategy=strategy,
+        query=query,
+        code_context=code_context[:600],
+        prev_context=prev_context
+    )
     
     response, _ = await call_deep_reasoner(prompt, state, max_tokens=768)
     
     # Score this iteration
-    score_prompt = f"""Rate quality of this iteration (0.0-1.0).
-
-OUTPUT: {response[:300]}
-PROBLEM: {query}
-
-SCORE:
-"""
+    score_prompt = PROCODER_SCORE_TEMPLATE.format(
+        output=response[:300],
+        query=query
+    )
     
     score_response, _ = await call_fast_synthesizer(score_prompt, state, max_tokens=32)
     
@@ -109,7 +99,6 @@ SCORE:
             score = max(0.0, min(1.0, float(match.group(1))))
     except Exception as e:
         logger.debug("score_parsing_failed", response=score_response[:50] if "score_response" in locals() else response[:50], error=str(e))
-        pass
     
     return ReasoningState(
         iteration=iteration,
@@ -126,18 +115,12 @@ async def _synthesize_final(reasoning_states: List[ReasoningState], analysis: st
         for rs in reasoning_states
     ])
     
-    prompt = f"""Synthesize final answer from Professional code generation iterations.
-
-ANALYSIS: {analysis}
-
-ITERATIONS:
-{iterations_summary}
-
-PROBLEM: {query}
-CONTEXT: {code_context}
-
-FINAL ANSWER:
-"""
+    prompt = PROCODER_SYNTHESIS_TEMPLATE.format(
+        analysis=analysis,
+        iterations_summary=iterations_summary,
+        query=query,
+        code_context=code_context
+    )
     
     response, _ = await call_deep_reasoner(prompt, state, max_tokens=1536)
     return response

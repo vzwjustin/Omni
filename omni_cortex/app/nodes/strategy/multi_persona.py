@@ -282,8 +282,8 @@ SATISFACTION: [0.0-1.0]
         match = re.search(r'(\d+\.?\d*)', response)
         if match:
             return max(0.0, min(1.0, float(match.group(1))))
-    except ValueError:
-        pass
+    except ValueError as e:
+        logger.debug("satisfaction_parsing_failed", response=response[:50], error=str(e))
     
     return 0.6
 
