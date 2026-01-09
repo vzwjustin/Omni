@@ -27,6 +27,8 @@ from .utility_handlers import (
     handle_compress_content,
     handle_detect_truncation,
     handle_manage_claude_md,
+    handle_prepare_context_streaming,
+    handle_context_cache_status,
 )
 from .validation import (
     ValidationError,
@@ -70,6 +72,8 @@ __all__ = [
     "handle_compress_content",
     "handle_detect_truncation",
     "handle_manage_claude_md",
+    "handle_prepare_context_streaming",
+    "handle_context_cache_status",
     # Validation
     "ValidationError",
     "validate_thread_id",

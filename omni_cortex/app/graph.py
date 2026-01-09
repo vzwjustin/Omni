@@ -18,6 +18,7 @@ from .state import GraphState
 from .core.router import HyperRouter
 from .core.settings import get_settings
 from .core.audit import log_framework_execution
+from .core.metrics import record_framework_execution
 from .langchain_integration import (
     enhance_state_with_langchain,
     save_to_langchain_memory,
@@ -49,7 +50,9 @@ def _log_framework_metrics(
     framework_name: str,
     tokens_used: int,
     duration_ms: float,
-    confidence_score: float
+    confidence_score: float,
+    category: str = "unknown",
+    success: bool = True
 ) -> None:
     """Log execution metrics for a framework."""
     logger.info(
@@ -58,6 +61,15 @@ def _log_framework_metrics(
         tokens_used=tokens_used,
         duration_ms=round(duration_ms, 2),
         confidence_score=round(confidence_score, 3)
+    )
+    # Record Prometheus metrics
+    record_framework_execution(
+        framework=framework_name,
+        category=category,
+        duration_seconds=duration_ms / 1000.0,
+        tokens_used=tokens_used,
+        confidence=confidence_score,
+        success=success
     )
 
 

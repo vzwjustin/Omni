@@ -6,3 +6,14 @@ CODEBASE_ISSUES.md
 INCOMPLETE_CODE_AND_DOCS_AUDIT.md
 BUG_FIXES_*.md
 BUG_HUNT_REPORT.md
+
+# Auto Claude data directory
+.auto-claude/
+
+# Auto Claude generated files
+.auto-claude-security.json
+.auto-claude-status
+.claude_settings.json
+.worktrees/
+.security-key
+logs/security/

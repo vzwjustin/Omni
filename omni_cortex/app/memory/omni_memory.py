@@ -37,6 +37,9 @@ class OmniCortexMemory:
             self.messages = self.messages[-self.max_messages:]
 
         self.framework_history.append(framework)
+        # Trim framework history to match message limit (prevent unbounded growth)
+        if len(self.framework_history) > self.max_messages:
+            self.framework_history = self.framework_history[-self.max_messages:]
         logger.info("memory_updated", thread_id=self.thread_id, framework=framework)
 
     def get_context(self) -> Dict[str, Any]:

@@ -81,6 +81,61 @@ class OmniCortexSettings(BaseSettings):
     # Code execution has stricter limits due to resource consumption risk
     rate_limit_execute_rpm: int = Field(default=10, ge=1, le=60, alias="RATE_LIMIT_EXECUTE_RPM")
 
+    # Context Gateway Enhancements
+    
+    # Cache settings
+    enable_context_cache: bool = Field(default=True, alias="ENABLE_CONTEXT_CACHE")
+    cache_query_analysis_ttl: int = Field(default=3600, ge=60, le=86400, alias="CACHE_QUERY_ANALYSIS_TTL")
+    cache_file_discovery_ttl: int = Field(default=1800, ge=60, le=86400, alias="CACHE_FILE_DISCOVERY_TTL")
+    cache_documentation_ttl: int = Field(default=86400, ge=3600, le=604800, alias="CACHE_DOCUMENTATION_TTL")
+    cache_max_entries: int = Field(default=1000, ge=100, le=10000, alias="CACHE_MAX_ENTRIES")
+    cache_max_size_mb: int = Field(default=100, ge=10, le=1000, alias="CACHE_MAX_SIZE_MB")
+    enable_stale_cache_fallback: bool = Field(default=True, alias="ENABLE_STALE_CACHE_FALLBACK")
+    
+    # Circuit breaker settings
+    circuit_breaker_failure_threshold: int = Field(default=5, ge=1, le=20, alias="CIRCUIT_BREAKER_FAILURE_THRESHOLD")
+    circuit_breaker_recovery_timeout: int = Field(default=60, ge=10, le=600, alias="CIRCUIT_BREAKER_RECOVERY_TIMEOUT")
+    circuit_breaker_half_open_timeout: int = Field(default=30, ge=5, le=300, alias="CIRCUIT_BREAKER_HALF_OPEN_TIMEOUT")
+    enable_circuit_breaker: bool = Field(default=True, alias="ENABLE_CIRCUIT_BREAKER")
+    
+    # Streaming settings
+    enable_streaming_context: bool = Field(default=True, alias="ENABLE_STREAMING_CONTEXT")
+    streaming_progress_interval: float = Field(default=0.5, ge=0.1, le=5.0, alias="STREAMING_PROGRESS_INTERVAL")
+    enable_completion_estimation: bool = Field(default=True, alias="ENABLE_COMPLETION_ESTIMATION")
+    
+    # Multi-repository settings
+    enable_multi_repo_discovery: bool = Field(default=True, alias="ENABLE_MULTI_REPO_DISCOVERY")
+    multi_repo_max_repositories: int = Field(default=10, ge=1, le=50, alias="MULTI_REPO_MAX_REPOSITORIES")
+    multi_repo_max_concurrent: int = Field(default=5, ge=1, le=20, alias="MULTI_REPO_MAX_CONCURRENT")
+    multi_repo_analysis_timeout: float = Field(default=30.0, ge=5.0, le=300.0, alias="MULTI_REPO_ANALYSIS_TIMEOUT")
+    enable_cross_repo_dependencies: bool = Field(default=True, alias="ENABLE_CROSS_REPO_DEPENDENCIES")
+    
+    # Token budget management
+    enable_dynamic_token_budget: bool = Field(default=True, alias="ENABLE_DYNAMIC_TOKEN_BUDGET")
+    token_budget_low_complexity: int = Field(default=30000, ge=10000, le=200000, alias="TOKEN_BUDGET_LOW_COMPLEXITY")
+    token_budget_medium_complexity: int = Field(default=50000, ge=20000, le=200000, alias="TOKEN_BUDGET_MEDIUM_COMPLEXITY")
+    token_budget_high_complexity: int = Field(default=80000, ge=40000, le=200000, alias="TOKEN_BUDGET_HIGH_COMPLEXITY")
+    token_budget_very_high_complexity: int = Field(default=120000, ge=60000, le=300000, alias="TOKEN_BUDGET_VERY_HIGH_COMPLEXITY")
+    enable_content_optimization: bool = Field(default=True, alias="ENABLE_CONTENT_OPTIMIZATION")
+    
+    # Enhanced documentation settings
+    enable_source_attribution: bool = Field(default=True, alias="ENABLE_SOURCE_ATTRIBUTION")
+    enable_documentation_prioritization: bool = Field(default=True, alias="ENABLE_DOCUMENTATION_PRIORITIZATION")
+    documentation_authority_threshold: float = Field(default=0.7, ge=0.0, le=1.0, alias="DOCUMENTATION_AUTHORITY_THRESHOLD")
+    
+    # Metrics and monitoring
+    enable_enhanced_metrics: bool = Field(default=True, alias="ENABLE_ENHANCED_METRICS")
+    enable_quality_scoring: bool = Field(default=True, alias="ENABLE_QUALITY_SCORING")
+    enable_performance_tracking: bool = Field(default=True, alias="ENABLE_PERFORMANCE_TRACKING")
+    enable_relevance_tracking: bool = Field(default=True, alias="ENABLE_RELEVANCE_TRACKING")
+    metrics_retention_days: int = Field(default=30, ge=1, le=365, alias="METRICS_RETENTION_DAYS")
+    enable_prometheus_metrics: bool = Field(default=True, alias="ENABLE_PROMETHEUS_METRICS")
+    
+    # Thinking mode optimization
+    enable_adaptive_thinking_mode: bool = Field(default=True, alias="ENABLE_ADAPTIVE_THINKING_MODE")
+    thinking_mode_complexity_threshold: str = Field(default="medium", alias="THINKING_MODE_COMPLEXITY_THRESHOLD")
+    thinking_mode_token_threshold: int = Field(default=20000, ge=5000, le=100000, alias="THINKING_MODE_TOKEN_THRESHOLD")
+
     @field_validator("chroma_persist_dir", mode="before")
     @classmethod
     def validate_chroma_dir(cls, v):
@@ -115,6 +170,15 @@ class OmniCortexSettings(BaseSettings):
         valid_providers = {"openrouter", "openai", "huggingface", "gemini", "google"}
         if v.lower() not in valid_providers:
             raise ValueError(f"embedding_provider must be one of {valid_providers}")
+        return v.lower()
+
+    @field_validator("thinking_mode_complexity_threshold")
+    @classmethod
+    def validate_thinking_mode_threshold(cls, v: str) -> str:
+        """Ensure thinking mode complexity threshold is valid."""
+        valid_thresholds = {"low", "medium", "high", "very_high"}
+        if v.lower() not in valid_thresholds:
+            raise ValueError(f"thinking_mode_complexity_threshold must be one of {valid_thresholds}")
         return v.lower()
 
     class Config:

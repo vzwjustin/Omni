@@ -239,7 +239,7 @@ async def program_of_thoughts_node(state: GraphState) -> GraphState:
     """
     Framework: Program of Thoughts (PoT): Code-Based Reasoning
     """
-    query = state["query"]
+    query = state.get("query", "")
     # Use Gemini to preprocess context via ContextGateway
 
     code_context = await prepare_context_with_gemini(

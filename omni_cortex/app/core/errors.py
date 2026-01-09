@@ -94,3 +94,72 @@ class SamplerTimeout(LLMError):
 
 class SamplerCircuitOpen(LLMError):
     """Circuit breaker is open, sampler unavailable."""
+
+
+# Context Gateway Enhancement errors
+class ContextCacheError(OmniCortexError):
+    """Cache-related errors."""
+
+
+class CacheInvalidationError(ContextCacheError):
+    """Cache invalidation failed."""
+
+
+class CacheCorruptionError(ContextCacheError):
+    """Cache data is corrupted or invalid."""
+
+
+class StreamingError(OmniCortexError):
+    """Streaming operation errors."""
+
+
+class StreamingCancellationError(StreamingError):
+    """Streaming operation was cancelled."""
+
+
+class ProgressEventError(StreamingError):
+    """Progress event emission failed."""
+
+
+class MultiRepoError(OmniCortexError):
+    """Multi-repository operation errors."""
+
+
+class RepositoryAccessError(MultiRepoError):
+    """Repository access denied or failed."""
+
+
+class CrossRepoDependencyError(MultiRepoError):
+    """Cross-repository dependency analysis failed."""
+
+
+class CircuitBreakerError(OmniCortexError):
+    """Circuit breaker activation errors."""
+
+
+class CircuitBreakerOpenError(CircuitBreakerError):
+    """Circuit breaker is open, operation blocked."""
+
+
+class TokenBudgetError(OmniCortexError):
+    """Token budget management errors."""
+
+
+class TokenBudgetExceededError(TokenBudgetError):
+    """Token budget exceeded during operation."""
+
+
+class ContentOptimizationError(TokenBudgetError):
+    """Content optimization failed."""
+
+
+class DocumentationGroundingError(ContextRetrievalError):
+    """Enhanced documentation grounding failed."""
+
+
+class SourceAttributionError(DocumentationGroundingError):
+    """Source attribution extraction failed."""
+
+
+class MetricsCollectionError(OmniCortexError):
+    """Metrics collection or recording failed."""

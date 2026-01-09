@@ -88,6 +88,8 @@ from .handlers import (
     handle_compress_content,
     handle_detect_truncation,
     handle_manage_claude_md,
+    handle_prepare_context_streaming,
+    handle_context_cache_status,
 )
 
 # Import MCP sampling and settings
@@ -112,10 +114,34 @@ def create_server() -> Server:
         tools = []
 
         if LEAN_MODE:
-            # ULTRA-LEAN: 8 tools - Gemini does the heavy lifting
+            # ULTRA-LEAN: 10 tools - Gemini does the heavy lifting
             tools.append(Tool(
                 name="prepare_context",
                 description="Gemini 3 Flash prepares rich, structured context for Claude. Analyzes query, discovers relevant files (with relevance scoring), fetches documentation, generates execution plan. Returns organized brief so Claude can focus on deep reasoning instead of searching.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "The task or problem to prepare context for"},
+                        "workspace_path": {"type": "string", "description": "Path to workspace/project directory"},
+                        "code_context": {"type": "string", "description": "Any code snippets to consider"},
+                        "file_list": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Pre-specified files to analyze"
+                        },
+                        "search_docs": {"type": "boolean", "description": "Search web for documentation (default: true)"},
+                        "output_format": {"type": "string", "enum": ["prompt", "json"], "description": "Output format (default: prompt)"},
+                        "enable_cache": {"type": "boolean", "description": "Enable intelligent caching (default: true)"},
+                        "enable_multi_repo": {"type": "boolean", "description": "Enable multi-repository discovery (default: true)"},
+                        "enable_source_attribution": {"type": "boolean", "description": "Include source attribution for docs (default: true)"}
+                    },
+                    "required": ["query"]
+                }
+            ))
+
+            tools.append(Tool(
+                name="prepare_context_streaming",
+                description="Gemini-powered context preparation with real-time streaming progress. Shows what's happening during file discovery, doc search, and analysis. Use for long-running context preparation.",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -132,6 +158,12 @@ def create_server() -> Server:
                     },
                     "required": ["query"]
                 }
+            ))
+
+            tools.append(Tool(
+                name="context_cache_status",
+                description="Get context cache status and statistics. Shows cache hit rates, token savings, and cache health.",
+                inputSchema={"type": "object", "properties": {}}
             ))
 
             tools.append(Tool(
@@ -422,10 +454,40 @@ def create_server() -> Server:
                         "description": "Pre-specified files to analyze"
                     },
                     "search_docs": {"type": "boolean", "description": "Whether to search web for documentation (default: true)"},
+                    "output_format": {"type": "string", "enum": ["prompt", "json"], "description": "Output as Claude prompt or raw JSON (default: prompt)"},
+                    "enable_cache": {"type": "boolean", "description": "Enable intelligent caching (default: true)"},
+                    "enable_multi_repo": {"type": "boolean", "description": "Enable multi-repository discovery (default: true)"},
+                    "enable_source_attribution": {"type": "boolean", "description": "Include source attribution for docs (default: true)"}
+                },
+                "required": ["query"]
+            }
+        ))
+
+        tools.append(Tool(
+            name="prepare_context_streaming",
+            description="Gemini-powered context preparation with real-time streaming progress. Shows what's happening during file discovery, doc search, and analysis.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "The task or problem to prepare context for"},
+                    "workspace_path": {"type": "string", "description": "Path to workspace/project directory"},
+                    "code_context": {"type": "string", "description": "Any code snippets to consider"},
+                    "file_list": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Pre-specified files to analyze"
+                    },
+                    "search_docs": {"type": "boolean", "description": "Whether to search web for documentation (default: true)"},
                     "output_format": {"type": "string", "enum": ["prompt", "json"], "description": "Output as Claude prompt or raw JSON (default: prompt)"}
                 },
                 "required": ["query"]
             }
+        ))
+
+        tools.append(Tool(
+            name="context_cache_status",
+            description="Get context cache status and statistics. Shows cache hit rates, token savings, and cache health.",
+            inputSchema={"type": "object", "properties": {}}
         ))
 
         return tools
@@ -507,6 +569,12 @@ def create_server() -> Server:
             if name == "prepare_context":
                 return await handle_prepare_context(arguments)
 
+            if name == "prepare_context_streaming":
+                return await handle_prepare_context_streaming(arguments)
+
+            if name == "context_cache_status":
+                return await handle_context_cache_status(arguments)
+
             if name == "count_tokens":
                 return await handle_count_tokens(arguments)
 
@@ -541,15 +609,15 @@ async def main():
     logger.info("Memory: LangChain ConversationBufferMemory")
     logger.info("RAG: ChromaDB with 6 collections")
     if LEAN_MODE:
-        logger.info("Mode: ULTRA-LEAN (8 tools)")
-        logger.info("  Core: prepare_context, reason, execute_code, health")
+        logger.info("Mode: ULTRA-LEAN (10 tools)")
+        logger.info("  Core: prepare_context, prepare_context_streaming, context_cache_status, reason, execute_code, health")
         logger.info("  Context: count_tokens, compress_content, detect_truncation, manage_claude_md")
         logger.info("  Gemini 3 Flash: Context prep, file discovery, doc search")
         logger.info("  62 frameworks available internally via HyperRouter")
-        logger.info("  Set LEAN_MODE=false for full 81-tool access")
+        logger.info("  Set LEAN_MODE=false for full 83-tool access")
     else:
-        logger.info(f"Mode: FULL ({len(FRAMEWORKS) + 19} tools)")
-        logger.info(f"  {len(FRAMEWORKS)} think_* tools + 19 utilities")
+        logger.info(f"Mode: FULL ({len(FRAMEWORKS) + 21} tools)")
+        logger.info(f"  {len(FRAMEWORKS)} think_* tools + 21 utilities")
     logger.info("=" * 60)
 
     server = create_server()

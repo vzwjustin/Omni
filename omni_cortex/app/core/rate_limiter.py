@@ -26,7 +26,7 @@ import asyncio
 import threading
 import time
 from dataclasses import dataclass, field
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 import structlog
 
 from .settings import get_settings
@@ -207,7 +207,7 @@ class RateLimiter:
             
             return True, ""
     
-    def validate_input_size(self, arguments: Dict[str, any], tool_name: str) -> tuple[bool, str]:
+    def validate_input_size(self, arguments: Dict[str, Any], tool_name: str) -> tuple[bool, str]:
         """
         Validate that input sizes are within limits.
         

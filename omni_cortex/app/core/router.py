@@ -6,7 +6,10 @@ Supports framework chaining for complex multi-step tasks.
 Designed for vibe coders and senior engineers who just want it to work.
 """
 
+import asyncio
+import hashlib
 import json
+import time
 import structlog
 from functools import lru_cache
 from typing import Optional, List, Tuple
@@ -93,6 +96,58 @@ class HyperRouter:
         self._complexity_estimator = ComplexityEstimator()
         self._vibe_matcher = VibeMatcher()
         self._brief_generator = None
+        # Routing decision cache: query_hash -> (chain, reasoning, category, timestamp)
+        self._routing_cache: dict[str, tuple] = {}
+        self._cache_max_size = 256
+        self._cache_ttl_seconds = 300  # 5 minutes
+        # Lock for thread-safe cache operations in async context
+        self._cache_lock: Optional[asyncio.Lock] = None
+
+    # ==========================================================================
+    # ROUTING CACHE
+    # ==========================================================================
+
+    def _get_cache_lock(self) -> asyncio.Lock:
+        """Get or create the async cache lock (lazy initialization)."""
+        if self._cache_lock is None:
+            self._cache_lock = asyncio.Lock()
+        return self._cache_lock
+
+    def _get_cache_key(self, query: str, code_snippet: Optional[str] = None) -> str:
+        """Generate cache key from query (normalized)."""
+        # Normalize: lowercase, strip, first 500 chars
+        normalized = query.lower().strip()[:500]
+        if code_snippet:
+            normalized += "|" + code_snippet[:200]
+        return hashlib.md5(normalized.encode()).hexdigest()
+
+    async def _get_cached_routing(self, cache_key: str) -> Optional[Tuple[List[str], str, str]]:
+        """Get cached routing decision if valid (thread-safe)."""
+        async with self._get_cache_lock():
+            if cache_key not in self._routing_cache:
+                return None
+            chain, reasoning, category, timestamp = self._routing_cache[cache_key]
+            # Check TTL
+            if time.time() - timestamp > self._cache_ttl_seconds:
+                del self._routing_cache[cache_key]
+                return None
+            logger.debug("routing_cache_hit", cache_key=cache_key[:8])
+            return chain, reasoning, category
+
+    async def _set_cached_routing(
+        self,
+        cache_key: str,
+        chain: List[str],
+        reasoning: str,
+        category: str
+    ) -> None:
+        """Cache a routing decision (thread-safe)."""
+        async with self._get_cache_lock():
+            # Evict oldest if at capacity
+            if len(self._routing_cache) >= self._cache_max_size:
+                oldest_key = min(self._routing_cache, key=lambda k: self._routing_cache[k][3])
+                del self._routing_cache[oldest_key]
+            self._routing_cache[cache_key] = (chain, reasoning, category, time.time())
 
     # ==========================================================================
     # HIERARCHICAL ROUTING - Stage 2: Specialist Agent Selection
@@ -299,6 +354,13 @@ class HyperRouter:
         """
         from ..core.settings import get_settings
 
+        # Check cache first
+        cache_key = self._get_cache_key(query, code_snippet)
+        cached = await self._get_cached_routing(cache_key)
+        if cached:
+            chain, reasoning, category = cached
+            return chain, f"[Cached] {reasoning}", category
+
         # Stage 1: Route to category
         category, confidence = self._vibe_matcher.route_to_category(query)
 
@@ -328,6 +390,9 @@ class HyperRouter:
                 chain, reasoning = await self._select_with_specialist(
                     category, query, code_snippet, ide_context
                 )
+
+        # Cache the result
+        await self._set_cached_routing(cache_key, chain, reasoning, category)
 
         return chain, reasoning, category
 

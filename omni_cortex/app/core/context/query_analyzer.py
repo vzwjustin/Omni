@@ -18,6 +18,11 @@ from ..settings import get_settings
 from ..constants import CONTENT
 from ..errors import LLMError, ProviderNotConfiguredError
 from ..correlation import get_correlation_id
+from .thinking_mode_optimizer import (
+    get_thinking_mode_optimizer,
+    ThinkingLevel,
+    ThinkingModeDecision,
+)
 
 # Try to import Google AI (new package with thinking mode)
 try:
@@ -128,7 +133,8 @@ class QueryAnalyzer:
         self,
         query: str,
         code_context: Optional[str] = None,
-        documentation_context: Optional[str] = None
+        documentation_context: Optional[str] = None,
+        available_budget: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Analyze a query to understand intent and plan execution.
@@ -137,6 +143,7 @@ class QueryAnalyzer:
             query: The user's request
             code_context: Optional code snippets for context
             documentation_context: Optional documentation/URL context found by search
+            available_budget: Optional available token budget for adaptive thinking mode
 
         Returns:
             Dictionary with analysis results:
@@ -152,6 +159,8 @@ class QueryAnalyzer:
             - blockers: Potential blockers
             - patterns: Code patterns to look for
             - dependencies: External dependencies
+            - thinking_mode_used: Whether thinking mode was used
+            - thinking_level: Thinking level used (if applicable)
         """
         client = self._get_client()
 
@@ -187,7 +196,31 @@ Respond in JSON format:
 Be specific and actionable. Focus on what Claude needs to execute effectively."""
 
         try:
-            # Use new API with thinking mode if available
+            # Get thinking mode optimizer
+            optimizer = get_thinking_mode_optimizer()
+            
+            # First, do a quick complexity estimation (without thinking mode)
+            # This helps us decide whether to use thinking mode for the full analysis
+            quick_complexity = self._estimate_complexity_from_query(query)
+            
+            # Decide on thinking mode usage
+            budget = available_budget or 50000  # Default budget
+            thinking_decision = optimizer.decide_thinking_mode(
+                query=query,
+                complexity=quick_complexity,
+                available_budget=budget,
+                task_type=None,  # We don't know task type yet
+            )
+            
+            logger.debug(
+                "thinking_mode_decision",
+                use_thinking=thinking_decision.use_thinking_mode,
+                level=thinking_decision.thinking_level.value,
+                reason=thinking_decision.reason,
+                complexity=quick_complexity,
+            )
+            
+            # Use new API with adaptive thinking mode if available
             if types:  # New google-genai package
                 model = self.settings.routing_model or "gemini-3-flash-preview"
                 
@@ -198,26 +231,39 @@ Be specific and actionable. Focus on what Claude needs to execute effectively.""
                     ),
                 ]
                 
-                # Enable thinking config for models that support it:
-                # - Models with "thinking" in name (legacy experimental)
-                # - Gemini 3 models (all support thinking mode)
-                is_thinking_model = "thinking" in model.lower() or "gemini-3" in model.lower()
+                # Check if model supports thinking mode
+                supports_thinking = optimizer.should_use_thinking_for_model(model)
                 
-                if is_thinking_model:
-                    # Enable HIGH thinking mode for deep analysis
+                # Configure thinking mode based on decision
+                if supports_thinking and thinking_decision.use_thinking_mode:
+                    # Enable adaptive thinking mode
                     config = types.GenerateContentConfig(
                         thinking_config=types.ThinkingConfig(
-                            thinking_level="HIGH",
+                            thinking_level=thinking_decision.thinking_level.value,
                         ),
                         temperature=0.3,
                         response_mime_type="application/json"
                     )
+                    logger.info(
+                        "using_adaptive_thinking_mode",
+                        level=thinking_decision.thinking_level.value,
+                        model=model,
+                    )
                 else:
-                    # Standard config for non-thinking models
+                    # Standard config without thinking mode
                     config = types.GenerateContentConfig(
                         temperature=0.3,
                         response_mime_type="application/json"
                     )
+                    if supports_thinking and not thinking_decision.use_thinking_mode:
+                        logger.info(
+                            "thinking_mode_disabled",
+                            reason=thinking_decision.reason,
+                            model=model,
+                        )
+                
+                # Track start time for metrics
+                start_time = asyncio.get_event_loop().time()
                 
                 # Use non-streaming API (simpler and works with async)
                 response = await asyncio.to_thread(
@@ -227,11 +273,41 @@ Be specific and actionable. Focus on what Claude needs to execute effectively.""
                     config=config,
                 )
 
+                # Track execution time
+                execution_time = asyncio.get_event_loop().time() - start_time
+                
                 # With response_mime_type="application/json", text IS valid JSON
                 result = json.loads(response.text)
                 
+                # Record thinking mode metrics
+                if thinking_decision.use_thinking_mode:
+                    # Estimate tokens used (rough approximation)
+                    tokens_used = len(prompt.split()) + len(response.text.split())
+                    
+                    # Get actual complexity from result
+                    actual_complexity = result.get("complexity", quick_complexity)
+                    
+                    # Estimate reasoning quality based on result completeness
+                    quality_score = self._estimate_reasoning_quality(result)
+                    
+                    optimizer.record_metrics(
+                        thinking_level=thinking_decision.thinking_level,
+                        tokens_used=tokens_used,
+                        execution_time=execution_time,
+                        complexity=actual_complexity,
+                        budget_available=budget,
+                        reasoning_quality_score=quality_score,
+                        fallback_used=False,
+                    )
+                
+                # Add thinking mode metadata to result
+                result["thinking_mode_used"] = thinking_decision.use_thinking_mode
+                result["thinking_level"] = thinking_decision.thinking_level.value
+                
             else:  # Fallback to old package
                 # Old package also supports response_mime_type in generation_config
+                start_time = asyncio.get_event_loop().time()
+                
                 response = await asyncio.to_thread(
                     client.generate_content,
                     prompt,
@@ -240,12 +316,19 @@ Be specific and actionable. Focus on what Claude needs to execute effectively.""
                         "response_mime_type": "application/json"
                     }
                 )
+                
+                execution_time = asyncio.get_event_loop().time() - start_time
                 result = json.loads(response.text)
+                
+                # Old package doesn't support thinking mode
+                result["thinking_mode_used"] = False
+                result["thinking_level"] = "none"
 
             logger.debug(
                 "query_analysis_complete",
                 task_type=result.get("task_type"),
-                complexity=result.get("complexity")
+                complexity=result.get("complexity"),
+                thinking_mode=result.get("thinking_mode_used", False),
             )
             return result
         except (LLMError, ProviderNotConfiguredError):
@@ -255,6 +338,105 @@ Be specific and actionable. Focus on what Claude needs to execute effectively.""
             # overall workflow. We convert errors to LLMError with helpful context
             # so callers can decide whether to proceed with reduced functionality.
             error_msg = str(e).lower()
+            
+            # Check if this is a thinking mode specific error
+            is_thinking_error = (
+                "thinking" in error_msg or
+                "thinking_config" in error_msg or
+                "thinking_level" in error_msg
+            )
+            
+            # If thinking mode failed and we were using it, try fallback without thinking
+            if is_thinking_error and thinking_decision.use_thinking_mode:
+                logger.warning(
+                    "thinking_mode_unavailable_fallback",
+                    error=str(e),
+                    original_level=thinking_decision.thinking_level.value,
+                )
+                
+                # Record fallback metrics
+                optimizer.record_metrics(
+                    thinking_level=thinking_decision.thinking_level,
+                    tokens_used=0,
+                    execution_time=0,
+                    complexity=quick_complexity,
+                    budget_available=budget,
+                    reasoning_quality_score=0.0,
+                    fallback_used=True,
+                    fallback_reason="Thinking mode unavailable",
+                )
+                
+                # Retry without thinking mode
+                try:
+                    if types:  # New google-genai package
+                        model = self.settings.routing_model or "gemini-3-flash-preview"
+                        
+                        contents = [
+                            types.Content(
+                                role="user",
+                                parts=[types.Part.from_text(text=prompt)],
+                            ),
+                        ]
+                        
+                        # Standard config without thinking mode
+                        config = types.GenerateContentConfig(
+                            temperature=0.3,
+                            response_mime_type="application/json"
+                        )
+                        
+                        start_time = asyncio.get_event_loop().time()
+                        
+                        response = await asyncio.to_thread(
+                            client.models.generate_content,
+                            model=model,
+                            contents=contents,
+                            config=config,
+                        )
+                        
+                        execution_time = asyncio.get_event_loop().time() - start_time
+                        result = json.loads(response.text)
+                        
+                        # Add fallback metadata
+                        result["thinking_mode_used"] = False
+                        result["thinking_level"] = "none"
+                        result["thinking_mode_fallback"] = True
+                        result["thinking_mode_fallback_reason"] = "Thinking mode unavailable"
+                        
+                        logger.info(
+                            "thinking_mode_fallback_success",
+                            execution_time=execution_time,
+                        )
+                        
+                        return result
+                    else:
+                        # Old package fallback
+                        start_time = asyncio.get_event_loop().time()
+                        
+                        response = await asyncio.to_thread(
+                            client.generate_content,
+                            prompt,
+                            generation_config={
+                                "temperature": 0.3,
+                                "response_mime_type": "application/json"
+                            }
+                        )
+                        
+                        execution_time = asyncio.get_event_loop().time() - start_time
+                        result = json.loads(response.text)
+                        
+                        result["thinking_mode_used"] = False
+                        result["thinking_level"] = "none"
+                        result["thinking_mode_fallback"] = True
+                        result["thinking_mode_fallback_reason"] = "Thinking mode unavailable"
+                        
+                        return result
+                        
+                except Exception as fallback_error:
+                    logger.error(
+                        "thinking_mode_fallback_failed",
+                        error=str(fallback_error),
+                    )
+                    # Continue to general error handling below
 
             # Detect specific API errors and provide helpful messages
             if "insufficient" in error_msg or "quota" in error_msg or "billing" in error_msg:
@@ -287,3 +469,196 @@ Be specific and actionable. Focus on what Claude needs to execute effectively.""
                     correlation_id=get_correlation_id()
                 )
                 raise LLMError(f"Query analysis failed: {e}") from e
+
+    def _estimate_complexity_from_query(self, query: str) -> str:
+        """
+        Quickly estimate complexity from query text without LLM call.
+        
+        This is a heuristic-based estimation used to decide on thinking mode.
+        
+        Args:
+            query: The user's query
+            
+        Returns:
+            Complexity level: "low", "medium", "high", or "very_high"
+        """
+        query_lower = query.lower()
+        
+        # Very high complexity indicators
+        very_high_indicators = [
+            "architecture", "design system", "refactor entire", "migrate",
+            "performance optimization", "security audit", "distributed system",
+            "microservices", "scale", "multi-repo", "cross-service",
+        ]
+        if any(indicator in query_lower for indicator in very_high_indicators):
+            return "very_high"
+        
+        # High complexity indicators
+        high_indicators = [
+            "debug", "fix bug", "root cause", "investigate", "analyze",
+            "optimize", "refactor", "redesign", "complex", "multiple",
+        ]
+        if any(indicator in query_lower for indicator in high_indicators):
+            return "high"
+        
+        # Low complexity indicators
+        low_indicators = [
+            "add", "create simple", "basic", "quick", "small change",
+            "update", "modify", "change", "simple",
+        ]
+        if any(indicator in query_lower for indicator in low_indicators):
+            return "low"
+        
+        # Default to medium
+        return "medium"
+    
+    def _estimate_reasoning_quality(self, result: Dict[str, Any]) -> float:
+        """
+        Estimate reasoning quality from analysis result.
+        
+        Quality is based on completeness and specificity of the analysis.
+        
+        Args:
+            result: The analysis result dictionary
+            
+        Returns:
+            Quality score from 0.0 to 1.0
+        """
+        score = 0.0
+        
+        # Check for required fields (0.3 points)
+        required_fields = ["task_type", "summary", "complexity", "framework"]
+        present_required = sum(1 for field in required_fields if result.get(field))
+        score += (present_required / len(required_fields)) * 0.3
+        
+        # Check for detailed fields (0.4 points)
+        detailed_fields = ["steps", "success_criteria", "blockers", "patterns"]
+        present_detailed = sum(1 for field in detailed_fields if result.get(field) and len(result[field]) > 0)
+        score += (present_detailed / len(detailed_fields)) * 0.4
+        
+        # Check for specificity (0.3 points)
+        # Longer, more detailed responses indicate better reasoning
+        summary_length = len(result.get("summary", ""))
+        if summary_length > 100:
+            score += 0.15
+        elif summary_length > 50:
+            score += 0.10
+        elif summary_length > 20:
+            score += 0.05
+        
+        steps_count = len(result.get("steps", []))
+        if steps_count >= 5:
+            score += 0.15
+        elif steps_count >= 3:
+            score += 0.10
+        elif steps_count >= 1:
+            score += 0.05
+        
+        return min(score, 1.0)
+
+    def check_thinking_mode_availability(self) -> Dict[str, Any]:
+        """
+        Check if thinking mode is available for the configured model.
+        
+        Returns:
+            Dictionary with availability information:
+            - available: bool - Whether thinking mode is available
+            - model: str - The model being checked
+            - reason: str - Explanation of availability status
+            - supported_levels: List[str] - Supported thinking levels
+        """
+        try:
+            client = self._get_client()
+            model = self.settings.routing_model or "gemini-3-flash-preview"
+            
+            # Check if model supports thinking mode
+            optimizer = get_thinking_mode_optimizer()
+            supports_thinking = optimizer.should_use_thinking_for_model(model)
+            
+            if not supports_thinking:
+                return {
+                    "available": False,
+                    "model": model,
+                    "reason": f"Model '{model}' does not support thinking mode",
+                    "supported_levels": [],
+                }
+            
+            # Check if adaptive thinking mode is enabled
+            if not self.settings.enable_adaptive_thinking_mode:
+                return {
+                    "available": False,
+                    "model": model,
+                    "reason": "Adaptive thinking mode disabled in settings",
+                    "supported_levels": ["LOW", "MEDIUM", "HIGH"],
+                }
+            
+            # Try a simple test call with thinking mode
+            if types:  # New google-genai package
+                try:
+                    test_prompt = "Test thinking mode availability"
+                    contents = [
+                        types.Content(
+                            role="user",
+                            parts=[types.Part.from_text(text=test_prompt)],
+                        ),
+                    ]
+                    
+                    config = types.GenerateContentConfig(
+                        thinking_config=types.ThinkingConfig(
+                            thinking_level="LOW",
+                        ),
+                        temperature=0.3,
+                        max_output_tokens=10,
+                    )
+                    
+                    # Quick test call
+                    response = client.models.generate_content(
+                        model=model,
+                        contents=contents,
+                        config=config,
+                    )
+                    
+                    return {
+                        "available": True,
+                        "model": model,
+                        "reason": "Thinking mode test successful",
+                        "supported_levels": ["LOW", "MEDIUM", "HIGH"],
+                    }
+                    
+                except Exception as e:
+                    error_msg = str(e).lower()
+                    if "thinking" in error_msg:
+                        return {
+                            "available": False,
+                            "model": model,
+                            "reason": f"Thinking mode not available: {str(e)}",
+                            "supported_levels": [],
+                        }
+                    else:
+                        # Other error, might not be thinking-related
+                        return {
+                            "available": True,
+                            "model": model,
+                            "reason": "Model supports thinking mode (test inconclusive)",
+                            "supported_levels": ["LOW", "MEDIUM", "HIGH"],
+                        }
+            else:
+                # Old package doesn't support thinking mode
+                return {
+                    "available": False,
+                    "model": model,
+                    "reason": "Old google-generativeai package doesn't support thinking mode",
+                    "supported_levels": [],
+                }
+                
+        except Exception as e:
+            logger.error(
+                "thinking_mode_availability_check_failed",
+                error=str(e),
+            )
+            return {
+                "available": False,
+                "model": "unknown",
+                "reason": f"Availability check failed: {str(e)}",
+                "supported_levels": [],
+            }

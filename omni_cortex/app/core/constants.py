@@ -146,6 +146,136 @@ class LLMParams:
 
 
 @dataclass(frozen=True)
+class CacheConfig:
+    """Context cache configuration constants."""
+    
+    # TTL settings (seconds)
+    QUERY_ANALYSIS_TTL: int = 3600      # 1 hour - query analysis results
+    FILE_DISCOVERY_TTL: int = 1800      # 30 minutes - file relevance scores
+    DOCUMENTATION_TTL: int = 86400      # 24 hours - documentation search results
+    CODE_SEARCH_TTL: int = 1800         # 30 minutes - code search results
+    
+    # Cache size limits
+    MAX_CACHE_ENTRIES: int = 1000       # maximum cache entries
+    MAX_CACHE_SIZE_MB: int = 100        # maximum cache size in MB
+    
+    # Cache key settings
+    QUERY_SIMILARITY_THRESHOLD: float = 0.85  # similarity threshold for cache hits
+    WORKSPACE_FINGERPRINT_DEPTH: int = 3      # directory depth for fingerprinting
+    
+    # Stale cache settings
+    STALE_CACHE_MAX_AGE: int = 604800   # 7 days - maximum age for stale cache fallback
+    ENABLE_STALE_FALLBACK: bool = True  # enable serving stale cache on API failures
+
+
+@dataclass(frozen=True)
+class CircuitBreakerConfig:
+    """Circuit breaker configuration constants."""
+    
+    # Failure thresholds
+    FAILURE_THRESHOLD: int = 5          # failures before opening circuit
+    SUCCESS_THRESHOLD: int = 3          # successes needed to close circuit in half-open
+    
+    # Timeout settings (seconds)
+    RECOVERY_TIMEOUT: int = 60          # time before attempting recovery
+    HALF_OPEN_TIMEOUT: int = 30         # timeout for half-open state
+    
+    # Backoff settings
+    INITIAL_BACKOFF: float = 1.0        # initial backoff delay (seconds)
+    MAX_BACKOFF: float = 300.0          # maximum backoff delay (5 minutes)
+    BACKOFF_MULTIPLIER: float = 2.0     # exponential backoff multiplier
+    JITTER_FACTOR: float = 0.1          # jitter factor for backoff randomization
+    
+    # Component-specific settings
+    GEMINI_API_THRESHOLD: int = 3       # lower threshold for Gemini API
+    FILE_SYSTEM_THRESHOLD: int = 10     # higher threshold for file system operations
+    NETWORK_THRESHOLD: int = 5          # standard threshold for network operations
+
+
+@dataclass(frozen=True)
+class StreamingConfig:
+    """Streaming context preparation configuration."""
+    
+    # Progress reporting
+    PROGRESS_UPDATE_INTERVAL: float = 0.5   # seconds between progress updates
+    MIN_PROGRESS_DELTA: float = 0.05        # minimum progress change to report
+    
+    # Estimation settings
+    ENABLE_TIME_ESTIMATION: bool = True     # enable completion time estimation
+    ESTIMATION_WINDOW_SIZE: int = 10        # number of recent operations for estimation
+    
+    # Cancellation settings
+    CANCELLATION_CHECK_INTERVAL: float = 0.1  # seconds between cancellation checks
+    CLEANUP_TIMEOUT: float = 5.0            # timeout for cleanup operations
+    
+    # Buffer settings
+    EVENT_BUFFER_SIZE: int = 100            # maximum buffered progress events
+
+
+@dataclass(frozen=True)
+class MultiRepoConfig:
+    """Multi-repository discovery configuration."""
+    
+    # Repository detection
+    MAX_REPO_DEPTH: int = 3             # maximum directory depth to search for repos
+    MAX_REPOSITORIES: int = 10          # maximum repositories to analyze
+    
+    # Parallel processing
+    MAX_CONCURRENT_REPOS: int = 5       # maximum concurrent repository analysis
+    REPO_ANALYSIS_TIMEOUT: float = 30.0  # timeout per repository analysis
+    
+    # Dependency analysis
+    ENABLE_CROSS_REPO_DEPS: bool = True # enable cross-repository dependency analysis
+    MAX_DEPENDENCY_DEPTH: int = 2       # maximum dependency traversal depth
+    
+    # Access control
+    RESPECT_GITIGNORE: bool = True      # respect .gitignore patterns
+    SKIP_INACCESSIBLE: bool = True      # skip inaccessible repositories
+
+
+@dataclass(frozen=True)
+class TokenBudgetConfig:
+    """Token budget management configuration."""
+    
+    # Base budgets by complexity
+    LOW_COMPLEXITY_BUDGET: int = 30000      # tokens for low complexity tasks
+    MEDIUM_COMPLEXITY_BUDGET: int = 50000   # tokens for medium complexity tasks
+    HIGH_COMPLEXITY_BUDGET: int = 80000     # tokens for high complexity tasks
+    VERY_HIGH_COMPLEXITY_BUDGET: int = 120000  # tokens for very high complexity tasks
+    
+    # Component allocation percentages
+    QUERY_ANALYSIS_PERCENT: float = 0.15    # 15% for query analysis
+    FILE_DISCOVERY_PERCENT: float = 0.30    # 30% for file discovery
+    DOCUMENTATION_PERCENT: float = 0.25     # 25% for documentation search
+    CODE_SEARCH_PERCENT: float = 0.20       # 20% for code search
+    ASSEMBLY_PERCENT: float = 0.05          # 5% for context assembly
+    RESERVE_PERCENT: float = 0.05           # 5% reserve
+    
+    # Optimization settings
+    ENABLE_CONTENT_RANKING: bool = True     # enable Gemini-based content ranking
+    ENABLE_PATTERN_SUMMARIZATION: bool = True  # enable pattern summarization
+    SNIPPET_PRIORITY_THRESHOLD: float = 0.7    # threshold for snippet prioritization
+
+
+@dataclass(frozen=True)
+class MetricsConfig:
+    """Metrics collection configuration."""
+    
+    # Collection settings
+    ENABLE_DETAILED_METRICS: bool = True   # enable detailed component metrics
+    ENABLE_QUALITY_SCORING: bool = True    # enable context quality scoring
+    ENABLE_PERFORMANCE_TRACKING: bool = True  # enable performance tracking
+    
+    # Retention settings
+    METRICS_RETENTION_DAYS: int = 30       # days to retain detailed metrics
+    AGGREGATED_RETENTION_DAYS: int = 365   # days to retain aggregated metrics
+    
+    # Export settings
+    PROMETHEUS_ENABLED: bool = True        # enable Prometheus metrics export
+    METRICS_EXPORT_INTERVAL: int = 60      # seconds between metrics exports
+
+
+@dataclass(frozen=True)
 class ServerConfig:
     """Server configuration constants."""
 
@@ -164,6 +294,14 @@ LIMITS = ResourceLimits()
 FRAMEWORK = FrameworkLimits()
 LLM = LLMParams()
 SERVER = ServerConfig()
+
+# Enhanced configuration constants
+CACHE = CacheConfig()
+CIRCUIT_BREAKER = CircuitBreakerConfig()
+STREAMING = StreamingConfig()
+MULTI_REPO = MultiRepoConfig()
+TOKEN_BUDGET = TokenBudgetConfig()
+METRICS = MetricsConfig()
 
 
 # ============================================================================

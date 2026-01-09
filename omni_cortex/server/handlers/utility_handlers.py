@@ -178,19 +178,39 @@ async def handle_execute_code(arguments: dict) -> list[TextContent]:
 
 async def handle_health(arguments: dict, manager, lean_mode: bool) -> list[TextContent]:
     """Check server health and capabilities."""
+    from app.core.settings import get_settings
+    from app.core.context.context_cache import get_context_cache
+    
+    settings = get_settings()
     collections = list(manager.COLLECTIONS.keys())
+    
     if lean_mode:
-        exposed_tools = 8
+        exposed_tools = 10
         note = (
-            "ULTRA-LEAN MODE: 8 tools exposed (prepare_context, reason, execute_code, health "
-            "+ count_tokens, compress_content, detect_truncation, manage_claude_md). "
-            "Gemini handles context prep, 62 frameworks available internally."
+            "ULTRA-LEAN MODE: 10 tools exposed (prepare_context, prepare_context_streaming, "
+            "context_cache_status, reason, execute_code, health + count_tokens, compress_content, "
+            "detect_truncation, manage_claude_md). Gemini handles context prep, 62 frameworks available internally."
         )
     else:
-        exposed_tools = len(FRAMEWORKS) + 19
-        note = "FULL MODE: All 81 tools exposed (62 think_* + 19 utilities)"
-
-    return [TextContent(type="text", text=json.dumps({
+        exposed_tools = len(FRAMEWORKS) + 21
+        note = "FULL MODE: All 83 tools exposed (62 think_* + 21 utilities)"
+    
+    # Get cache status
+    cache_status = "disabled"
+    cache_entries = 0
+    cache_hit_rate = 0.0
+    try:
+        if settings.enable_context_cache:
+            cache = get_context_cache()
+            stats = cache.get_statistics()
+            cache_status = "enabled"
+            cache_entries = stats["active_entries"]
+            cache_hit_rate = stats["hit_rate"]
+    except Exception as e:
+        logger.warning("health_check_cache_status_failed", error=str(e))
+    
+    # Build enhanced health response
+    health_data = {
         "status": "healthy",
         "mode": "ultra-lean" if lean_mode else "full",
         "tools_exposed": exposed_tools,
@@ -199,13 +219,44 @@ async def handle_health(arguments: dict, manager, lean_mode: bool) -> list[TextC
         "collections": collections,
         "memory_enabled": True,
         "rag_enabled": True,
-        "note": note
-    }, indent=2))]
+        "note": note,
+        "enhancements": {
+            "context_cache": {
+                "enabled": settings.enable_context_cache,
+                "status": cache_status,
+                "active_entries": cache_entries,
+                "hit_rate": cache_hit_rate,
+            },
+            "streaming_context": {
+                "enabled": settings.enable_streaming_context,
+            },
+            "multi_repo_discovery": {
+                "enabled": settings.enable_multi_repo_discovery,
+                "max_repositories": settings.multi_repo_max_repositories,
+            },
+            "circuit_breaker": {
+                "enabled": settings.enable_circuit_breaker,
+                "failure_threshold": settings.circuit_breaker_failure_threshold,
+            },
+            "dynamic_token_budget": {
+                "enabled": settings.enable_dynamic_token_budget,
+            },
+            "enhanced_metrics": {
+                "enabled": settings.enable_enhanced_metrics,
+                "prometheus": settings.enable_prometheus_metrics,
+            },
+        }
+    }
+
+    return [TextContent(type="text", text=json.dumps(health_data, indent=2))]
 
 
 async def handle_prepare_context(arguments: dict) -> list[TextContent]:
-    """Gemini-powered context preparation."""
+    """Gemini-powered context preparation with enhanced features."""
+    from app.core.settings import get_settings
+    
     valid_formats = ["prompt", "json"]
+    settings = get_settings()
 
     # Validate inputs
     try:
@@ -219,6 +270,10 @@ async def handle_prepare_context(arguments: dict) -> list[TextContent]:
             valid_formats,
             "output_format"
         )
+        # New enhanced options
+        enable_cache = validate_boolean(arguments.get("enable_cache"), "enable_cache", default=settings.enable_context_cache)
+        enable_multi_repo = validate_boolean(arguments.get("enable_multi_repo"), "enable_multi_repo", default=settings.enable_multi_repo_discovery)
+        enable_source_attribution = validate_boolean(arguments.get("enable_source_attribution"), "enable_source_attribution", default=settings.enable_source_attribution)
     except ValidationError as e:
         log_tool_call(
             tool_name="prepare_context",
@@ -232,13 +287,22 @@ async def handle_prepare_context(arguments: dict) -> list[TextContent]:
 
     try:
         gateway = get_context_gateway()
-        context = await gateway.prepare_context(
-            query=query,
-            workspace_path=workspace_path,
-            code_context=code_context,
-            file_list=file_list,
-            search_docs=search_docs,
-        )
+        
+        # Temporarily override settings if requested
+        original_cache_setting = gateway._enable_cache
+        try:
+            gateway._enable_cache = enable_cache
+            
+            context = await gateway.prepare_context(
+                query=query,
+                workspace_path=workspace_path,
+                code_context=code_context,
+                file_list=file_list,
+                search_docs=search_docs,
+            )
+        finally:
+            # Restore original setting
+            gateway._enable_cache = original_cache_setting
 
         # Audit log successful call
         log_tool_call(
@@ -248,9 +312,49 @@ async def handle_prepare_context(arguments: dict) -> list[TextContent]:
         )
 
         if output_format == "json":
-            return [TextContent(type="text", text=json.dumps(context.to_dict(), indent=2))]
+            result = context.to_dict()
+            # Add cache metadata if available
+            if hasattr(context, 'cache_metadata') and context.cache_metadata:
+                result["cache_metadata"] = {
+                    "cache_hit": context.cache_metadata.cache_hit,
+                    "cache_age_seconds": context.cache_metadata.cache_age.total_seconds(),
+                    "is_stale_fallback": context.cache_metadata.is_stale_fallback,
+                }
+            return [TextContent(type="text", text=json.dumps(result, indent=2))]
         else:
             output = "# Context Prepared by Gemini\n\n"
+
+            # Add enhanced metadata section
+            metadata_parts = []
+
+            # Cache status
+            if hasattr(context, 'cache_metadata') and context.cache_metadata:
+                if context.cache_metadata.cache_hit:
+                    cache_age = int(context.cache_metadata.cache_age.total_seconds())
+                    cache_status = f"Cache Hit ({cache_age}s old"
+                    if context.cache_metadata.is_stale_fallback:
+                        cache_status += ", stale fallback"
+                    cache_status += ")"
+                    metadata_parts.append(cache_status)
+
+            # Quality metrics
+            if hasattr(context, 'quality_metrics') and context.quality_metrics:
+                qm = context.quality_metrics
+                quality_info = f"Quality: {qm.context_coverage_score:.0%} coverage, {qm.avg_file_relevance:.0%} file relevance"
+                metadata_parts.append(quality_info)
+
+            # Token budget usage
+            if hasattr(context, 'token_budget_usage') and context.token_budget_usage:
+                tbu = context.token_budget_usage
+                budget_info = f"Budget: {tbu.used_tokens}/{tbu.allocated_tokens} tokens ({tbu.utilization_percentage:.0f}%)"
+                if not tbu.within_budget:
+                    budget_info += " ⚠️"
+                metadata_parts.append(budget_info)
+
+            # Add metadata if we have any
+            if metadata_parts:
+                output += "*" + " | ".join(metadata_parts) + "*\n\n"
+
             output += context.to_claude_prompt()
             return [TextContent(type="text", text=output)]
 
@@ -377,3 +481,144 @@ async def handle_manage_claude_md(arguments: dict) -> list[TextContent]:
         return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
     return [TextContent(type="text", text=f"Unknown action: {action}")]
+
+
+async def handle_prepare_context_streaming(arguments: dict) -> list[TextContent]:
+    """Gemini-powered context preparation with streaming progress."""
+    from app.core.context.streaming_gateway import get_streaming_context_gateway
+    
+    valid_formats = ["prompt", "json"]
+    
+    # Validate inputs
+    try:
+        query = validate_query(arguments.get("query"), required=True)
+        workspace_path = validate_path(arguments.get("workspace_path"), "workspace_path", required=False)
+        code_context = validate_text(arguments.get("code_context"), "code_context", max_length=100000, required=False) or None
+        file_list = validate_file_list(arguments.get("file_list"))
+        search_docs = validate_boolean(arguments.get("search_docs"), "search_docs", default=True)
+        output_format = validate_category(
+            arguments.get("output_format") or "prompt",
+            valid_formats,
+            "output_format"
+        )
+    except ValidationError as e:
+        log_tool_call(
+            tool_name="prepare_context_streaming",
+            arguments=arguments,
+            success=False,
+            error=str(e)
+        )
+        return [TextContent(type="text", text=json.dumps({
+            "error": f"Validation error: {str(e)}"
+        }, indent=2))]
+    
+    try:
+        gateway = get_streaming_context_gateway()
+        
+        # Collect progress events
+        progress_events = []
+        
+        def progress_callback(event):
+            """Collect progress events."""
+            progress_events.append({
+                "component": event.component,
+                "status": event.status.value,
+                "progress": event.progress,
+                "message": event.message,
+                "timestamp": event.timestamp.isoformat(),
+                "estimated_completion": event.estimated_completion,
+            })
+        
+        # Create cancellation token (not used in MCP, but required by API)
+        cancellation_token = asyncio.Event()
+        
+        # Prepare context with streaming
+        context = await gateway.prepare_context_streaming(
+            query=query,
+            workspace_path=workspace_path,
+            code_context=code_context,
+            file_list=file_list,
+            search_docs=search_docs,
+            progress_callback=progress_callback,
+            cancellation_token=cancellation_token,
+        )
+        
+        # Audit log successful call
+        log_tool_call(
+            tool_name="prepare_context_streaming",
+            arguments=arguments,
+            success=True
+        )
+        
+        # Format output
+        if output_format == "json":
+            result = context.to_detailed_json()
+            result["progress_events"] = progress_events
+            return [TextContent(type="text", text=json.dumps(result, indent=2))]
+        else:
+            output = "# Context Prepared by Gemini (Streaming)\n\n"
+            
+            # Add progress summary
+            output += "## Progress Summary\n"
+            for event in progress_events:
+                if event["status"] == "completed":
+                    output += f"- ✅ {event['component']}: {event['message']}\n"
+                elif event["status"] == "failed":
+                    output += f"- ❌ {event['component']}: {event['message']}\n"
+            output += "\n"
+            
+            # Add main context
+            output += context.to_claude_prompt_enhanced()
+            return [TextContent(type="text", text=output)]
+    
+    except Exception as e:
+        logger.error("streaming_context_gateway_failed", error=str(e), error_type=type(e).__name__)
+        log_tool_call(
+            tool_name="prepare_context_streaming",
+            arguments=arguments,
+            success=False,
+            error=str(e)
+        )
+        return [TextContent(type="text", text=json.dumps({
+            "error": str(e),
+            "hint": "Ensure GOOGLE_API_KEY is set and streaming is enabled"
+        }, indent=2))]
+
+
+async def handle_context_cache_status(arguments: dict) -> list[TextContent]:
+    """Get context cache status and statistics."""
+    from app.core.context.context_cache import get_context_cache
+    
+    try:
+        cache = get_context_cache()
+        
+        # Get cache statistics
+        stats = cache.get_statistics()
+        
+        # Format output
+        result = {
+            "cache_enabled": cache._enabled,
+            "total_entries": stats["total_entries"],
+            "expired_entries": stats["expired_entries"],
+            "active_entries": stats["active_entries"],
+            "cache_size_mb": stats["cache_size_mb"],
+            "max_size_mb": cache._max_size_mb,
+            "hit_rate": stats["hit_rate"],
+            "entries_by_type": stats["entries_by_type"],
+            "oldest_entry_age_seconds": stats["oldest_entry_age_seconds"],
+            "newest_entry_age_seconds": stats["newest_entry_age_seconds"],
+            "ttl_settings": {
+                "query_analysis": cache._ttl_settings.get("query_analysis", 3600),
+                "file_discovery": cache._ttl_settings.get("file_discovery", 1800),
+                "documentation": cache._ttl_settings.get("documentation", 86400),
+            },
+        }
+        
+        return [TextContent(type="text", text=json.dumps(result, indent=2))]
+    
+    except Exception as e:
+        logger.error("cache_status_failed", error=str(e), error_type=type(e).__name__)
+        return [TextContent(type="text", text=json.dumps({
+            "error": str(e),
+            "hint": "Cache may not be initialized or enabled"
+        }, indent=2))]
