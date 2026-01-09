@@ -5,6 +5,7 @@
 [![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge&logo=github)](LICENSE)
 [![MCP Compatible](https://img.shields.io/badge/MCP-Compatible-green?style=for-the-badge)](https://modelcontextprotocol.io)
 [![Frameworks](https://img.shields.io/badge/Frameworks-62-purple?style=for-the-badge)](FRAMEWORKS.md)
+[![Dashboard](https://img.shields.io/badge/Dashboard-Experimental-orange?style=for-the-badge&logo=grafana)](DASHBOARD.md)
 
 **Omni Cortex** is an MCP server that gives Claude access to **62 advanced reasoning frameworks** through Gemini-powered orchestration. Gemini thinks deeply about your problem and generates ultra-efficient execution briefs for Claude.
 
@@ -154,6 +155,54 @@ Add to your IDE's MCP settings (e.g., `claude_desktop_config.json`):
   }
 }
 ```
+
+---
+
+## 📊 Experimental Dashboard
+
+> **⚠️ EXPERIMENTAL BRANCH ONLY**
+> Available on: `claude/experimental-dashboard-integration-Ze6C5`
+
+Monitor your Omni Cortex operations in real-time with the optional web dashboard:
+
+### Features
+- 📈 **Real-time Metrics**: Track sessions, tokens, success rates, uptime
+- 🔍 **Framework Analytics**: See which reasoning frameworks are used most
+- 🎯 **Active Sessions**: Monitor ongoing reasoning operations live
+- 📝 **Session History**: Review recent completions with detailed metrics
+- 🎛️ **Configuration View**: Quick reference for current settings
+
+### Quick Start
+
+**1. Enable Dashboard**
+```bash
+echo "ENABLE_DASHBOARD=true" >> omni_cortex/.env
+```
+
+**2. Install Dependencies**
+```bash
+pip install fastapi uvicorn
+```
+
+**3. Run Dashboard**
+```bash
+python -m omni_cortex.server.dashboard_server
+```
+
+Then open http://127.0.0.1:8080 in your browser!
+
+### Architecture
+- **Zero Impact When Disabled**: Default is OFF, with zero performance overhead
+- **Separate Process**: Runs independently from MCP server (port 8080)
+- **Thread-Safe**: Safe concurrent access from multiple reasoning operations
+- **Claude Code Optimized**: Tracks framework selection, token usage, performance
+
+### Security Notes
+- Binds to `127.0.0.1` (localhost only) by default
+- No authentication (development use only)
+- Do NOT expose to public networks without proper security
+
+📖 **Full Documentation**: See [DASHBOARD.md](DASHBOARD.md) for complete setup guide and API reference.
 
 ---
 
@@ -315,6 +364,13 @@ app/nodes/
 ---
 
 ## 🔧 Recent Changes
+
+### Experimental Dashboard (Branch: `claude/experimental-dashboard-integration-Ze6C5`)
+- **Real-Time Monitoring**: Web dashboard for tracking reasoning operations
+- **Framework Analytics**: Visual insights into which frameworks are used most
+- **Zero-Impact Toggle**: Default OFF, with zero performance overhead when disabled
+- **Thread-Safe Metrics**: Safe concurrent tracking from multiple operations
+- **Claude Code Optimized**: Designed specifically for Claude Code workflows
 
 ### Code Consolidation
 - **Single Registry**: All frameworks now in `app/frameworks/registry.py`
