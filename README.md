@@ -129,6 +129,14 @@ The structured handoff protocol optimizes for Claude Max subscriptions:
 docker pull vzwjustin/omni-cortex:latest
 ```
 
+> **📚 Pre-Seeded Knowledge**: The `:latest` image ships with an embedded knowledge base including:
+> - **LLM Debugging**: Prompt engineering, error recovery, hallucination handling
+> - **Reasoning Frameworks**: When to use CoT, Tree-of-Thoughts, ReAct, etc.
+> - **Best Practices**: Tool calling, memory management, cost optimization
+> - **Curated llms.txt**: Anthropic, LangChain, Pydantic, Docker, and more
+>
+> No setup required - knowledge is pre-loaded in ChromaDB.
+
 ### Option 2: Add to MCP Config
 Add to your IDE's MCP settings (e.g., `claude_desktop_config.json`):
 
