@@ -7,6 +7,7 @@ import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
+import { initializeWebSocketServer } from "../websocket";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -36,6 +37,9 @@ async function startServer() {
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
   // tRPC API
+  // Initialize WebSocket server for real-time event streaming
+  initializeWebSocketServer(server);
+
   app.use(
     "/api/trpc",
     createExpressMiddleware({
