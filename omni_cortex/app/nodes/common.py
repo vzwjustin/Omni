@@ -18,7 +18,7 @@ from typing import Callable, Optional, Any
 from ..core.settings import get_settings
 from ..core.constants import CONTENT, FRAMEWORK
 from ..core.errors import LLMError, ProviderNotConfiguredError
-from ..core.context_gateway import ContextGateway, StructuredContext
+from ..core.context_gateway import get_context_gateway, StructuredContext
 from ..state import GraphState
 from ..nodes.langchain_tools import (
     call_langchain_tool,
@@ -671,9 +671,9 @@ async def prepare_context_with_gemini(
     2. Returns StructuredContext with rich preprocessing
     3. Claude uses this context for deep reasoning
     """
-    # Initialize gateway
-    gateway = ContextGateway()
-    
+    # Use singleton gateway (thread-safe)
+    gateway = get_context_gateway()
+
     # Prepare structured context via Gemini
     structured_context = await gateway.prepare_context(
         query=query,

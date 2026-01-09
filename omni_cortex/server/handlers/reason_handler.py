@@ -2,6 +2,7 @@
 Reason Tool Handler
 
 The smart routing handler that uses HyperRouter for framework selection.
+Integrates with ContextGateway for automatic context preparation.
 """
 
 import logging
@@ -11,6 +12,7 @@ import traceback
 from mcp.types import TextContent
 
 from app.core.audit import log_tool_call
+from app.core.context_gateway import get_context_gateway
 from ..framework_prompts import FRAMEWORKS
 from .validation import (
     ValidationError,
@@ -49,6 +51,31 @@ async def handle_reason(
             error=str(e)
         )
         return [TextContent(type="text", text=f"Validation error: {str(e)}")]
+
+    # AUTO-CONTEXT: If no context provided, use ContextGateway to prepare rich context
+    # This bridges the gap between prepare_context and reason tools
+    context_was_prepared = False
+    if not context or context == "None provided":
+        try:
+            gateway = get_context_gateway()
+            structured_context = await gateway.prepare_context(
+                query=query,
+                workspace_path=arguments.get("workspace_path"),
+                code_context=arguments.get("code_context"),
+                file_list=arguments.get("file_list"),
+                search_docs=True,
+            )
+            context = structured_context.to_claude_prompt()
+            context_was_prepared = True
+            logger.info("auto_context_prepared", query_preview=query[:50])
+        except Exception as e:
+            # Graceful degradation: proceed without auto-context if gateway fails
+            logger.warning(
+                "auto_context_failed",
+                error=str(e),
+                error_type=type(e).__name__
+            )
+            context = None
 
     # Generate structured brief using the new protocol
     try:

@@ -2,6 +2,7 @@
 Framework Tool Handlers
 
 Handles think_* tools for specific framework execution.
+Integrates with ContextGateway for automatic context preparation.
 """
 
 import logging
@@ -14,6 +15,7 @@ from app.core.sampling import (
     call_llm_with_fallback,
     LANGCHAIN_LLM_ENABLED,
 )
+from app.core.context_gateway import get_context_gateway
 from app.orchestrators import FRAMEWORK_ORCHESTRATORS
 from ..framework_prompts import FRAMEWORKS
 from .validation import (
@@ -51,6 +53,27 @@ async def handle_think_framework(
         thread_id = validate_thread_id(arguments.get("thread_id"), required=False)
     except ValidationError as e:
         return [TextContent(type="text", text=f"Validation error: {str(e)}")]
+
+    # AUTO-CONTEXT: If no context provided, use ContextGateway to prepare rich context
+    if not context or context == "None provided":
+        try:
+            gateway = get_context_gateway()
+            structured_context = await gateway.prepare_context(
+                query=query,
+                workspace_path=arguments.get("workspace_path"),
+                code_context=arguments.get("code_context"),
+                file_list=arguments.get("file_list"),
+                search_docs=True,
+            )
+            context = structured_context.to_claude_prompt()
+            logger.info(f"Auto-prepared context for {fw_name}", extra={"query_preview": query[:50]})
+        except Exception as e:
+            # Graceful degradation: proceed without auto-context if gateway fails
+            logger.warning(
+                f"Auto-context failed for {fw_name}",
+                extra={"error": str(e), "error_type": type(e).__name__}
+            )
+            context = "None provided"
 
     # Enhance context with memory if thread_id provided
     if thread_id:
