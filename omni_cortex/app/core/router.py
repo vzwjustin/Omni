@@ -101,17 +101,13 @@ class HyperRouter:
         self._cache_max_size = 256
         self._cache_ttl_seconds = 300  # 5 minutes
         # Lock for thread-safe cache operations in async context
-        self._cache_lock: Optional[asyncio.Lock] = None
+        # Initialize immediately to prevent race conditions
+        self._cache_lock = asyncio.Lock()
 
     # ==========================================================================
     # ROUTING CACHE
     # ==========================================================================
 
-    def _get_cache_lock(self) -> asyncio.Lock:
-        """Get or create the async cache lock (lazy initialization)."""
-        if self._cache_lock is None:
-            self._cache_lock = asyncio.Lock()
-        return self._cache_lock
 
     def _get_cache_key(self, query: str, code_snippet: Optional[str] = None) -> str:
         """Generate cache key from query (normalized)."""
@@ -123,7 +119,7 @@ class HyperRouter:
 
     async def _get_cached_routing(self, cache_key: str) -> Optional[Tuple[List[str], str, str]]:
         """Get cached routing decision if valid (thread-safe)."""
-        async with self._get_cache_lock():
+        async with self._cache_lock:
             if cache_key not in self._routing_cache:
                 return None
             chain, reasoning, category, timestamp = self._routing_cache[cache_key]
@@ -142,7 +138,7 @@ class HyperRouter:
         category: str
     ) -> None:
         """Cache a routing decision (thread-safe)."""
-        async with self._get_cache_lock():
+        async with self._cache_lock:
             # Evict oldest if at capacity
             if len(self._routing_cache) >= self._cache_max_size:
                 oldest_key = min(self._routing_cache, key=lambda k: self._routing_cache[k][3])
