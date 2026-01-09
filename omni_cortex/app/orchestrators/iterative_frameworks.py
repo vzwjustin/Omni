@@ -381,7 +381,7 @@ async def rubber_duck(sampler: ClientSampler, query: str, context: str) -> Dict[
     # Insight synthesis
     insight_prompt = f"""Based on this Socratic dialogue:
 
-{chr(10).join(f'Q: {q}\\nA: {a[:CONTENT.QUERY_LOG]}...' for q, a in questions_and_answers)}
+{chr(10).join(f"Q: {q} " + chr(10) + f"A: {a[:CONTENT.QUERY_LOG]}..." for q, a in questions_and_answers)}
 
 ## Original Problem
 {query}
