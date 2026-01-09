@@ -1,6 +1,6 @@
 {
     "name": "Omni-Cortex Dev",
-    "image": "vzwjustin/omni-cortex:seeded",
+    "image": "vzwjustin/omni-cortex:latest",
     "customizations": {
         "vscode": {
             "extensions": [
