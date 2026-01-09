@@ -332,7 +332,13 @@ class StreamingContextGateway(ContextGateway):
                 self._performance_tracker.record_execution(
                     "file_discovery", workspace_size, comp_time
                 )
-                
+
+                # Estimate token usage for file discovery API call
+                # Formula: prompt tokens (query + file listing) + response tokens (JSON output)
+                estimated_prompt_tokens = len(query) // 4 + workspace_size // 4  # ~4 chars per token
+                estimated_response_tokens = len(result) * 50  # ~50 tokens per file result
+                tokens_consumed = estimated_prompt_tokens + estimated_response_tokens
+
                 self._emit_progress(
                     component="file_discovery",
                     status=ProgressStatus.COMPLETED,
@@ -341,12 +347,12 @@ class StreamingContextGateway(ContextGateway):
                     message=f"Found {len(result)} relevant files",
                     callback=progress_callback
                 )
-                
+
                 component_metrics.append(ComponentMetrics(
                     component_name="file_discovery",
                     execution_time=comp_time,
                     api_calls_made=1,
-                    tokens_consumed=0,  # TODO: Track actual tokens
+                    tokens_consumed=tokens_consumed,
                     success=True,
                     cache_hit=False
                 ))
@@ -354,7 +360,7 @@ class StreamingContextGateway(ContextGateway):
                     status=ComponentStatus.SUCCESS,
                     execution_time=comp_time,
                     api_calls_made=1,
-                    tokens_consumed=0
+                    tokens_consumed=tokens_consumed
                 )
                 
                 return result
@@ -463,21 +469,28 @@ class StreamingContextGateway(ContextGateway):
                 self._performance_tracker.record_execution(
                     "doc_search", workspace_size, comp_time
                 )
-                
+
+                # Estimate token usage for documentation search
+                # Formula: query tokens + doc context tokens + response tokens
+                estimated_prompt_tokens = len(query) // 4 + workspace_size // 4
+                doc_count = len(result) if result else 0
+                estimated_response_tokens = doc_count * 100  # ~100 tokens per doc snippet
+                tokens_consumed = estimated_prompt_tokens + estimated_response_tokens
+
                 self._emit_progress(
                     component="doc_search",
                     status=ProgressStatus.COMPLETED,
                     progress=1.0,
-                    data={"docs_found": len(result) if result else 0},
-                    message=f"Found {len(result) if result else 0} documentation snippets",
+                    data={"docs_found": doc_count},
+                    message=f"Found {doc_count} documentation snippets",
                     callback=progress_callback
                 )
-                
+
                 component_metrics.append(ComponentMetrics(
                     component_name="doc_search",
                     execution_time=comp_time,
                     api_calls_made=1,
-                    tokens_consumed=0,
+                    tokens_consumed=tokens_consumed,
                     success=True,
                     cache_hit=False
                 ))
@@ -485,7 +498,7 @@ class StreamingContextGateway(ContextGateway):
                     status=ComponentStatus.SUCCESS,
                     execution_time=comp_time,
                     api_calls_made=1,
-                    tokens_consumed=0
+                    tokens_consumed=tokens_consumed
                 )
                 
                 return result
@@ -549,21 +562,28 @@ class StreamingContextGateway(ContextGateway):
                 self._performance_tracker.record_execution(
                     "code_search", workspace_size, comp_time
                 )
-                
+
+                # Estimate token usage for code search
+                # Code search is typically local (ripgrep), but may use LLM for analysis
+                # Estimate conservatively based on query and results
+                search_count = len(result) if result else 0
+                estimated_tokens = len(query) // 4 + search_count * 30  # ~30 tokens per search result
+                tokens_consumed = estimated_tokens
+
                 self._emit_progress(
                     component="code_search",
                     status=ProgressStatus.COMPLETED,
                     progress=1.0,
-                    data={"searches": len(result) if result else 0},
-                    message=f"Completed {len(result) if result else 0} code searches",
+                    data={"searches": search_count},
+                    message=f"Completed {search_count} code searches",
                     callback=progress_callback
                 )
-                
+
                 component_metrics.append(ComponentMetrics(
                     component_name="code_search",
                     execution_time=comp_time,
                     api_calls_made=1,
-                    tokens_consumed=0,
+                    tokens_consumed=tokens_consumed,
                     success=True,
                     cache_hit=False
                 ))
@@ -571,7 +591,7 @@ class StreamingContextGateway(ContextGateway):
                     status=ComponentStatus.SUCCESS,
                     execution_time=comp_time,
                     api_calls_made=1,
-                    tokens_consumed=0
+                    tokens_consumed=tokens_consumed
                 )
                 
                 return result
@@ -709,7 +729,17 @@ class StreamingContextGateway(ContextGateway):
             self._performance_tracker.record_execution(
                 "query_analysis", workspace_size, comp_time
             )
-            
+
+            # Estimate token usage for query analysis
+            # Formula: query + code context + documentation context + response (structured JSON)
+            estimated_prompt_tokens = len(query) // 4
+            if code_context:
+                estimated_prompt_tokens += len(code_context) // 4
+            if docs_context_str:
+                estimated_prompt_tokens += len(docs_context_str) // 4
+            estimated_response_tokens = 200  # Structured JSON response with task analysis
+            tokens_consumed = estimated_prompt_tokens + estimated_response_tokens
+
             self._emit_progress(
                 component="query_analysis",
                 status=ProgressStatus.COMPLETED,
@@ -718,12 +748,12 @@ class StreamingContextGateway(ContextGateway):
                 message=f"Task identified: {query_analysis.get('task_type', 'general')}",
                 callback=progress_callback
             )
-            
+
             component_metrics.append(ComponentMetrics(
                 component_name="query_analysis",
                 execution_time=comp_time,
                 api_calls_made=1,
-                tokens_consumed=0,
+                tokens_consumed=tokens_consumed,
                 success=True,
                 cache_hit=False
             ))
@@ -731,7 +761,7 @@ class StreamingContextGateway(ContextGateway):
                 status=ComponentStatus.SUCCESS,
                 execution_time=comp_time,
                 api_calls_made=1,
-                tokens_consumed=0
+                tokens_consumed=tokens_consumed
             )
             
         except asyncio.CancelledError:
