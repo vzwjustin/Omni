@@ -59,30 +59,33 @@ RUN python -m pytest tests/ -v --tb=short 2>&1 | tee /app/test-results.txt; \
 
 # =============================================================================
 # Stage 3: Seeded - pre-loaded with knowledge base
-# Usage: docker buildx build --target seeded --build-arg OPENAI_API_KEY=sk-xxx ...
+# Usage: docker buildx build --target seeded --secret id=openai_api_key,env=OPENAI_API_KEY ...
 # =============================================================================
 FROM base AS seeded
 
-# Need API key for embeddings during build
-ARG OPENAI_API_KEY
-ARG OPENROUTER_API_KEY
-
-ENV OPENAI_API_KEY=${OPENAI_API_KEY} \
-    OPENROUTER_API_KEY=${OPENROUTER_API_KEY} \
-    EMBEDDING_PROVIDER=openai \
+ENV EMBEDDING_PROVIDER=openai \
     PYTHONPATH=/app
 
 # Create data directory
 RUN mkdir -p /app/data/chroma
 
 # Seed from local knowledge file
-RUN if [ -n "$OPENAI_API_KEY" ] || [ -n "$OPENROUTER_API_KEY" ]; then \
+# Mount secret to avoid leaking key in image layers
+RUN --mount=type=secret,id=openai_api_key \
+    --mount=type=secret,id=openrouter_api_key \
+    if [ -f /run/secrets/openai_api_key ] || [ -f /run/secrets/openrouter_api_key ]; then \
+    export OPENAI_API_KEY=$(cat /run/secrets/openai_api_key 2>/dev/null || echo "") && \
+    export OPENROUTER_API_KEY=$(cat /run/secrets/openrouter_api_key 2>/dev/null || echo "") && \
     echo "Seeding knowledge from local files..." && \
     python3 scripts/seed_knowledge.py --file knowledge/llm_best_practices.md || true; \
     fi
 
 # Seed from curated llms.txt sources
-RUN if [ -n "$OPENAI_API_KEY" ] || [ -n "$OPENROUTER_API_KEY" ]; then \
+RUN --mount=type=secret,id=openai_api_key \
+    --mount=type=secret,id=openrouter_api_key \
+    if [ -f /run/secrets/openai_api_key ] || [ -f /run/secrets/openrouter_api_key ]; then \
+    export OPENAI_API_KEY=$(cat /run/secrets/openai_api_key 2>/dev/null || echo "") && \
+    export OPENROUTER_API_KEY=$(cat /run/secrets/openrouter_api_key 2>/dev/null || echo "") && \
     echo "Seeding from curated llms.txt sources..." && \
     python3 scripts/seed_knowledge.py --auto || true; \
     fi
