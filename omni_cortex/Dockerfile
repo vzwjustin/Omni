@@ -58,7 +58,51 @@ RUN python -m pytest tests/ -v --tb=short 2>&1 | tee /app/test-results.txt; \
     exit $RESULT
 
 # =============================================================================
-# Stage 3: Production - final lightweight image
+# Stage 3: Seeded - pre-loaded with knowledge base
+# Usage: docker buildx build --target seeded --build-arg OPENAI_API_KEY=sk-xxx ...
+# =============================================================================
+FROM base AS seeded
+
+# Need API key for embeddings during build
+ARG OPENAI_API_KEY
+ARG OPENROUTER_API_KEY
+
+ENV OPENAI_API_KEY=${OPENAI_API_KEY} \
+    OPENROUTER_API_KEY=${OPENROUTER_API_KEY} \
+    EMBEDDING_PROVIDER=openai \
+    PYTHONPATH=/app
+
+# Create data directory
+RUN mkdir -p /app/data/chroma
+
+# Seed from local knowledge file
+RUN if [ -n "$OPENAI_API_KEY" ] || [ -n "$OPENROUTER_API_KEY" ]; then \
+    echo "Seeding knowledge from local files..." && \
+    python3 scripts/seed_knowledge.py --file knowledge/llm_best_practices.md || true; \
+    fi
+
+# Seed from curated llms.txt sources
+RUN if [ -n "$OPENAI_API_KEY" ] || [ -n "$OPENROUTER_API_KEY" ]; then \
+    echo "Seeding from curated llms.txt sources..." && \
+    python3 scripts/seed_knowledge.py --auto || true; \
+    fi
+
+# Create non-root user
+RUN groupadd --gid 1000 cortex && \
+    useradd --uid 1000 --gid cortex --shell /bin/bash --create-home cortex
+
+# Set ownership (including seeded data)
+RUN chown -R cortex:cortex /app
+
+# Copy startup script
+COPY scripts/startup.sh /app/scripts/startup.sh
+RUN chmod +x /app/scripts/startup.sh && chown cortex:cortex /app/scripts/startup.sh
+
+USER cortex
+ENTRYPOINT ["/app/scripts/startup.sh"]
+
+# =============================================================================
+# Stage 4: Production - final lightweight image (no pre-seeding)
 # =============================================================================
 FROM base AS production
 
