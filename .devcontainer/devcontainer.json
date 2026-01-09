@@ -1,0 +1,29 @@
+{
+    "name": "Omni-Cortex Dev",
+    "image": "vzwjustin/omni-cortex:seeded",
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-python.python",
+                "ms-python.vscode-pydantic",
+                "charliermarsh.ruff",
+                "tamasfe.even-better-toml",
+                "redhat.vscode-yaml"
+            ],
+            "settings": {
+                "python.defaultInterpreterPath": "/usr/local/bin/python",
+                "python.testing.pytestArgs": [
+                    "tests"
+                ],
+                "python.testing.unittestEnabled": false,
+                "python.testing.pytestEnabled": true
+            }
+        }
+    },
+    "remoteUser": "root",
+    "postCreateCommand": "pip install -r requirements.txt && pip install pytest pytest-asyncio pytest-cov",
+    "runArgs": [
+        "--name",
+        "omni-cortex-dev"
+    ]
+}
