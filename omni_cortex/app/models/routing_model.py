@@ -11,6 +11,7 @@ from typing import Any
 import structlog
 
 from ..core.settings import get_settings
+from ..core.constants import LIMITS
 
 logger = structlog.get_logger("routing_model")
 
@@ -27,9 +28,12 @@ class GeminiRoutingWrapper:
 
     async def ainvoke(self, prompt: str) -> Any:
         """Async invoke with search grounding."""
-        response = await asyncio.to_thread(
-            self.model.generate_content,
-            prompt
+        response = await asyncio.wait_for(
+            asyncio.to_thread(
+                self.model.generate_content,
+                prompt
+            ),
+            timeout=LIMITS.LLM_TIMEOUT
         )
         return GeminiResponse(response)
 
@@ -57,15 +61,18 @@ class GeminiRoutingWrapperNew:
             google_search=types.GoogleSearch()
         )
 
-        response = await asyncio.to_thread(
-            self._client.models.generate_content,
-            model=self._model_name,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                temperature=0.7,
-                max_output_tokens=4096,
-                tools=[google_search_tool]
-            )
+        response = await asyncio.wait_for(
+            asyncio.to_thread(
+                self._client.models.generate_content,
+                model=self._model_name,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    temperature=0.7,
+                    max_output_tokens=4096,
+                    tools=[google_search_tool]
+                )
+            ),
+            timeout=LIMITS.LLM_TIMEOUT
         )
         return GeminiResponse(response)
 

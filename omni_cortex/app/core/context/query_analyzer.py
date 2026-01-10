@@ -15,7 +15,7 @@ import structlog
 from typing import Dict, Any, Optional
 
 from ..settings import get_settings
-from ..constants import CONTENT
+from ..constants import CONTENT, LIMITS
 from ..errors import LLMError, ProviderNotConfiguredError
 from ..correlation import get_correlation_id
 from .thinking_mode_optimizer import (
@@ -294,11 +294,15 @@ Be specific and actionable. Focus on what Claude needs to execute effectively.""
                 start_time = asyncio.get_event_loop().time()
                 
                 # Use non-streaming API (simpler and works with async)
-                response = await asyncio.to_thread(
-                    client.models.generate_content,
-                    model=model,
-                    contents=contents,
-                    config=config,
+                # Wrap with timeout to prevent hanging on slow/unresponsive API
+                response = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        client.models.generate_content,
+                        model=model,
+                        contents=contents,
+                        config=config,
+                    ),
+                    timeout=LIMITS.LLM_TIMEOUT
                 )
 
                 # Track execution time
@@ -335,14 +339,17 @@ Be specific and actionable. Focus on what Claude needs to execute effectively.""
             else:  # Fallback to old package
                 # Old package also supports response_mime_type in generation_config
                 start_time = asyncio.get_event_loop().time()
-                
-                response = await asyncio.to_thread(
-                    client.generate_content,
-                    prompt,
-                    generation_config={
-                        "temperature": 0.3,
-                        "response_mime_type": "application/json"
-                    }
+
+                response = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        client.generate_content,
+                        prompt,
+                        generation_config={
+                            "temperature": 0.3,
+                            "response_mime_type": "application/json"
+                        }
+                    ),
+                    timeout=LIMITS.LLM_TIMEOUT
                 )
                 
                 execution_time = asyncio.get_event_loop().time() - start_time
@@ -413,17 +420,20 @@ Be specific and actionable. Focus on what Claude needs to execute effectively.""
                         )
                         
                         start_time = asyncio.get_event_loop().time()
-                        
-                        response = await asyncio.to_thread(
-                            client.models.generate_content,
-                            model=model,
-                            contents=contents,
-                            config=config,
+
+                        response = await asyncio.wait_for(
+                            asyncio.to_thread(
+                                client.models.generate_content,
+                                model=model,
+                                contents=contents,
+                                config=config,
+                            ),
+                            timeout=LIMITS.LLM_TIMEOUT
                         )
-                        
+
                         execution_time = asyncio.get_event_loop().time() - start_time
                         result = json.loads(response.text)
-                        
+
                         # Add fallback metadata
                         result["thinking_mode_used"] = False
                         result["thinking_level"] = "none"
@@ -439,19 +449,22 @@ Be specific and actionable. Focus on what Claude needs to execute effectively.""
                     else:
                         # Old package fallback
                         start_time = asyncio.get_event_loop().time()
-                        
-                        response = await asyncio.to_thread(
-                            client.generate_content,
-                            prompt,
-                            generation_config={
-                                "temperature": 0.3,
-                                "response_mime_type": "application/json"
-                            }
+
+                        response = await asyncio.wait_for(
+                            asyncio.to_thread(
+                                client.generate_content,
+                                prompt,
+                                generation_config={
+                                    "temperature": 0.3,
+                                    "response_mime_type": "application/json"
+                                }
+                            ),
+                            timeout=LIMITS.LLM_TIMEOUT
                         )
-                        
+
                         execution_time = asyncio.get_event_loop().time() - start_time
                         result = json.loads(response.text)
-                        
+
                         result["thinking_mode_used"] = False
                         result["thinking_level"] = "none"
                         result["thinking_mode_fallback"] = True
