@@ -454,6 +454,41 @@ def validate_float(value: Any, param_name: str, default: float, min_value: float
     return float_value
 
 
+def validate_int(value: Any, param_name: str, default: Optional[int] = None, min_value: Optional[int] = None, max_value: Optional[int] = None) -> Optional[int]:
+    """
+    Validate optional integer parameter within range.
+
+    Args:
+        value: The value to validate
+        param_name: Name of parameter for error messages
+        default: Default value if not provided (can be None)
+        min_value: Minimum allowed value (optional)
+        max_value: Maximum allowed value (optional)
+
+    Returns:
+        Validated integer or None if not provided and default is None
+
+    Raises:
+        ValidationError: If validation fails
+    """
+    if value is None:
+        return default
+
+    if isinstance(value, bool):
+        raise ValidationError(f"{param_name} must be an integer")
+
+    if not isinstance(value, int):
+        raise ValidationError(f"{param_name} must be an integer")
+
+    if min_value is not None and value < min_value:
+        raise ValidationError(f"{param_name} must be at least {min_value}")
+
+    if max_value is not None and value > max_value:
+        raise ValidationError(f"{param_name} must be at most {max_value}")
+
+    return value
+
+
 # Re-export core validation utilities for backward compatibility
 # These can be imported directly from this module
 __all__ = [
@@ -472,6 +507,7 @@ __all__ = [
     'validate_string_list',
     'validate_boolean',
     'validate_float',
+    'validate_int',
     # Re-exported from app.core.validation
     'sanitize_user_input',
     'sanitize_query',
