@@ -90,6 +90,12 @@ from .handlers import (
     handle_manage_claude_md,
     handle_prepare_context_streaming,
     handle_context_cache_status,
+    # Token reduction tools
+    handle_serialize_to_toon,
+    handle_deserialize_from_toon,
+    handle_compress_prompt,
+    handle_compress_context,
+    handle_token_reduction_compare,
 )
 
 # Import MCP sampling and settings
@@ -248,6 +254,71 @@ def create_server() -> Server:
                         "section": {"type": "string", "description": "Section name for injection (default: Rules)"}
                     },
                     "required": ["action"]
+                }
+            ))
+
+            # Token Reduction Tools (TOON + LLMLingua-2)
+            tools.append(Tool(
+                name="serialize_to_toon",
+                description="Convert JSON to TOON format for 20-60% token reduction. TOON (Token-Oriented Object Notation) is optimized for LLMs, especially effective for arrays of uniform objects.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "data": {"type": "string", "description": "JSON string to serialize to TOON format"}
+                    },
+                    "required": ["data"]
+                }
+            ))
+
+            tools.append(Tool(
+                name="deserialize_from_toon",
+                description="Convert TOON format back to JSON",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "toon_data": {"type": "string", "description": "TOON-formatted string to deserialize"}
+                    },
+                    "required": ["toon_data"]
+                }
+            ))
+
+            tools.append(Tool(
+                name="compress_prompt",
+                description="Compress prompt using Microsoft's LLMLingua-2 for 50-80% token reduction while preserving semantic meaning. Uses BERT-based token classification.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "prompt": {"type": "string", "description": "Prompt text to compress"},
+                        "rate": {"type": "number", "description": "Compression rate 0.1-0.9 (default: 0.5, lower = more compression)", "minimum": 0.1, "maximum": 0.9},
+                        "min_tokens": {"type": "number", "description": "Only compress if prompt exceeds this token count", "minimum": 1000}
+                    },
+                    "required": ["prompt"]
+                }
+            ))
+
+            tools.append(Tool(
+                name="compress_context",
+                description="Compress context while preserving instruction (ideal for RAG). The instruction is kept intact while retrieved context is compressed.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "instruction": {"type": "string", "description": "User instruction to preserve"},
+                        "context": {"type": "string", "description": "Context to compress"},
+                        "rate": {"type": "number", "description": "Compression rate 0.1-0.9 (default: 0.5)", "minimum": 0.1, "maximum": 0.9}
+                    },
+                    "required": ["instruction", "context"]
+                }
+            ))
+
+            tools.append(Tool(
+                name="token_reduction_compare",
+                description="Compare different token reduction strategies (JSON, TOON, LLMLingua) to find the best approach for your content",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "content": {"type": "string", "description": "Content to analyze (text or JSON)"}
+                    },
+                    "required": ["content"]
                 }
             ))
 
@@ -586,6 +657,22 @@ def create_server() -> Server:
 
             if name == "manage_claude_md":
                 return await handle_manage_claude_md(arguments)
+
+            # Token Reduction Tools
+            if name == "serialize_to_toon":
+                return await handle_serialize_to_toon(arguments)
+
+            if name == "deserialize_from_toon":
+                return await handle_deserialize_from_toon(arguments)
+
+            if name == "compress_prompt":
+                return await handle_compress_prompt(arguments)
+
+            if name == "compress_context":
+                return await handle_compress_context(arguments)
+
+            if name == "token_reduction_compare":
+                return await handle_token_reduction_compare(arguments)
 
             return [TextContent(type="text", text=f"Unknown tool: {name}")]
         finally:

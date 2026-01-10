@@ -136,6 +136,21 @@ class OmniCortexSettings(BaseSettings):
     thinking_mode_complexity_threshold: str = Field(default="medium", alias="THINKING_MODE_COMPLEXITY_THRESHOLD")
     thinking_mode_token_threshold: int = Field(default=20000, ge=5000, le=100000, alias="THINKING_MODE_TOKEN_THRESHOLD")
 
+    # Token Reduction Technologies (TOON + LLMLingua-2)
+    enable_toon_serialization: bool = Field(default=True, alias="ENABLE_TOON_SERIALIZATION")
+    enable_llmlingua_compression: bool = Field(default=False, alias="ENABLE_LLMLINGUA_COMPRESSION")
+    llmlingua_compression_rate: float = Field(default=0.5, ge=0.1, le=0.9, alias="LLMLINGUA_COMPRESSION_RATE")
+    llmlingua_model_name: str = Field(
+        default="microsoft/llmlingua-2-bert-base-multilingual-cased-meetingbank",
+        alias="LLMLINGUA_MODEL_NAME"
+    )
+    llmlingua_device: str = Field(default="cpu", alias="LLMLINGUA_DEVICE")
+    toon_delimiter: str = Field(default="|", alias="TOON_DELIMITER")
+    toon_array_threshold: int = Field(default=2, ge=1, le=10, alias="TOON_ARRAY_THRESHOLD")
+    auto_compress_prompts: bool = Field(default=False, alias="AUTO_COMPRESS_PROMPTS")
+    auto_compress_context: bool = Field(default=False, alias="AUTO_COMPRESS_CONTEXT")
+    compression_min_tokens: int = Field(default=5000, ge=1000, le=50000, alias="COMPRESSION_MIN_TOKENS")
+
     @field_validator("chroma_persist_dir", mode="before")
     @classmethod
     def validate_chroma_dir(cls, v):

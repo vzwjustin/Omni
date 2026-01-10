@@ -67,3 +67,11 @@ prometheus-client>=0.20.0
 # =============================================================================
 pandas>=2.0.0  # For CSV parsing in bug-fix datasets
 datasets>=2.15.0  # For loading HuggingFace datasets
+
+# =============================================================================
+# Token Reduction Technologies
+# =============================================================================
+llmlingua>=0.2.0  # Microsoft's LLMLingua-2 for prompt compression
+transformers>=4.30.0  # Required for LLMLingua BERT models
+torch>=2.0.0  # PyTorch for model inference
+tiktoken>=0.5.0  # Token counting for compression metrics

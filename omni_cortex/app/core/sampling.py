@@ -99,6 +99,8 @@ class ClientSampler:
         from mcp.types import SamplingMessage, TextContent
 
         # Build message with proper TextContent object (not dict)
+        # NOTE: NO automatic compression here - Claude should always receive full, uncompressed
+        # context from Gemini. Token reduction is available as opt-in tools only.
         messages = [
             SamplingMessage(
                 role="user",
