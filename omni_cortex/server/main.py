@@ -120,10 +120,11 @@ def create_server() -> Server:
         tools = []
 
         if LEAN_MODE:
-            # ULTRA-LEAN: 10 tools - Gemini does the heavy lifting
+            # ULTRA-LEAN: 4 tools only - Claude talks to Gemini, Gemini does all preprocessing
+            # All compression, token counting, TOON, etc. happens internally in prepare_context
             tools.append(Tool(
                 name="prepare_context",
-                description="Gemini 3 Flash prepares rich, structured context for Claude. Analyzes query, discovers relevant files (with relevance scoring), fetches documentation, generates execution plan. Returns organized brief so Claude can focus on deep reasoning instead of searching.",
+                description="Gemini 3 Flash prepares rich, structured context for Claude. Analyzes query, discovers relevant files (with relevance scoring), fetches documentation, generates execution plan. All compression and token optimization happens internally. Returns organized brief so Claude can focus on deep reasoning.",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -137,39 +138,10 @@ def create_server() -> Server:
                         },
                         "search_docs": {"type": "boolean", "description": "Search web for documentation (default: true)"},
                         "output_format": {"type": "string", "enum": ["prompt", "json"], "description": "Output format (default: prompt)"},
-                        "enable_cache": {"type": "boolean", "description": "Enable intelligent caching (default: true)"},
-                        "enable_multi_repo": {"type": "boolean", "description": "Enable multi-repository discovery (default: true)"},
-                        "enable_source_attribution": {"type": "boolean", "description": "Include source attribution for docs (default: true)"}
+                        "streaming": {"type": "boolean", "description": "Enable streaming progress (default: false)"}
                     },
                     "required": ["query"]
                 }
-            ))
-
-            tools.append(Tool(
-                name="prepare_context_streaming",
-                description="Gemini-powered context preparation with real-time streaming progress. Shows what's happening during file discovery, doc search, and analysis. Use for long-running context preparation.",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "query": {"type": "string", "description": "The task or problem to prepare context for"},
-                        "workspace_path": {"type": "string", "description": "Path to workspace/project directory"},
-                        "code_context": {"type": "string", "description": "Any code snippets to consider"},
-                        "file_list": {
-                            "type": "array",
-                            "items": {"type": "string"},
-                            "description": "Pre-specified files to analyze"
-                        },
-                        "search_docs": {"type": "boolean", "description": "Search web for documentation (default: true)"},
-                        "output_format": {"type": "string", "enum": ["prompt", "json"], "description": "Output format (default: prompt)"}
-                    },
-                    "required": ["query"]
-                }
-            ))
-
-            tools.append(Tool(
-                name="context_cache_status",
-                description="Get context cache status and statistics. Shows cache hit rates, token savings, and cache health.",
-                inputSchema={"type": "object", "properties": {}}
             ))
 
             tools.append(Tool(
@@ -188,7 +160,7 @@ def create_server() -> Server:
 
             tools.append(Tool(
                 name="execute_code",
-                description="Execute Python code in sandboxed environment. Use for testing, validation, and verification.",
+                description="Execute Python code in sandboxed environment. Use for testing and validation.",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -203,123 +175,6 @@ def create_server() -> Server:
                 name="health",
                 description="Check server health, available frameworks, and capabilities",
                 inputSchema={"type": "object", "properties": {}}
-            ))
-
-            # Context optimization tools
-            tools.append(Tool(
-                name="count_tokens",
-                description="Count tokens in text using Claude's tokenizer",
-                inputSchema={
-                    "type": "object",
-                    "properties": {"text": {"type": "string", "description": "Text to count tokens for"}},
-                    "required": ["text"]
-                }
-            ))
-
-            tools.append(Tool(
-                name="compress_content",
-                description="Compress file content by removing comments/whitespace. Achieves 30-70% token reduction.",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "content": {"type": "string", "description": "Content to compress"},
-                        "target_reduction": {"type": "number", "description": "Target reduction 0.0-1.0 (default: 0.3)"}
-                    },
-                    "required": ["content"]
-                }
-            ))
-
-            tools.append(Tool(
-                name="detect_truncation",
-                description="Detect if text is truncated (unclosed blocks, incomplete sentences)",
-                inputSchema={
-                    "type": "object",
-                    "properties": {"text": {"type": "string", "description": "Text to check"}},
-                    "required": ["text"]
-                }
-            ))
-
-            tools.append(Tool(
-                name="manage_claude_md",
-                description="Analyze, generate, or inject rules into CLAUDE.md files",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "action": {"type": "string", "enum": ["analyze", "generate", "inject", "list_presets"], "description": "Action to perform"},
-                        "directory": {"type": "string", "description": "Project directory (for analyze)"},
-                        "project_type": {"type": "string", "enum": ["general", "python", "typescript", "react", "rust"], "description": "Project type (for generate)"},
-                        "rules": {"type": "array", "items": {"type": "string"}, "description": "Custom rules to add"},
-                        "presets": {"type": "array", "items": {"type": "string"}, "description": "Presets: security, performance, testing, documentation, code_quality, git, context_optimization"},
-                        "existing_content": {"type": "string", "description": "Existing CLAUDE.md content (for inject)"},
-                        "section": {"type": "string", "description": "Section name for injection (default: Rules)"}
-                    },
-                    "required": ["action"]
-                }
-            ))
-
-            # Token Reduction Tools (TOON + LLMLingua-2)
-            tools.append(Tool(
-                name="serialize_to_toon",
-                description="Convert JSON to TOON format for 20-60% token reduction. TOON (Token-Oriented Object Notation) is optimized for LLMs, especially effective for arrays of uniform objects.",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "data": {"type": "string", "description": "JSON string to serialize to TOON format"}
-                    },
-                    "required": ["data"]
-                }
-            ))
-
-            tools.append(Tool(
-                name="deserialize_from_toon",
-                description="Convert TOON format back to JSON",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "toon_data": {"type": "string", "description": "TOON-formatted string to deserialize"}
-                    },
-                    "required": ["toon_data"]
-                }
-            ))
-
-            tools.append(Tool(
-                name="compress_prompt",
-                description="Compress prompt using Microsoft's LLMLingua-2 for 50-80% token reduction while preserving semantic meaning. Uses BERT-based token classification.",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "prompt": {"type": "string", "description": "Prompt text to compress"},
-                        "rate": {"type": "number", "description": "Compression rate 0.1-0.9 (default: 0.5, lower = more compression)", "minimum": 0.1, "maximum": 0.9},
-                        "min_tokens": {"type": "number", "description": "Only compress if prompt exceeds this token count", "minimum": 1000}
-                    },
-                    "required": ["prompt"]
-                }
-            ))
-
-            tools.append(Tool(
-                name="compress_context",
-                description="Compress context while preserving instruction (ideal for RAG). The instruction is kept intact while retrieved context is compressed.",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "instruction": {"type": "string", "description": "User instruction to preserve"},
-                        "context": {"type": "string", "description": "Context to compress"},
-                        "rate": {"type": "number", "description": "Compression rate 0.1-0.9 (default: 0.5)", "minimum": 0.1, "maximum": 0.9}
-                    },
-                    "required": ["instruction", "context"]
-                }
-            ))
-
-            tools.append(Tool(
-                name="token_reduction_compare",
-                description="Compare different token reduction strategies (JSON, TOON, LLMLingua) to find the best approach for your content",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "content": {"type": "string", "description": "Content to analyze (text or JSON)"}
-                    },
-                    "required": ["content"]
-                }
             ))
 
             return tools
@@ -638,10 +493,10 @@ def create_server() -> Server:
                 return await handle_health(arguments, manager, LEAN_MODE)
 
             if name == "prepare_context":
+                # Route to streaming handler if streaming=true
+                if arguments.get("streaming", False):
+                    return await handle_prepare_context_streaming(arguments)
                 return await handle_prepare_context(arguments)
-
-            if name == "prepare_context_streaming":
-                return await handle_prepare_context_streaming(arguments)
 
             if name == "context_cache_status":
                 return await handle_context_cache_status(arguments)
@@ -696,12 +551,11 @@ async def main():
     logger.info("Memory: LangChain ConversationBufferMemory")
     logger.info("RAG: ChromaDB with 6 collections")
     if LEAN_MODE:
-        logger.info("Mode: ULTRA-LEAN (10 tools)")
-        logger.info("  Core: prepare_context, prepare_context_streaming, context_cache_status, reason, execute_code, health")
-        logger.info("  Context: count_tokens, compress_content, detect_truncation, manage_claude_md")
-        logger.info("  Gemini 3 Flash: Context prep, file discovery, doc search")
+        logger.info("Mode: ULTRA-LEAN (4 tools)")
+        logger.info("  Tools: prepare_context, reason, execute_code, health")
+        logger.info("  Gemini handles: file discovery, doc search, compression, token optimization")
         logger.info("  62 frameworks available internally via HyperRouter")
-        logger.info("  Set LEAN_MODE=false for full 83-tool access")
+        logger.info("  Set LEAN_MODE=false for full tool access")
     else:
         logger.info(f"Mode: FULL ({len(FRAMEWORKS) + 21} tools)")
         logger.info(f"  {len(FRAMEWORKS)} think_* tools + 21 utilities")
