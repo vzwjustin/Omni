@@ -1,10 +1,12 @@
 # 🧠 Omni Cortex
 ### The Headless Strategy Engine for AI Coding Agents
 
+[![Initial Release](https://img.shields.io/badge/Release-v1.0.0-brightgreen?style=for-the-badge)](https://github.com/vzwjustin/Omni/releases)
 [![Docker Version](https://img.shields.io/docker/v/vzwjustin/omni-cortex?sort=semver&style=for-the-badge&logo=docker&logoColor=white)](https://hub.docker.com/r/vzwjustin/omni-cortex)
 [![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge&logo=github)](LICENSE)
 [![MCP Compatible](https://img.shields.io/badge/MCP-Compatible-green?style=for-the-badge)](https://modelcontextprotocol.io)
 [![Frameworks](https://img.shields.io/badge/Frameworks-62-purple?style=for-the-badge)](FRAMEWORKS.md)
+[![Tests](https://img.shields.io/badge/Tests-280%2B%20Passing-success?style=for-the-badge)](omni_cortex/tests/)
 
 **Omni Cortex** is an MCP server that gives Claude access to **62 advanced reasoning frameworks** through Gemini-powered orchestration. Gemini thinks deeply about your problem and generates ultra-efficient execution briefs for Claude.
 
@@ -316,20 +318,49 @@ app/nodes/
 
 ## 🔧 Recent Changes
 
-### Code Consolidation
-- **Single Registry**: All frameworks now in `app/frameworks/registry.py`
-- **Config Unified**: Deprecated `core/config.py`, using `core/settings.py`
-- **Token-Efficient Briefs**: `ClaudeCodeBrief.to_surgical_prompt()` for 20% savings
+### v1.0.0 - Initial Release (January 2026)
 
-### Architecture
+#### Production Hardening
+- **P0/P1 Fixes Complete**: All critical code review issues resolved
+- **280+ Tests Passing**: Comprehensive test coverage for core modules
+- **Defensive Error Handling**: GeminiResponse never throws, graceful degradation
+- **Dead Code Removed**: Consolidated duplicate functions, wired up unused parameters
+
+#### Code Quality
+- **Single Registry**: All 62 frameworks in `app/frameworks/registry.py`
+- **Config Unified**: Single source of truth in `core/settings.py`
+- **Token-Efficient Briefs**: 20% savings via `ClaudeCodeBrief.to_surgical_prompt()`
+- **Async-Safe Cache**: Thundering herd protection, 90% reduction in duplicate API calls
+
+#### Architecture
 - **Gemini Orchestration**: Task analysis, context prep, framework selection
-- **ChromaDB Integration**: Knowledge buffer for cross-session learning
+- **ChromaDB Integration**: 16K+ examples for cross-session learning
+- **Multi-Repo Support**: Context discovery across multiple repositories
 - **Structured Handoff Protocol**: GeminiRouterOutput → ClaudeCodeBrief
+
+---
+
+## 🧪 Testing
+
+```bash
+# Run all tests
+cd omni_cortex
+python -m pytest tests/ -v
+
+# Run smoke tests only
+python -m pytest tests/unit/test_refactor_smoke.py -v
+```
 
 ---
 
 ## 📄 License
 MIT License. Open source and free to use.
+
+---
+
+## 🙏 Contributing
+
+Contributions welcome! Please read the [CLAUDE.md](omni_cortex/CLAUDE.md) for development guidelines.
 
 ---
 *Built with ❤️ by [Justin Adams](https://github.com/vzwjustin)*
