@@ -81,23 +81,62 @@ class GeminiResponse:
 
     @property
     def content(self) -> str:
-        """Extract text content from Gemini response."""
+        """Extract text content from Gemini response.
+
+        Defensive implementation that handles various failure modes:
+        - Missing/None response
+        - Blocked responses (no text attribute)
+        - Malformed candidates structure
+        - Non-string return values
+        """
+        if self._response is None:
+            return "<no response>"
+
+        # Try direct .text access first (most common case)
         try:
-            return self._response.text
-        except (AttributeError, ValueError) as e:
-            # Fallback for different response formats (blocked responses, etc.)
-            logger.debug("gemini_response_fallback", error=str(e))
+            text = self._response.text
+            if isinstance(text, str):
+                return text
+            # Handle non-string text (shouldn't happen but be safe)
+            return str(text) if text is not None else "<empty>"
+        except (AttributeError, ValueError, TypeError) as e:
+            logger.debug("gemini_response_text_fallback", error=str(e)[:100])
+        except Exception as e:
+            # Catch unexpected errors from .text property
+            logger.debug("gemini_response_text_unexpected", error=str(e)[:100])
+
+        # Try candidates fallback
+        try:
             if hasattr(self._response, 'candidates') and self._response.candidates:
-                parts = self._response.candidates[0].content.parts
-                return "".join(p.text for p in parts if hasattr(p, 'text'))
+                candidate = self._response.candidates[0]
+                if hasattr(candidate, 'content') and hasattr(candidate.content, 'parts'):
+                    parts = candidate.content.parts
+                    text_parts = [p.text for p in parts if hasattr(p, 'text') and p.text]
+                    if text_parts:
+                        return "".join(text_parts)
+        except (IndexError, AttributeError, TypeError) as e:
+            logger.debug("gemini_response_candidates_fallback", error=str(e)[:100])
+        except Exception as e:
+            logger.debug("gemini_response_candidates_unexpected", error=str(e)[:100])
+
+        # Last resort: stringify the response
+        try:
             return str(self._response)
+        except Exception:
+            return "<unreadable response>"
 
     def __repr__(self) -> str:
+        """Safe repr that never throws."""
         try:
             c = self.content
+            # Defensive: ensure c is a string before slicing
+            if not isinstance(c, str):
+                c = str(c) if c is not None else "<none>"
             preview = (c[:50] + "...") if len(c) > 50 else c
         except Exception as e:
-            logger.debug("gemini_response_repr_fallback", error=str(e))
+            # This should never happen given content's defensive implementation,
+            # but belt-and-suspenders for __repr__
+            logger.debug("gemini_response_repr_fallback", error=str(e)[:100])
             preview = "<unavailable>"
         return f"GeminiResponse({preview!r})"
 

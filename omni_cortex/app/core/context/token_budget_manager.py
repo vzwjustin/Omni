@@ -127,12 +127,9 @@ class TokenBudgetManager:
         
         # Get base budget for complexity
         base_budget = self._base_budgets.get(complexity, self._base_budgets["medium"])
-        
-        # Apply task type multiplier if provided
-        if task_type and task_type in self._task_type_adjustments:
-            # Task type adjustments are applied at component level, not total budget
-            # So we just return the base budget here
-            pass
+
+        # Note: task_type adjustments are applied at the component allocation level
+        # (see allocate_budget), not by changing the total budget here.
         
         logger.info(
             "budget_calculated",

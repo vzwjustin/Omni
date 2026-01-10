@@ -16,6 +16,8 @@ from app.core.sampling import (
     LANGCHAIN_LLM_ENABLED,
 )
 from app.core.context_gateway import get_context_gateway
+from app.core.routing import get_framework_info
+from app.core.errors import FrameworkNotFoundError
 from app.orchestrators import FRAMEWORK_ORCHESTRATORS
 from ..framework_prompts import FRAMEWORKS
 from .validation import (
@@ -53,6 +55,12 @@ async def handle_think_framework(
         thread_id = validate_thread_id(arguments.get("thread_id"), required=False)
     except ValidationError as e:
         return [TextContent(type="text", text=f"Validation error: {str(e)}")]
+
+    # Validate framework exists in registry (uses raise_on_unknown=True)
+    try:
+        fw_info = get_framework_info(fw_name, raise_on_unknown=True)
+    except FrameworkNotFoundError as e:
+        return [TextContent(type="text", text=f"Unknown framework: {fw_name}. {e}")]
 
     # AUTO-CONTEXT: If no context provided, use ContextGateway to prepare rich context
     if not context or context == "None provided":

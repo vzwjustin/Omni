@@ -3,22 +3,38 @@ Input Validation Utilities for MCP Tool Handlers
 
 Provides validation helpers to sanitize and validate input parameters
 before they are used in handlers.
+
+This module re-exports common validation functions from app.core.validation
+and adds handler-specific validation utilities.
 """
 
 import re
 from typing import Any, Optional, List
 
-from app.core.errors import OmniCortexError
+from app.core.errors import OmniCortexError, ValidationError
 
-
-class ValidationError(OmniCortexError):
-    """Input validation failed."""
-    pass
+# Import core validation functions for re-export and internal use
+from app.core.validation import (
+    validate_thread_id as _core_validate_thread_id,
+    validate_framework_name as _core_validate_framework_name,
+    # Re-export sanitization utilities from core
+    sanitize_user_input,
+    sanitize_query,
+    sanitize_code_snippet,
+    sanitize_context,
+    sanitize_file_path,
+    MAX_QUERY_LENGTH,
+    MAX_CODE_SNIPPET_LENGTH,
+    MAX_CONTEXT_LENGTH,
+)
 
 
 def validate_thread_id(thread_id: Any, required: bool = False) -> Optional[str]:
     """
     Validate thread_id parameter.
+
+    This is a handler-specific wrapper around app.core.validation.validate_thread_id
+    that adds support for the 'required' parameter.
 
     Args:
         thread_id: The thread_id value to validate
@@ -35,17 +51,8 @@ def validate_thread_id(thread_id: Any, required: bool = False) -> Optional[str]:
             raise ValidationError("thread_id is required")
         return None
 
-    if not isinstance(thread_id, str):
-        raise ValidationError("thread_id must be a string")
-
-    if len(thread_id) > 256:
-        raise ValidationError("thread_id too long (max 256 chars)")
-
-    # Basic sanitization - alphanumeric, dash, underscore only
-    if not re.match(r'^[a-zA-Z0-9_-]+$', thread_id):
-        raise ValidationError("thread_id contains invalid characters (alphanumeric, dash, underscore only)")
-
-    return thread_id
+    # Delegate to core validation
+    return _core_validate_thread_id(thread_id)
 
 
 def validate_query(query: Any, max_length: int = 50000, required: bool = True) -> str:
@@ -193,33 +200,36 @@ def validate_positive_int(value: Any, param_name: str, default: int, max_value: 
     return value
 
 
-def validate_framework_name(name: Any) -> str:
+def validate_framework_name(name: Any, required: bool = True) -> Optional[str]:
     """
     Validate framework name parameter.
 
+    This is a handler-specific wrapper around app.core.validation.validate_framework_name
+    that adds support for the 'required' parameter and normalizes to lowercase.
+
     Args:
         name: The framework name to validate
+        required: If True, raises ValidationError when name is missing
 
     Returns:
-        Validated framework name string
+        Validated framework name string (lowercase), or None if not required and not provided
 
     Raises:
         ValidationError: If validation fails
     """
     if not name:
-        raise ValidationError("framework_name is required")
+        if required:
+            raise ValidationError("framework_name is required")
+        return None
 
     if not isinstance(name, str):
         raise ValidationError("framework_name must be a string")
 
-    if len(name) > 100:
-        raise ValidationError("framework_name too long (max 100 chars)")
+    # Normalize to lowercase for consistency with registry
+    normalized = name.lower()
 
-    # Framework names should be alphanumeric with underscores
-    if not re.match(r'^[a-zA-Z][a-zA-Z0-9_]*$', name):
-        raise ValidationError("framework_name contains invalid characters")
-
-    return name
+    # Use core validation (validates format and length)
+    return _core_validate_framework_name(normalized)
 
 
 def validate_category(category: Any, valid_categories: List[str], param_name: str = "category") -> str:
@@ -253,6 +263,8 @@ def validate_path(path: Any, param_name: str = "path", required: bool = False) -
     """
     Validate file/directory path parameter.
 
+    Checks for path traversal attacks and null bytes.
+
     Args:
         path: The path value to validate
         param_name: Name of parameter for error messages
@@ -275,11 +287,11 @@ def validate_path(path: Any, param_name: str = "path", required: bool = False) -
     if len(path) > 4096:
         raise ValidationError(f"{param_name} too long (max 4096 chars)")
 
-    # Basic path traversal protection
+    # Check for path traversal sequences
     if ".." in path:
         raise ValidationError(f"{param_name} cannot contain path traversal sequences")
 
-    # Prevent null bytes
+    # Check for null bytes
     if "\x00" in path:
         raise ValidationError(f"{param_name} contains invalid characters")
 
@@ -385,6 +397,10 @@ def validate_boolean(value: Any, param_name: str, default: bool) -> bool:
     """
     Validate boolean parameter.
 
+    This is a handler-specific wrapper around app.core.validation.validate_boolean
+    that adds default value support. Unlike the core version, this only accepts
+    actual boolean values (not string conversions like "true"/"false").
+
     Args:
         value: The value to validate
         param_name: Name of parameter for error messages
@@ -399,6 +415,8 @@ def validate_boolean(value: Any, param_name: str, default: bool) -> bool:
     if value is None:
         return default
 
+    # For handler validation, we only accept actual booleans (stricter than core)
+    # This maintains backward compatibility with existing handler behavior
     if not isinstance(value, bool):
         raise ValidationError(f"{param_name} must be a boolean")
 
@@ -428,44 +446,39 @@ def validate_float(value: Any, param_name: str, default: float, min_value: float
     if not isinstance(value, (int, float)):
         raise ValidationError(f"{param_name} must be a number")
 
-    value = float(value)
+    float_value = float(value)
 
-    if value < min_value or value > max_value:
+    if float_value < min_value or float_value > max_value:
         raise ValidationError(f"{param_name} must be between {min_value} and {max_value}")
 
-    return value
+    return float_value
 
 
-def validate_int(value: Any, param_name: str, default: Optional[int] = None, min_value: Optional[int] = None, max_value: Optional[int] = None) -> Optional[int]:
-    """
-    Validate integer parameter with optional range.
-
-    Args:
-        value: The value to validate
-        param_name: Name of parameter for error messages
-        default: Default value if not provided (can be None)
-        min_value: Minimum allowed value (optional)
-        max_value: Maximum allowed value (optional)
-
-    Returns:
-        Validated integer or None if default is None
-
-    Raises:
-        ValidationError: If validation fails
-    """
-    if value is None:
-        return default
-
-    if isinstance(value, bool):
-        raise ValidationError(f"{param_name} must be an integer")
-
-    if not isinstance(value, int):
-        raise ValidationError(f"{param_name} must be an integer")
-
-    if min_value is not None and value < min_value:
-        raise ValidationError(f"{param_name} must be at least {min_value}")
-
-    if max_value is not None and value > max_value:
-        raise ValidationError(f"{param_name} must be at most {max_value}")
-
-    return value
+# Re-export core validation utilities for backward compatibility
+# These can be imported directly from this module
+__all__ = [
+    # Handler-specific validation functions
+    'validate_thread_id',
+    'validate_query',
+    'validate_context',
+    'validate_code',
+    'validate_text',
+    'validate_positive_int',
+    'validate_framework_name',
+    'validate_category',
+    'validate_path',
+    'validate_action',
+    'validate_file_list',
+    'validate_string_list',
+    'validate_boolean',
+    'validate_float',
+    # Re-exported from app.core.validation
+    'sanitize_user_input',
+    'sanitize_query',
+    'sanitize_code_snippet',
+    'sanitize_context',
+    'sanitize_file_path',
+    'MAX_QUERY_LENGTH',
+    'MAX_CODE_SNIPPET_LENGTH',
+    'MAX_CONTEXT_LENGTH',
+]

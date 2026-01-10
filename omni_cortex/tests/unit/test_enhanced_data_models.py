@@ -37,30 +37,45 @@ except ImportError:
         @staticmethod
         def text(*args, **kwargs):
             return lambda: "test_string"
-        
+
         @staticmethod
         def floats(*args, **kwargs):
             return lambda: 0.5
-        
+
         @staticmethod
         def integers(*args, **kwargs):
             return lambda: 42
-        
+
         @staticmethod
         def booleans():
             return lambda: True
-        
+
         @staticmethod
         def lists(*args, **kwargs):
             return lambda: []
-        
+
         @staticmethod
         def dictionaries(*args, **kwargs):
             return lambda: {}
-        
+
         @staticmethod
         def one_of(*args):
             return lambda: args[0]() if args else None
+
+        @staticmethod
+        def just(value):
+            return lambda: value
+
+    def composite(func):
+        """Dummy composite decorator when hypothesis is not available."""
+        def wrapper(*args, **kwargs):
+            # Return a dummy strategy that does nothing
+            return None
+        return wrapper
+
+    def assume(condition):
+        """Dummy assume function."""
+        pass
 
 # Import enhanced models
 from app.core.context.enhanced_models import (

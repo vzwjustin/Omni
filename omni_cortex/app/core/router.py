@@ -8,6 +8,7 @@ Designed for vibe coders and senior engineers who just want it to work.
 
 import asyncio
 import hashlib
+import heapq
 import json
 import time
 import structlog
@@ -32,6 +33,7 @@ from .routing import (
 )
 from .routing.complexity import ComplexityEstimator
 from .routing.vibes import VibeMatcher
+from .settings import get_settings
 
 logger = structlog.get_logger("router")
 
@@ -98,8 +100,12 @@ class HyperRouter:
         self._brief_generator = None
         # Routing decision cache: query_hash -> (chain, reasoning, category, timestamp)
         self._routing_cache: dict[str, tuple] = {}
-        self._cache_max_size = 256
-        self._cache_ttl_seconds = 300  # 5 minutes
+        # Min-heap for O(log n) eviction: (timestamp, cache_key) pairs
+        self._cache_heap: list[tuple[float, str]] = []
+        # Use settings for cache configuration
+        settings = get_settings()
+        self._cache_max_size = settings.routing_cache_max_size
+        self._cache_ttl_seconds = settings.routing_cache_ttl_seconds
         # Lock for thread-safe cache operations in async context
         # Initialize immediately to prevent race conditions
         self._cache_lock = asyncio.Lock()
@@ -115,7 +121,7 @@ class HyperRouter:
         normalized = query.lower().strip()[:500]
         if code_snippet:
             normalized += "|" + code_snippet[:200]
-        return hashlib.md5(normalized.encode()).hexdigest()
+        return hashlib.sha256(normalized.encode()).hexdigest()
 
     async def _get_cached_routing(self, cache_key: str) -> Optional[Tuple[List[str], str, str]]:
         """Get cached routing decision if valid (thread-safe)."""
@@ -139,11 +145,33 @@ class HyperRouter:
     ) -> None:
         """Cache a routing decision (thread-safe)."""
         async with self._cache_lock:
-            # Evict oldest if at capacity
-            if len(self._routing_cache) >= self._cache_max_size:
-                oldest_key = min(self._routing_cache, key=lambda k: self._routing_cache[k][3])
+            timestamp = time.time()
+
+            # Evict oldest entries if at capacity using O(log n) heap operations
+            while len(self._routing_cache) >= self._cache_max_size and self._cache_heap:
+                # Pop the oldest entry from the heap
+                oldest_ts, oldest_key = heapq.heappop(self._cache_heap)
+
+                # Handle stale heap entries: key was already deleted or updated
+                if oldest_key not in self._routing_cache:
+                    # Key was deleted (e.g., TTL expiration in _get_cached_routing)
+                    continue
+
+                # Check if heap entry is stale (key was updated with a newer timestamp)
+                cached_entry = self._routing_cache[oldest_key]
+                cached_timestamp = cached_entry[3]
+                if cached_timestamp != oldest_ts:
+                    # Entry was updated; skip this stale heap entry
+                    continue
+
+                # Valid entry found - evict it
                 del self._routing_cache[oldest_key]
-            self._routing_cache[cache_key] = (chain, reasoning, category, time.time())
+                logger.debug("routing_cache_evicted", key=oldest_key[:8])
+                break
+
+            # Add new entry to cache and heap
+            self._routing_cache[cache_key] = (chain, reasoning, category, timestamp)
+            heapq.heappush(self._cache_heap, (timestamp, cache_key))
 
     # ==========================================================================
     # HIERARCHICAL ROUTING - Stage 2: Specialist Agent Selection
@@ -543,9 +571,17 @@ class HyperRouter:
         """Infer task type from chosen framework."""
         return infer_task_type(framework)
 
-    def get_framework_info(self, framework: str) -> dict:
-        """Get metadata about a framework."""
-        return get_framework_info(framework)
+    def get_framework_info(self, framework: str, raise_on_unknown: bool = False) -> dict:
+        """Get metadata about a framework.
+
+        Args:
+            framework: Name of the framework
+            raise_on_unknown: If True, raise FrameworkNotFoundError for unknown frameworks
+
+        Returns:
+            Framework metadata dict
+        """
+        return get_framework_info(framework, raise_on_unknown=raise_on_unknown)
 
     # ==========================================================================
     # STRUCTURED BRIEF GENERATION

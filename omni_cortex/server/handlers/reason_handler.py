@@ -131,7 +131,7 @@ async def handle_reason(
         )
         print(f"BRIEF FAILED: {e}\n{err_detail}", file=sys.stderr)
 
-        selected = router._check_vibe_dictionary(query)
+        selected = router._vibe_matcher.check_vibe_dictionary(query)
         if not selected:
             selected = router._heuristic_select(query, context)
         if not selected or selected not in FRAMEWORKS:

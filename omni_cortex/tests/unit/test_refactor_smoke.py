@@ -90,6 +90,75 @@ class TestReprMethods:
         assert "..." in repr_str  # Truncated
         assert len(repr_str) < 100  # Reasonable length
 
+    def test_gemini_response_repr_none_response(self):
+        """GeminiResponse.__repr__ should handle None response."""
+        from app.models.routing_model import GeminiResponse
+
+        response = GeminiResponse(None)
+        repr_str = repr(response)
+
+        assert "GeminiResponse(" in repr_str
+        assert "<no response>" in repr_str
+
+    def test_gemini_response_repr_non_string_text(self):
+        """GeminiResponse.__repr__ should handle non-string .text values."""
+        from app.models.routing_model import GeminiResponse
+
+        # Mock a response with non-string text (e.g., list)
+        mock_response = MagicMock()
+        mock_response.text = ["list", "of", "strings"]
+
+        response = GeminiResponse(mock_response)
+        repr_str = repr(response)
+
+        # Should not throw, should stringify
+        assert "GeminiResponse(" in repr_str
+
+    def test_gemini_response_repr_throwing_str(self):
+        """GeminiResponse.__repr__ should handle response with broken __str__."""
+        from app.models.routing_model import GeminiResponse
+
+        class BrokenResponse:
+            @property
+            def text(self):
+                raise ValueError("blocked")
+
+            @property
+            def candidates(self):
+                return None
+
+            def __str__(self):
+                raise RuntimeError("str also broken")
+
+        response = GeminiResponse(BrokenResponse())
+        repr_str = repr(response)
+
+        # Should not throw, should show fallback
+        assert "GeminiResponse(" in repr_str
+        assert "<unreadable response>" in repr_str
+
+    def test_gemini_response_content_with_candidates(self):
+        """GeminiResponse.content should fallback to candidates structure."""
+        from app.models.routing_model import GeminiResponse
+
+        # Mock a response with candidates but no direct .text
+        mock_part = MagicMock()
+        mock_part.text = "from candidates"
+
+        mock_content = MagicMock()
+        mock_content.parts = [mock_part]
+
+        mock_candidate = MagicMock()
+        mock_candidate.content = mock_content
+
+        mock_response = MagicMock()
+        del mock_response.text  # Remove .text to trigger fallback
+        mock_response.candidates = [mock_candidate]
+
+        response = GeminiResponse(mock_response)
+
+        assert response.content == "from candidates"
+
 
 class TestSettings:
     """Test that settings load correctly."""
@@ -234,3 +303,76 @@ class TestFrameworkRegistry:
             get_framework_info("nonexistent_framework_xyz", raise_on_unknown=True)
 
         assert "nonexistent_framework_xyz" in str(exc_info.value)
+
+
+class TestRouterWrapper:
+    """Test HyperRouter wrapper methods pass through parameters."""
+
+    def test_router_get_framework_info_passes_raise_on_unknown(self):
+        """HyperRouter.get_framework_info should pass raise_on_unknown."""
+        from app.core.router import HyperRouter
+        from app.core.errors import FrameworkNotFoundError
+
+        router = HyperRouter()
+
+        # Default behavior: return fallback
+        info = router.get_framework_info("nonexistent_xyz")
+        assert info["category"] == "unknown"
+
+        # With raise_on_unknown=True: should raise
+        with pytest.raises(FrameworkNotFoundError):
+            router.get_framework_info("nonexistent_xyz", raise_on_unknown=True)
+
+
+class TestRaiseOnErrorWiring:
+    """Test that raise_on_error parameters are properly wired up."""
+
+    def test_collection_manager_get_collection_raise_on_error(self):
+        """CollectionManager.get_collection should respect raise_on_error."""
+        from app.collection_manager import CollectionManager
+        from app.core.errors import CollectionNotFoundError
+
+        manager = CollectionManager(persist_dir="/tmp/test_collections")
+
+        # Default: return None for unknown collection
+        result = manager.get_collection("totally_fake_collection")
+        assert result is None
+
+        # With raise_on_error=True: should raise
+        with pytest.raises(CollectionNotFoundError):
+            manager.get_collection("totally_fake_collection", raise_on_error=True)
+
+    def test_retrieval_search_uses_raise_on_error(self):
+        """app/retrieval/search.py should use raise_on_error=True."""
+        # This is a structural test - verify the code path exists
+        from pathlib import Path
+
+        search_file = Path("app/retrieval/search.py")
+        if search_file.exists():
+            source = search_file.read_text()
+            # Verify raise_on_error=True is used in the search call
+            assert "raise_on_error=True" in source
+
+    def test_framework_handler_uses_raise_on_unknown(self):
+        """server/handlers/framework_handlers.py should use raise_on_unknown=True."""
+        # This is a structural test - verify the code path exists
+        from pathlib import Path
+
+        handler_file = Path("server/handlers/framework_handlers.py")
+        if handler_file.exists():
+            source = handler_file.read_text()
+            # Verify raise_on_unknown=True is used in get_framework_info call
+            assert "raise_on_unknown=True" in source
+            assert "FrameworkNotFoundError" in source
+
+    def test_handler_validate_framework_uses_core(self):
+        """server/handlers/validation.py should use core validate_framework_name."""
+        # This verifies the dead code was wired up
+        from pathlib import Path
+
+        handler_file = Path("server/handlers/validation.py")
+        if handler_file.exists():
+            source = handler_file.read_text()
+            # Verify it imports and uses core validation
+            assert "_core_validate_framework_name" in source
+            assert "validate_framework_name as _core_validate_framework_name" in source

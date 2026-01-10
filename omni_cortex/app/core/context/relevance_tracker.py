@@ -16,6 +16,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Set, Any
 from collections import defaultdict
 import re
+from uuid import uuid4
 
 logger = structlog.get_logger("relevance_tracker")
 
@@ -66,6 +67,83 @@ class RelevanceTracker:
         self._sessions: List[ContextUsageSession] = []
         self._max_history_days = max_history_days
         self._usage_by_task_type: Dict[str, Dict[str, ElementUsage]] = defaultdict(dict)
+
+    def start_session(
+        self,
+        query: str,
+        task_type: Optional[str] = None,
+        complexity: Optional[str] = None
+    ) -> str:
+        """
+        Start a relevance tracking session.
+
+        Returns:
+            Generated session identifier.
+        """
+        session_id = f"session-{uuid4().hex}"
+        session = ContextUsageSession(
+            session_id=session_id,
+            query=query,
+            timestamp=datetime.now(),
+            task_type=task_type,
+            complexity=complexity
+        )
+        self._sessions.append(session)
+        logger.info("relevance_session_started", session_id=session_id)
+        return session_id
+
+    def track_element_provided(
+        self,
+        session_id: str,
+        element_type: str,
+        element_identifier: str,
+        relevance_score: Optional[float] = None
+    ) -> None:
+        """
+        Track an element included in the prepared context.
+
+        Args:
+            session_id: Active session identifier
+            element_type: "file", "doc", or "code_search"
+            element_identifier: File path, doc URL, or search signature
+            relevance_score: Optional relevance score (0-1)
+        """
+        session = None
+        for s in self._sessions:
+            if s.session_id == session_id:
+                session = s
+                break
+
+        if not session:
+            logger.warning("session_not_found", session_id=session_id)
+            return
+
+        normalized_type = element_type.lower()
+        if normalized_type in ("doc", "documentation"):
+            element_id = f"doc:{element_identifier}"
+            usage_type = "documentation"
+        elif normalized_type in ("code_search", "code"):
+            element_id = f"code_search:{element_identifier}"
+            usage_type = "code_search"
+        else:
+            element_id = f"file:{element_identifier}"
+            usage_type = "file"
+
+        session.included_elements.add(element_id)
+
+        if element_id not in self._element_usage:
+            self._element_usage[element_id] = ElementUsage(
+                element_id=element_id,
+                element_type=usage_type
+            )
+
+        usage = self._element_usage[element_id]
+        usage.times_included += 1
+        usage.last_included = datetime.now()
+
+        if relevance_score is not None:
+            usage.relevance_scores.append(relevance_score)
+            usage.avg_relevance_score = sum(usage.relevance_scores) / len(usage.relevance_scores)
         
     def record_context_preparation(
         self,

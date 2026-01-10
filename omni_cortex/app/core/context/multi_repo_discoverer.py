@@ -80,6 +80,15 @@ class MultiRepoFileDiscoverer(FileDiscoverer):
                 for f in files
             ]
             return enhanced_files, [], []
+
+        max_repos = self.settings.multi_repo_max_repositories
+        if max_repos and len(repos) > max_repos:
+            logger.warning(
+                "multi_repo_limit_applied",
+                detected=len(repos),
+                max_allowed=max_repos
+            )
+            repos = repos[:max_repos]
         
         logger.info("repositories_detected", count=len(repos), repos=[r.name for r in repos])
         
@@ -87,7 +96,9 @@ class MultiRepoFileDiscoverer(FileDiscoverer):
         repo_results = await self._analyze_repositories_parallel(query, repos, max_files)
         
         # Phase 3: Follow cross-repository dependencies
-        cross_repo_deps = await self._follow_cross_repo_dependencies(repos, repo_results)
+        cross_repo_deps = []
+        if self.settings.enable_cross_repo_dependencies:
+            cross_repo_deps = await self._follow_cross_repo_dependencies(repos, repo_results)
         
         # Phase 4: Merge and rank results
         all_files = []
@@ -371,9 +382,16 @@ class MultiRepoFileDiscoverer(FileDiscoverer):
         accessible_repos = []
         inaccessible_repos = []
         
+        max_concurrent = self.settings.multi_repo_max_concurrent
+        semaphore = asyncio.Semaphore(max_concurrent)
+
+        async def _bounded_analyze(target_repo: RepoInfo) -> List[FileContext]:
+            async with semaphore:
+                return await self._analyze_repository(target_repo, query, max_files_per_repo)
+
         for repo in repos:
             if repo.is_accessible:
-                tasks.append(self._analyze_repository(repo, query, max_files_per_repo))
+                tasks.append(_bounded_analyze(repo))
                 accessible_repos.append(repo)
             else:
                 inaccessible_repos.append(repo)
@@ -401,7 +419,7 @@ class MultiRepoFileDiscoverer(FileDiscoverer):
         try:
             results = await asyncio.wait_for(
                 asyncio.gather(*tasks, return_exceptions=True),
-                timeout=60.0  # 60 second timeout for all repo analyses
+                timeout=self.settings.multi_repo_analysis_timeout
             )
         except asyncio.TimeoutError:
             logger.error(

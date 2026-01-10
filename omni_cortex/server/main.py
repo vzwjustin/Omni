@@ -707,9 +707,20 @@ async def main():
         logger.info(f"  {len(FRAMEWORKS)} think_* tools + 21 utilities")
     logger.info("=" * 60)
 
-    server = create_server()
-    async with stdio_server() as (read_stream, write_stream):
-        await server.run(read_stream, write_stream, server.create_initialization_options())
+    try:
+        server = create_server()
+        async with stdio_server() as (read_stream, write_stream):
+            await server.run(read_stream, write_stream, server.create_initialization_options())
+    finally:
+        # CRITICAL: Always cleanup resources on shutdown (especially important for Docker)
+        # Ensures SQLite connections are closed and prevents "database locked" errors on restart
+        from app.graph import cleanup_checkpointer
+        logger.info("shutting_down", action="cleanup_resources")
+        try:
+            await cleanup_checkpointer()
+            logger.info("server_shutdown_complete")
+        except Exception as e:
+            logger.error("shutdown_cleanup_failed", error=str(e), error_type=type(e).__name__)
 
 
 if __name__ == "__main__":

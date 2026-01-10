@@ -84,6 +84,41 @@ async def _execute_pipeline(
     Each framework receives the output of the previous one.
     Intermediate results are stored in reasoning_steps.
 
+    Design Rationale - Sequential Execution:
+    -----------------------------------------
+    This pipeline executes frameworks SEQUENTIALLY rather than in parallel.
+    This is an intentional design decision for the following reasons:
+
+    1. **Context Accumulation**: Each framework in the chain builds upon the
+       results of the previous framework. For example, a "decompose" framework
+       might break a problem into sub-problems, and the next "solve" framework
+       needs those sub-problems as input. The final_answer, final_code, and
+       reasoning_steps from framework N become essential context for framework N+1.
+
+    2. **Reasoning Chain Integrity**: Multi-step reasoning requires that later
+       stages have access to earlier conclusions. Parallel execution would mean
+       each framework operates on the same initial state, producing independent
+       (and likely contradictory) results rather than a coherent chain of thought.
+
+    3. **State Mutation Dependencies**: The GraphState is mutated by each
+       framework (tokens_used, confidence_score, working_memory, etc.). Later
+       frameworks depend on these mutations to:
+       - Track cumulative token usage for budget management
+       - Access intermediate results via working_memory["pipeline_context"]
+       - Build on reasoning_steps from previous frameworks
+
+    4. **Pipeline Position Awareness**: Each framework receives pipeline_position
+       metadata (is_first, is_last, previous_frameworks) which allows it to
+       adjust its behavior based on where it sits in the chain. This metadata
+       would be meaningless in parallel execution.
+
+    Why Parallel Execution Would Be Inappropriate:
+    - Framework B cannot "refine" Framework A's answer if they run simultaneously
+    - Token budgets would be unpredictable with concurrent LLM calls
+    - No meaningful "chain" of reasoning - just independent parallel analyses
+    - Merging parallel results would require a separate reconciliation step,
+      adding complexity without benefit for our reasoning use cases
+
     Args:
         state: Current graph state
         framework_chain: List of framework names to execute in order
@@ -102,8 +137,21 @@ async def _execute_pipeline(
 
     for i, framework_name in enumerate(framework_chain):
         if framework_name not in FRAMEWORK_NODES:
-            logger.warning("unknown_framework_in_chain", framework=framework_name)
-            continue
+            # CRITICAL: Invalid framework in chain should fail the pipeline, not silently skip
+            error_msg = f"Framework '{framework_name}' not found in chain at position {i+1}"
+            logger.error(
+                "invalid_framework_in_chain", 
+                framework=framework_name,
+                position=i+1,
+                chain=framework_chain,
+                available_count=len(FRAMEWORK_NODES)
+            )
+            state["error"] = error_msg
+            state["final_answer"] = (
+                f"Pipeline execution failed: {error_msg}. "
+                f"Valid frameworks: {', '.join(list(FRAMEWORK_NODES.keys())[:5])}..."
+            )
+            return state
 
         # Update current framework context
         state["selected_framework"] = framework_name
@@ -495,15 +543,36 @@ async def cleanup_checkpointer() -> None:
     Clean up checkpointer resources on shutdown.
     
     Call this from your shutdown handler to properly close database connections.
+    Critical for Docker deployments to prevent "database locked" errors.
     """
     global _checkpointer
     if _checkpointer is not None:
         try:
-            if hasattr(_checkpointer, 'conn') and _checkpointer.conn:
-                await _checkpointer.conn.close()
-            logger.info("checkpointer_cleaned_up")
+            # Try documented async close methods first (LangGraph 0.4+ compatibility)
+            if hasattr(_checkpointer, 'aclose') and callable(_checkpointer.aclose):
+                await _checkpointer.aclose()
+                logger.info("checkpointer_cleaned_up", method="aclose")
+            elif hasattr(_checkpointer, 'close') and callable(_checkpointer.close):
+                # Some versions have sync close
+                result = _checkpointer.close()
+                # If close returns a coroutine, await it
+                if asyncio.iscoroutine(result):
+                    await result
+                logger.info("checkpointer_cleaned_up", method="close")
+            # Fallback to direct connection close
+            elif hasattr(_checkpointer, 'conn') and _checkpointer.conn:
+                if hasattr(_checkpointer.conn, 'close'):
+                    result = _checkpointer.conn.close()
+                    if asyncio.iscoroutine(result):
+                        await result
+                logger.info("checkpointer_cleaned_up", method="conn.close")
+            else:
+                logger.warning("checkpointer_no_close_method", 
+                             available_attrs=[attr for attr in dir(_checkpointer) if not attr.startswith('_')][:10])
         except Exception as e:
-            logger.warning("checkpointer_cleanup_error", error=str(e))
+            logger.error("checkpointer_cleanup_error", 
+                        error=str(e), 
+                        error_type=type(e).__name__)
         finally:
             _checkpointer = None
 

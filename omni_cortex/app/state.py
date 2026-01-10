@@ -87,6 +87,10 @@ class GraphState(TypedDict, total=False):
     # Error handling
     error: Optional[str]
 
+    # Retry state (used by graph retry logic)
+    retry_count: int
+    last_error: Optional[str]
+
 
 @dataclass
 class MemoryStore:
@@ -208,4 +212,8 @@ def create_initial_state(
 
         # Error handling
         error=None,
+
+        # Retry state
+        retry_count=0,
+        last_error=None,
     )

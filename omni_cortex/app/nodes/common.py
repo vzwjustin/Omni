@@ -13,6 +13,7 @@ import asyncio
 import difflib
 import functools
 import re
+import warnings
 import structlog
 from typing import Callable, Optional, Any
 from ..core.settings import get_settings
@@ -628,12 +629,13 @@ def add_reasoning_step(
     state["reasoning_steps"].append(new_step)
 
     # Implement rolling window memory bounding
-    # Keep first 5 steps (context) + last 45 steps (recent memory)
-    # Use a larger hard cap for memory bounding than the logical depth limit
-    MEMORY_BOUND = 50
-    if len(state["reasoning_steps"]) > MEMORY_BOUND:
+    # Keep first 5 steps (context) + remaining recent memory
+    # Use settings for configurable memory bound
+    settings = get_settings()
+    memory_bound = settings.reasoning_memory_bound
+    if len(state["reasoning_steps"]) > memory_bound:
         initial_context = state["reasoning_steps"][:5]
-        recent_memory = state["reasoning_steps"][-(MEMORY_BOUND - 5):]
+        recent_memory = state["reasoning_steps"][-(memory_bound - 5):]
 
         state["reasoning_steps"] = initial_context + recent_memory
 
@@ -641,7 +643,7 @@ def add_reasoning_step(
         state["reasoning_steps"].insert(5, {
             "step_number": -1,
             "framework_node": "system",
-            "thought": f"... {step_num - MEMORY_BOUND} intermediate steps truncated for memory efficiency ...",
+            "thought": f"... {step_num - memory_bound} intermediate steps truncated for memory efficiency ...",
             "action": "truncate_memory",
             "observation": None,
             "score": None
@@ -695,9 +697,17 @@ def format_code_context(
 ) -> str:
     """
     DEPRECATED: Use prepare_context_with_gemini() instead for proper Gemini→Claude flow.
-    
+
     This is a fallback for simple context formatting without Gemini preprocessing.
+
+    .. deprecated:: 1.0.0
+        Use :func:`prepare_context_with_gemini` instead.
     """
+    warnings.warn(
+        "format_code_context is deprecated, use prepare_context_with_gemini() instead",
+        DeprecationWarning,
+        stacklevel=2
+    )
     parts = []
 
     # Include RAG context if available (auto-fetched during routing)

@@ -23,7 +23,6 @@ Usage:
         get_framework_safe,
         get_frameworks_by_category,
         get_framework_names,
-        get_framework_info,
         get_frameworks_dict,
 
         # Vibe-based routing
@@ -65,7 +64,6 @@ from .registry import (
     get_framework_safe,
     get_frameworks_by_category,
     get_framework_names,
-    get_framework_info,
     get_frameworks_dict,
 
     # Vibe-based routing (backward compatibility)
@@ -95,7 +93,6 @@ __all__ = [
     "get_framework_safe",
     "get_frameworks_by_category",
     "get_framework_names",
-    "get_framework_info",
     "get_frameworks_dict",
 
     # Vibe-based routing

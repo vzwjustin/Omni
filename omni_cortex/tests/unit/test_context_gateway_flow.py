@@ -45,7 +45,12 @@ async def test_prepare_context_flow(mock_components):
 
     # Execute
     query = "Implement feature X"
-    await gateway.prepare_context(query, workspace_path="/tmp", search_docs=True)
+    await gateway.prepare_context(
+        query,
+        workspace_path="/tmp",
+        search_docs=True,
+        enable_source_attribution=False,
+    )
 
     # Verification 1: Discovery called
     mock_components["file_discoverer"].discover.assert_called_once()
@@ -77,7 +82,7 @@ async def test_prepare_context_no_docs(mock_components):
     mock_components["file_discoverer"].discover = AsyncMock(return_value=[])
     mock_components["query_analyzer"].analyze = AsyncMock(return_value={})
 
-    await gateway.prepare_context("query", search_docs=False)
+    await gateway.prepare_context("query", search_docs=False, enable_source_attribution=False)
 
     mock_components["doc_searcher"].search_web.assert_not_called()
     mock_components["query_analyzer"].analyze.assert_called_once()

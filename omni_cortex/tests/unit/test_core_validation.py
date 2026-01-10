@@ -396,11 +396,17 @@ class TestValidateFrameworkName:
             validate_framework_name("chain of thought")
 
     def test_max_length_enforced(self):
-        """Framework name exceeding max length should be rejected."""
-        long_name = "x" * 129
+        """Framework name exceeding max length (100) should be rejected."""
+        long_name = "x" * 101
         with pytest.raises(ValidationError) as exc_info:
             validate_framework_name(long_name)
         assert "too long" in str(exc_info.value).lower()
+
+    def test_starting_with_number_blocked(self):
+        """Framework name starting with number should be blocked."""
+        with pytest.raises(ValidationError) as exc_info:
+            validate_framework_name("123_framework")
+        assert "invalid characters" in str(exc_info.value).lower()
 
     def test_non_string_rejected(self):
         """Non-string input should be rejected."""

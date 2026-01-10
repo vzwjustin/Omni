@@ -19,6 +19,11 @@ class OmniCortexError(Exception):
         return f"{name}({self.args[0]!r})"
 
 
+# Validation errors
+class ValidationError(OmniCortexError):
+    """Input validation failed."""
+
+
 # Routing errors
 class RoutingError(OmniCortexError):
     """Framework selection or routing failed."""

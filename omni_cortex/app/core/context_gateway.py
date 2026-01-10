@@ -42,6 +42,7 @@ from .context import (
     EnhancedDocumentationContext,
     ComponentStatus,
     QualityMetrics,
+    MultiRepoFileDiscoverer,
 )
 from .context.fallback_analysis import (
     get_fallback_analyzer,
@@ -146,122 +147,97 @@ class StructuredContext:
     token_budget: int = LLM.CONTEXT_TOKEN_BUDGET  # Max tokens for Claude prompt
     actual_tokens: int = 0  # Actual token count after generation
 
-    def _format_toon_list(self, items: List[Dict[str, Any]]) -> Optional[str]:
-        """
-        Format a list of dictionaries using TOON encoding.
-
-        Args:
-            items: List of dictionaries to encode
-
-        Returns:
-            Formatted TOON string with code blocks, or None on error
-        """
-        try:
-            from .toon import TOONEncoder
-            encoder = TOONEncoder(delimiter="|", threshold=2)
-            toon_str = encoder.encode(items)
-            return f"\n```toon\n{toon_str}\n```"
-        except Exception as e:
-            logger.warning("TOON encoding failed", error=str(e))
-            return None
-
-    def to_claude_prompt(self, use_toon_optimization: bool = True) -> str:
-        """
-        Format as rich context prompt for Claude with smart token optimization.
-
-        Strategy: Use TOON (lossless) for structured metadata while keeping
-        ALL semantic content (summaries, snippets, descriptions) fully detailed.
-
-        Result: 20-35% token savings with ZERO information loss.
-
-        Args:
-            use_toon_optimization: Use TOON for file/doc lists (default: True, safe)
-        """
-        from .settings import get_settings
-        settings = get_settings()
-
-        # Only use TOON if enabled and requested
-        use_toon = use_toon_optimization and settings.enable_toon_serialization
-
+    def to_claude_prompt(self) -> str:
+        """Format as rich context prompt for Claude."""
         sections = []
 
-        # Task Section - Keep fully detailed (critical context)
+        # Task Section
         sections.append(f"""## Task Analysis
 **Type**: {self.task_type} | **Complexity**: {self.complexity}
 **Summary**: {self.task_summary}""")
 
-        # Files Section - Use TOON for metadata structure (lossless 30-40% savings)
+        # Repository Information (multi-repo)
+        repository_info = getattr(self, "repository_info", None)
+        if repository_info:
+            repo_lines = ["## Repository Information"]
+            for repo in repository_info:
+                name = getattr(repo, "name", None)
+                path = getattr(repo, "path", None)
+                if not name and not path:
+                    continue
+                line = f"- {name or 'unknown'}"
+                if path:
+                    line += f" ({path})"
+                branch = getattr(repo, "branch", None)
+                if branch:
+                    line += f" [{branch}]"
+                last_commit = getattr(repo, "last_commit", None)
+                if last_commit:
+                    line += f" @ {last_commit[:8]}"
+                if getattr(repo, "is_accessible", True) is False:
+                    line += " [inaccessible]"
+                repo_lines.append(line)
+            if len(repo_lines) > 1:
+                sections.append("\n".join(repo_lines))
+
+        cross_repo_dependencies = getattr(self, "cross_repo_dependencies", None)
+        if cross_repo_dependencies:
+            dep_lines = ["## Cross-Repo Dependencies"]
+            for dep in cross_repo_dependencies[:10]:
+                dep_lines.append(
+                    f"- {dep.source_repo} -> {dep.target_repo} ({dep.dependency_type})"
+                )
+            sections.append("\n".join(dep_lines))
+
+        # Files Section
         if self.relevant_files:
             file_lines = ["## Relevant Files"]
             if self.entry_point:
                 file_lines.append(f"**Start here**: `{self.entry_point}`\n")
-
-            if use_toon and len(self.relevant_files) >= 3:
-                # TOON format: more efficient but LOSSLESS
-                # Build uniform structure (keeps ALL detail)
-                file_data = []
-                for f in self.relevant_files[:10]:
-                    file_data.append({
-                        "path": f.path,
-                        "score": f"{f.relevance_score:.2f}",
-                        "summary": f.summary,  # FULL summary preserved
-                        "elements": ', '.join(f.key_elements[:5]) if f.key_elements else ""
-                    })
-
-                toon_result = self._format_toon_list(file_data)
-                if toon_result:
-                    file_lines.append(toon_result)
-                    file_lines.append("*Format: TOON (20-30% more token efficient, lossless)*")
-                else:
-                    # Graceful fallback if TOON fails
-                    use_toon = False
-
-            if not use_toon or len(self.relevant_files) < 3:
-                # Standard format (still fully detailed)
-                for f in self.relevant_files[:10]:
-                    score_bar = "█" * int(f.relevance_score * 5) + "░" * (5 - int(f.relevance_score * 5))
-                    file_lines.append(f"- `{f.path}` [{score_bar}] - {f.summary}")
-                    if f.key_elements:
-                        file_lines.append(f"  Key: {', '.join(f.key_elements[:5])}")
-
+            for f in self.relevant_files[:10]:  # Top 10
+                score_bar = "█" * int(f.relevance_score * 5) + "░" * (5 - int(f.relevance_score * 5))
+                repo_label = f"[{f.repository}] " if getattr(f, "repository", None) else ""
+                file_lines.append(f"- {repo_label}`{f.path}` [{score_bar}] - {f.summary}")
+                if f.key_elements:
+                    file_lines.append(f"  Key: {', '.join(f.key_elements[:5])}")
             sections.append("\n".join(file_lines))
 
-        # Documentation Section - Keep snippets FULLY detailed (no compression ever)
+        # Documentation Section
         if self.documentation:
             doc_lines = ["## Pre-Fetched Documentation"]
-
-            if use_toon and len(self.documentation) >= 3:
-                # TOON for doc metadata (lossless), but keep snippets separate & full
-                # Metadata in TOON format
-                doc_metadata = []
-                for i, doc in enumerate(self.documentation[:5]):
-                    doc_metadata.append({
-                        "id": f"doc{i+1}",
-                        "title": doc.title,
-                        "source": doc.source,
-                        "score": f"{doc.relevance_score:.2f}"
-                    })
-
-                toon_result = self._format_toon_list(doc_metadata)
-                if toon_result:
-                    doc_lines.append(toon_result + "\n")
-
-                    # Full snippets (never compressed, fully detailed)
-                    for i, doc in enumerate(self.documentation[:5]):
-                        doc_lines.append(f"### {doc.title} (doc{i+1})")
-                        doc_lines.append(f"```\n{doc.snippet}\n```")  # FULL snippet, zero compression
+            for doc in self.documentation[:5]:
+                authority_indicator = ""
+                attribution = getattr(doc, "attribution", None)
+                if attribution:
+                    if getattr(attribution, "is_official", False):
+                        authority_indicator = " [official]"
+                    elif getattr(attribution, "authority_score", 0) >= 0.8:
+                        authority_indicator = " [high-authority]"
+                doc_lines.append(f"### {doc.title}{authority_indicator}")
+                merge_source = getattr(doc, "merge_source", None)
+                if merge_source:
+                    doc_lines.append(f"*Source ({merge_source}): {doc.source}*")
                 else:
-                    # Graceful fallback if TOON fails
-                    use_toon = False
-
-            if not use_toon or len(self.documentation) < 3:
-                # Standard format (still fully detailed)
-                for doc in self.documentation[:5]:
-                    doc_lines.append(f"### {doc.title}")
                     doc_lines.append(f"*Source: {doc.source}*")
-                    doc_lines.append(f"```\n{doc.snippet}\n```")  # FULL snippet always
-
+                doc_lines.append(f"```\n{doc.snippet}\n```")
             sections.append("\n".join(doc_lines))
+
+        source_attributions = getattr(self, "source_attributions", None)
+        if source_attributions:
+            source_lines = ["## Source Attributions"]
+            for attr in source_attributions[:5]:
+                title = getattr(attr, "title", None) or getattr(attr, "url", "")
+                url = getattr(attr, "url", "")
+                line = f"- {title}" if title else "-"
+                if url:
+                    line += f" ({url})"
+                domain = getattr(attr, "domain", None)
+                if domain:
+                    line += f" [{domain}]"
+                if getattr(attr, "is_official", False):
+                    line += " [official]"
+                source_lines.append(line)
+            sections.append("\n".join(source_lines))
 
         # Code Search Section
         if self.code_search:
@@ -304,28 +280,38 @@ class StructuredContext:
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
+        relevant_files = []
+        for f in self.relevant_files:
+            file_entry = {
+                "path": f.path,
+                "relevance_score": f.relevance_score,
+                "summary": f.summary,
+                "key_elements": f.key_elements,
+            }
+            repository = getattr(f, "repository", None)
+            if repository:
+                file_entry["repository"] = repository
+            relevant_files.append(file_entry)
+
+        documentation = []
+        for d in self.documentation:
+            doc_entry = {
+                "source": d.source,
+                "title": d.title,
+                "snippet": d.snippet,
+            }
+            merge_source = getattr(d, "merge_source", None)
+            if merge_source:
+                doc_entry["merge_source"] = merge_source
+            documentation.append(doc_entry)
+
         return {
             "task_type": self.task_type,
             "task_summary": self.task_summary,
             "complexity": self.complexity,
-            "relevant_files": [
-                {
-                    "path": f.path,
-                    "relevance_score": f.relevance_score,
-                    "summary": f.summary,
-                    "key_elements": f.key_elements,
-                }
-                for f in self.relevant_files
-            ],
+            "relevant_files": relevant_files,
             "entry_point": self.entry_point,
-            "documentation": [
-                {
-                    "source": d.source,
-                    "title": d.title,
-                    "snippet": d.snippet,
-                }
-                for d in self.documentation
-            ],
+            "documentation": documentation,
             "recommended_framework": self.recommended_framework,
             "framework_reason": self.framework_reason,
             "chain_suggestion": self.chain_suggestion,
@@ -333,83 +319,6 @@ class StructuredContext:
             "success_criteria": self.success_criteria,
             "potential_blockers": self.potential_blockers,
         }
-
-    def to_toon(self) -> str:
-        """
-        Convert to TOON format for token-optimized serialization.
-
-        TOON (Token-Oriented Object Notation) reduces tokens by 20-60%
-        compared to JSON, especially for arrays of uniform objects.
-
-        Returns:
-            TOON-formatted string
-        """
-        try:
-            from .token_reduction import serialize_to_toon
-            return serialize_to_toon(self.to_dict())
-        except ImportError:
-            logger.warning("Token reduction module not available, falling back to JSON")
-            import json
-            return json.dumps(self.to_dict())
-
-    def to_compressed_prompt(self, compression_rate: float = 0.5) -> Dict[str, Any]:
-        """
-        Generate compressed prompt using LLMLingua-2.
-
-        Reduces prompt tokens by 50-80% while preserving semantic meaning.
-
-        Args:
-            compression_rate: Target compression rate (0.5 = 50% of original)
-
-        Returns:
-            Dict with compressed_prompt and metadata
-        """
-        try:
-            from .token_reduction import compress_prompt
-            prompt = self.to_claude_prompt()
-            result = compress_prompt(prompt, rate=compression_rate)
-            return result
-        except ImportError:
-            logger.warning("Token reduction module not available, using original prompt")
-            return {
-                "compressed_prompt": self.to_claude_prompt(),
-                "compressed": False,
-                "reason": "Token reduction not available"
-            }
-
-    def get_token_optimized_output(self, format: str = "auto") -> str:
-        """
-        Get token-optimized output based on format preference.
-
-        Args:
-            format: Output format ("auto", "toon", "compressed", "standard")
-                - auto: Automatically choose best format based on settings
-                - toon: Use TOON serialization (best for structured data)
-                - compressed: Use LLMLingua-2 compression (best for prompts)
-                - standard: Use standard Claude prompt format
-
-        Returns:
-            Token-optimized string
-        """
-        from .settings import get_settings
-        settings = get_settings()
-
-        if format == "auto":
-            # Auto-select based on settings
-            if settings.enable_toon_serialization:
-                format = "toon"
-            elif settings.enable_llmlingua_compression:
-                format = "compressed"
-            else:
-                format = "standard"
-
-        if format == "toon":
-            return self.to_toon()
-        elif format == "compressed":
-            result = self.to_compressed_prompt()
-            return result.get("compressed_prompt", self.to_claude_prompt())
-        else:
-            return self.to_claude_prompt()
 
 
 @dataclass
@@ -438,6 +347,8 @@ class EnhancedStructuredContext(StructuredContext):
 
     # Multi-repository information
     repository_info: List[Any] = field(default_factory=list)  # List[RepoInfo] - avoid circular import
+    cross_repo_dependencies: List[Any] = field(default_factory=list)
+    source_attributions: List[Any] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary with enhanced fields."""
@@ -471,6 +382,40 @@ class EnhancedStructuredContext(StructuredContext):
             base_dict["component_status"] = {
                 name: status.value for name, status in self.component_status.items()
             }
+        if self.repository_info:
+            base_dict["repository_info"] = [
+                {
+                    "name": repo.name,
+                    "path": repo.path,
+                    "branch": repo.branch,
+                    "last_commit": repo.last_commit,
+                    "is_accessible": repo.is_accessible,
+                }
+                for repo in self.repository_info
+            ]
+        if self.cross_repo_dependencies:
+            base_dict["cross_repo_dependencies"] = [
+                {
+                    "source_repo": dep.source_repo,
+                    "target_repo": dep.target_repo,
+                    "dependency_type": dep.dependency_type,
+                    "source_file": dep.source_file,
+                    "target_file": dep.target_file,
+                    "confidence": dep.confidence,
+                }
+                for dep in self.cross_repo_dependencies
+            ]
+        if self.source_attributions:
+            base_dict["source_attributions"] = [
+                {
+                    "url": attr.url,
+                    "title": attr.title,
+                    "domain": attr.domain,
+                    "authority_score": attr.authority_score,
+                    "is_official": attr.is_official,
+                }
+                for attr in self.source_attributions
+            ]
 
         return base_dict
 
@@ -524,6 +469,8 @@ class ContextGateway:
         self._cache = cache or get_context_cache()
         self._settings = get_settings()
         self._enable_cache = self._settings.enable_context_cache
+        self._multi_repo_discoverer: Optional[MultiRepoFileDiscoverer] = None
+        self._enhanced_doc_searcher: Optional[Any] = None
 
         # Enhanced components (lazy-loaded to avoid circular imports and support testing)
         self._circuit_breakers: Dict[str, Any] = {}
@@ -569,6 +516,51 @@ class ContextGateway:
         from .context import get_relevance_tracker
         self._relevance_tracker = get_relevance_tracker()
 
+    def _get_multi_repo_discoverer(self) -> MultiRepoFileDiscoverer:
+        """Lazily initialize multi-repo discoverer."""
+        if self._multi_repo_discoverer is None:
+            self._multi_repo_discoverer = MultiRepoFileDiscoverer()
+        return self._multi_repo_discoverer
+
+    def _get_doc_searcher(self, enable_source_attribution: bool) -> DocumentationSearcher:
+        """Select documentation searcher based on attribution settings."""
+        if enable_source_attribution:
+            if self._enhanced_doc_searcher is None:
+                from .context.doc_searcher import EnhancedDocumentationSearcher
+                self._enhanced_doc_searcher = EnhancedDocumentationSearcher()
+            return self._enhanced_doc_searcher
+        return self._doc_searcher
+
+    @staticmethod
+    def _normalize_file_discovery_result(
+        file_result: Any
+    ) -> tuple[List[Any], List[Any], List[Any]]:
+        """Normalize file discovery result to (files, repos, dependencies)."""
+        if isinstance(file_result, dict) and "files" in file_result:
+            return (
+                file_result.get("files", []) or [],
+                file_result.get("repositories", []) or [],
+                file_result.get("dependencies", []) or [],
+            )
+        return file_result or [], [], []
+
+    @staticmethod
+    def _coerce_enhanced_file(file_item: Any) -> EnhancedFileContext:
+        """Normalize file items to EnhancedFileContext for downstream consumers."""
+        if isinstance(file_item, EnhancedFileContext):
+            return file_item
+        return EnhancedFileContext(
+            path=file_item.path,
+            relevance_score=file_item.relevance_score,
+            summary=file_item.summary,
+            key_elements=getattr(file_item, "key_elements", []),
+            line_count=getattr(file_item, "line_count", 0),
+            size_kb=getattr(file_item, "size_kb", 0),
+            repository=getattr(file_item, "repository", None),
+            last_modified=getattr(file_item, "last_modified", None),
+            git_blame_info=getattr(file_item, "git_blame_info", None),
+        )
+
     def _fallback_analyze(self, query: str) -> Dict[str, Any]:
         """
         Fallback analyzer using enhanced pattern matching when Gemini is unavailable.
@@ -592,6 +584,8 @@ class ContextGateway:
         file_list: Optional[List[str]] = None,
         search_docs: bool = True,
         max_files: int = 15,
+        enable_multi_repo: Optional[bool] = None,
+        enable_source_attribution: Optional[bool] = None,
     ) -> EnhancedStructuredContext:
         """
         Prepare rich, structured context for Claude.
@@ -610,6 +604,8 @@ class ContextGateway:
             file_list: Pre-specified files to consider
             search_docs: Whether to search web for documentation
             max_files: Maximum files to include in context
+            enable_multi_repo: Override multi-repo discovery settings
+            enable_source_attribution: Override documentation source attribution settings
 
         Returns:
             EnhancedStructuredContext ready for Claude with quality metrics
@@ -624,6 +620,47 @@ class ContextGateway:
         is_stale_fallback = False
         component_status: Dict[str, ComponentStatus] = {}
         relevance_session_id: Optional[str] = None
+        repository_info: List[Any] = []
+        cross_repo_dependencies: List[Any] = []
+        source_attributions: List[Any] = []
+
+        use_multi_repo = self._settings.enable_multi_repo_discovery if enable_multi_repo is None else enable_multi_repo
+        use_source_attribution = self._settings.enable_source_attribution if enable_source_attribution is None else enable_source_attribution
+        use_doc_prioritization = self._settings.enable_documentation_prioritization
+        if file_list or not workspace_path:
+            use_multi_repo = False
+
+        doc_searcher = self._get_doc_searcher(use_source_attribution)
+        doc_search_method = (
+            doc_searcher.search_web_with_attribution
+            if use_source_attribution and hasattr(doc_searcher, "search_web_with_attribution")
+            else doc_searcher.search_web
+        )
+
+        async def _run_doc_search() -> List[Any]:
+            doc_task_type = "general"
+            if use_doc_prioritization:
+                doc_task_type = self._fallback_analyze(query).get("task_type", "general")
+
+            if hasattr(doc_searcher, "search_with_fallback"):
+                return await doc_searcher.search_with_fallback(query, doc_task_type)
+
+            results = await doc_search_method(query)
+            if not use_doc_prioritization or not hasattr(doc_searcher, "search_knowledge_base"):
+                return results
+
+            local_results = []
+            try:
+                local_results = await doc_searcher.search_knowledge_base(query, doc_task_type)
+            except Exception as e:
+                logger.warning("knowledge_base_merge_failed", error=str(e))
+
+            if local_results:
+                merged = list(results or []) + list(local_results)
+                merged.sort(key=lambda d: getattr(d, "relevance_score", 0), reverse=True)
+                return merged
+
+            return results
 
         # Start relevance tracking session if enabled
         if self._relevance_tracker:
@@ -686,8 +723,14 @@ class ContextGateway:
                 )
                 
                 # Skip to context assembly
-                converted_files = file_result
+                file_items, repository_info, cross_repo_dependencies = self._normalize_file_discovery_result(file_result)
+                converted_files = [self._coerce_enhanced_file(f) for f in file_items]
                 doc_contexts = doc_result
+                source_attributions = [
+                    doc.attribution
+                    for doc in doc_contexts
+                    if getattr(doc, "attribution", None)
+                ]
                 code_search_results = []
                 if code_result:
                     code_search_results = [
@@ -702,7 +745,7 @@ class ContextGateway:
                     ]
                 
                 # Jump to context assembly
-                context = StructuredContext(
+                context = EnhancedStructuredContext(
                     task_type=query_analysis.get("task_type", "general"),
                     task_summary=query_analysis.get("summary", query),
                     complexity=query_analysis.get("complexity", "medium"),
@@ -718,6 +761,11 @@ class ContextGateway:
                     potential_blockers=query_analysis.get("blockers", []),
                     related_patterns=query_analysis.get("patterns", []),
                     dependencies=query_analysis.get("dependencies", []),
+                    cache_metadata=cache_metadata,
+                    component_status=component_status,
+                    repository_info=repository_info,
+                    cross_repo_dependencies=cross_repo_dependencies,
+                    source_attributions=source_attributions,
                 )
                 
                 logger.info(
@@ -733,7 +781,18 @@ class ContextGateway:
 
         # Phase 1: Discovery & Search (Parallel with named tasks)
         # Run discovery tasks with explicit naming for cleaner result handling
-        
+
+        async def _run_file_discovery() -> Any:
+            if use_multi_repo:
+                discoverer = self._get_multi_repo_discoverer()
+                files, repos, deps = await discoverer.discover_multi_repo(
+                    query=query,
+                    workspace_path=workspace_path,
+                    max_files=max_files,
+                )
+                return {"files": files, "repositories": repos, "dependencies": deps}
+            return await self._file_discoverer.discover(query, workspace_path, file_list, max_files)
+
         # Create named coroutines for parallel execution
         async def _discover_files():
             # Check cache first
@@ -748,7 +807,7 @@ class ContextGateway:
                 elif cached and cached.is_expired:
                     # Try fresh discovery, fallback to stale cache on error
                     try:
-                        result = await self._file_discoverer.discover(query, workspace_path, file_list, max_files)
+                        result = await _run_file_discovery()
                         # Cache the result
                         await self._cache.set(file_cache_key, result, "file_discovery", workspace_path)
                         return result
@@ -763,11 +822,11 @@ class ContextGateway:
             try:
                 if self._circuit_breakers and "file_discovery" in self._circuit_breakers:
                     result = await self._circuit_breakers["file_discovery"].call(
-                        self._file_discoverer.discover, query, workspace_path, file_list, max_files
+                        _run_file_discovery
                     )
                     component_status["file_discovery"] = ComponentStatus.SUCCESS
                 else:
-                    result = await self._file_discoverer.discover(query, workspace_path, file_list, max_files)
+                    result = await _run_file_discovery()
                     component_status["file_discovery"] = ComponentStatus.SUCCESS
 
                 # Record metrics
@@ -807,7 +866,7 @@ class ContextGateway:
                 elif cached and cached.is_expired:
                     # Try fresh search, fallback to stale cache on error
                     try:
-                        result = await self._doc_searcher.search_web(query)
+                        result = await _run_doc_search()
                         # Cache the result
                         await self._cache.set(doc_cache_key, result, "documentation", workspace_path)
                         return result
@@ -822,11 +881,11 @@ class ContextGateway:
             try:
                 if self._circuit_breakers and "doc_search" in self._circuit_breakers:
                     result = await self._circuit_breakers["doc_search"].call(
-                        self._doc_searcher.search_web, query
+                        _run_doc_search
                     )
                     component_status["doc_search"] = ComponentStatus.SUCCESS
                 else:
-                    result = await self._doc_searcher.search_web(query)
+                    result = await _run_doc_search()
                     component_status["doc_search"] = ComponentStatus.SUCCESS
 
                 # Record metrics
@@ -893,32 +952,20 @@ class ContextGateway:
         if isinstance(file_result, Exception):
             logger.warning("file_discovery_failed", error=str(file_result))
         elif file_result:
-            converted_files = [
-                FileContext(
-                    path=f.path,
-                    relevance_score=f.relevance_score,
-                    summary=f.summary,
-                    key_elements=f.key_elements,
-                    line_count=f.line_count,
-                    size_kb=f.size_kb,
-                )
-                for f in file_result
-            ]
+            file_items, repository_info, cross_repo_dependencies = self._normalize_file_discovery_result(file_result)
+            converted_files = [self._coerce_enhanced_file(f) for f in file_items]
 
         # Process documentation search results
         doc_contexts = []
+        source_attributions = []
         if isinstance(doc_result, Exception):
             logger.warning("doc_search_failed", error=str(doc_result))
         elif doc_result:
-            doc_contexts = [
-                DocumentationContext(
-                    source=d.source,
-                    title=d.title,
-                    snippet=d.snippet,
-                    relevance_score=d.relevance_score,
-                )
-                for d in doc_result
-            ]
+            doc_contexts = list(doc_result)
+            for doc in doc_result:
+                attribution = getattr(doc, "attribution", None)
+                if attribution:
+                    source_attributions.append(attribution)
 
         # Process code search results
         code_search_results = []
@@ -1077,26 +1124,23 @@ class ContextGateway:
 
         # Convert to enhanced models for budget optimization
         enhanced_files = [
-            EnhancedFileContext(
-                path=f.path,
-                relevance_score=f.relevance_score,
-                summary=f.summary,
-                key_elements=f.key_elements,
-                line_count=f.line_count,
-                size_kb=f.size_kb,
-            )
+            self._coerce_enhanced_file(f)
             for f in converted_files
         ]
 
-        enhanced_docs = [
-            EnhancedDocumentationContext(
-                source=d.source,
-                title=d.title,
-                snippet=d.snippet,
-                relevance_score=d.relevance_score,
-            )
-            for d in doc_contexts
-        ]
+        enhanced_docs = []
+        for d in doc_contexts:
+            if isinstance(d, EnhancedDocumentationContext):
+                enhanced_docs.append(d)
+            else:
+                enhanced_docs.append(EnhancedDocumentationContext(
+                    source=d.source,
+                    title=d.title,
+                    snippet=d.snippet,
+                    relevance_score=d.relevance_score,
+                    attribution=getattr(d, "attribution", None),
+                    merge_source=getattr(d, "merge_source", "web"),
+                ))
 
         # Apply token budget optimization if enabled
         if self._budget_integration:
@@ -1108,31 +1152,20 @@ class ContextGateway:
                         enhanced_files, enhanced_docs, code_search_results
                     )
                 # Use optimized content
-                converted_files = [
-                    FileContext(
-                        path=f.path,
-                        relevance_score=f.relevance_score,
-                        summary=f.summary,
-                        key_elements=f.key_elements,
-                        line_count=f.line_count,
-                        size_kb=f.size_kb,
-                    )
-                    for f in optimized_files
-                ]
-                doc_contexts = [
-                    DocumentationContext(
-                        source=d.source,
-                        title=d.title,
-                        snippet=d.snippet,
-                        relevance_score=d.relevance_score,
-                    )
-                    for d in optimized_docs
-                ]
+                converted_files = [self._coerce_enhanced_file(f) for f in optimized_files]
+                doc_contexts = list(optimized_docs)
                 code_search_results = optimized_code
                 logger.info("token_budget_optimization_complete", optimized_files=len(converted_files), optimized_docs=len(doc_contexts))
             except Exception as e:
                 logger.warning("token_budget_optimization_failed", error=str(e))
                 # Continue with unoptimized content
+
+        # Refresh source attributions after any optimization
+        source_attributions = [
+            doc.attribution
+            for doc in doc_contexts
+            if getattr(doc, "attribution", None)
+        ]
 
         # Phase 4: Relevance Tracking (if enabled)
         if self._relevance_tracker and relevance_session_id:
@@ -1160,6 +1193,7 @@ class ContextGateway:
                 diversity_score = len(set(f.path.split('/')[0] for f in converted_files if '/' in f.path)) / max(1, len(converted_files))
 
                 quality_metrics = QualityMetrics(
+                    overall_quality_score=context_coverage_score,
                     avg_file_relevance=avg_file_relevance,
                     avg_doc_relevance=avg_doc_relevance,
                     context_coverage_score=context_coverage_score,
@@ -1190,6 +1224,9 @@ class ContextGateway:
             quality_metrics=quality_metrics,
             token_budget_usage=token_budget_usage,
             component_status=component_status,
+            repository_info=repository_info,
+            cross_repo_dependencies=cross_repo_dependencies,
+            source_attributions=source_attributions,
         )
 
         # Phase 7: Record Final Metrics
@@ -1211,11 +1248,12 @@ class ContextGateway:
                 if cache_metadata:
                     # Estimate tokens saved from cache
                     tokens_saved = len(converted_files) * 200 + len(doc_contexts) * 300
-                    self._metrics.record_cache_operation(
-                        operation="hit" if cache_metadata.cache_hit else "miss",
-                        hit=cache_metadata.cache_hit,
-                        tokens_saved=tokens_saved if cache_metadata.cache_hit else 0
-                    )
+                    if hasattr(self._metrics, "record_cache_operation"):
+                        self._metrics.record_cache_operation(
+                            operation="hit" if cache_metadata.cache_hit else "miss",
+                            hit=cache_metadata.cache_hit,
+                            tokens_saved=tokens_saved if cache_metadata.cache_hit else 0
+                        )
             except Exception as e:
                 logger.warning("final_metrics_recording_failed", error=str(e))
 
@@ -1273,6 +1311,8 @@ async def prepare_context_for_claude(
     code_context: Optional[str] = None,
     file_list: Optional[List[str]] = None,
     search_docs: bool = True,
+    enable_multi_repo: Optional[bool] = None,
+    enable_source_attribution: Optional[bool] = None,
 ) -> EnhancedStructuredContext:
     """
     Convenience function to prepare context with all enhancements.
@@ -1295,4 +1335,6 @@ async def prepare_context_for_claude(
         code_context=code_context,
         file_list=file_list,
         search_docs=search_docs,
+        enable_multi_repo=enable_multi_repo,
+        enable_source_attribution=enable_source_attribution,
     )

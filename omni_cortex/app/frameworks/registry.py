@@ -63,11 +63,8 @@ class FrameworkDefinition:
         }
 
 
-class FrameworkNotFoundError(Exception):
-    """Raised when a requested framework doesn't exist."""
-    def __init__(self, message: str, details: Optional[Dict] = None):
-        super().__init__(message)
-        self.details = details or {}
+# Import centralized error class instead of defining duplicate
+from app.core.errors import FrameworkNotFoundError
 
 
 # =============================================================================
@@ -1737,41 +1734,6 @@ def get_all_vibes() -> Dict[str, List[str]]:
 def get_framework_names() -> List[str]:
     """Get list of all registered framework names."""
     return list(FRAMEWORKS.keys())
-
-
-def get_framework_info(framework: str, raise_on_unknown: bool = False) -> Dict[str, Any]:
-    """Get metadata about a framework (for framework_registry compatibility).
-
-    Args:
-        framework: Name of the framework
-        raise_on_unknown: If True, raise FrameworkNotFoundError for unknown frameworks
-
-    Returns:
-        Framework metadata dict
-    """
-    if framework in FRAMEWORKS:
-        fw = FRAMEWORKS[framework]
-        return {
-            "name": fw.display_name,
-            "category": fw.category.value,
-            "description": fw.description,
-            "best_for": fw.best_for,
-            "complexity": fw.complexity,
-        }
-
-    if raise_on_unknown:
-        raise FrameworkNotFoundError(
-            f"Unknown framework: {framework}",
-            details={"requested": framework, "available": list(FRAMEWORKS.keys())}
-        )
-
-    return {
-        "name": framework,
-        "category": "unknown",
-        "description": "Unknown framework",
-        "best_for": [],
-        "complexity": "unknown"
-    }
 
 
 def infer_task_type(framework: str) -> str:

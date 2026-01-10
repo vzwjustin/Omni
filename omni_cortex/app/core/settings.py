@@ -55,6 +55,11 @@ class OmniCortexSettings(BaseSettings):
     max_reasoning_depth: int = Field(default=10, ge=1, le=100, alias="MAX_REASONING_DEPTH")
     mcts_max_rollouts: int = Field(default=50, ge=1, le=500, alias="MCTS_MAX_ROLLOUTS")
     debate_max_rounds: int = Field(default=5, ge=1, le=20, alias="DEBATE_MAX_ROUNDS")
+    reasoning_memory_bound: int = Field(default=50, ge=10, le=200, alias="REASONING_MEMORY_BOUND")
+
+    # Routing Cache
+    routing_cache_max_size: int = Field(default=256, ge=16, le=1024, alias="ROUTING_CACHE_MAX_SIZE")
+    routing_cache_ttl_seconds: int = Field(default=300, ge=60, le=3600, alias="ROUTING_CACHE_TTL_SECONDS")
 
     # Features
     enable_auto_ingest: bool = Field(default=True, alias="ENABLE_AUTO_INGEST")

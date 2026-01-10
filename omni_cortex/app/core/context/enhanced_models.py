@@ -168,6 +168,10 @@ class RelevanceMetrics:
 class QualityMetrics:
     """Quality metrics for context preparation."""
     overall_quality_score: float  # 0.0 to 1.0
+    avg_file_relevance: float = 0.0
+    avg_doc_relevance: float = 0.0
+    context_coverage_score: float = 0.0
+    diversity_score: float = 0.0
     component_quality_scores: Dict[str, float] = field(default_factory=dict)
     confidence_intervals: Dict[str, Tuple[float, float]] = field(default_factory=dict)
     completeness_score: float = 0.0  # How complete the context is
@@ -212,6 +216,21 @@ class TokenBudgetUsage:
     component_usage: Dict[str, int] = field(default_factory=dict)
     optimization_applied: bool = False
     optimization_details: List[str] = field(default_factory=list)
+
+    @property
+    def allocated_tokens(self) -> int:
+        """Compatibility alias for allocated token budget."""
+        return self.allocated_budget
+
+    @property
+    def used_tokens(self) -> int:
+        """Compatibility alias for actual token usage."""
+        return self.actual_usage
+
+    @property
+    def within_budget(self) -> bool:
+        """Whether actual usage is within the allocated budget."""
+        return self.actual_usage <= self.allocated_budget
 
 
 # =============================================================================
@@ -462,4 +481,3 @@ class EnhancedStructuredContext:
             "docs_count": len(self.documentation),
             "repos_count": len(self.repository_info),
         }
-

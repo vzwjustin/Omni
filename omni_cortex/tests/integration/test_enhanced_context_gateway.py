@@ -27,6 +27,10 @@ from app.core.context.enhanced_models import (
     ProgressStatus,
     EnhancedStructuredContext,
     ComponentStatus,
+    EnhancedDocumentationContext,
+    EnhancedFileContext,
+    RepoInfo,
+    SourceAttribution,
 )
 from app.core.context.context_cache import ContextCache, get_context_cache
 
@@ -189,11 +193,55 @@ class TestContextGatewayIntegration:
             context = await gateway.prepare_context(
                 query="How to use Python decorators?",
                 workspace_path=temp_workspace,
-                search_docs=True
+                search_docs=True,
+                enable_source_attribution=False,
             )
             
             assert len(context.documentation) > 0
             assert context.documentation[0].source == "https://docs.python.org"
+
+    @pytest.mark.asyncio
+    async def test_prepare_context_with_source_attribution(self, temp_workspace, mock_gemini_response):
+        """Test context preparation using source attribution searcher."""
+        with patch('app.core.context.query_analyzer.QueryAnalyzer.analyze') as mock_analyze, \
+             patch('app.core.context.file_discoverer.FileDiscoverer.discover') as mock_discover, \
+             patch('app.core.context.code_searcher.CodeSearcher.search') as mock_code_search, \
+             patch('app.core.context.doc_searcher.EnhancedDocumentationSearcher.search_with_fallback') as mock_search:
+
+            mock_analyze.return_value = mock_gemini_response
+            mock_discover.return_value = []
+            mock_code_search.return_value = []
+            attribution = SourceAttribution(
+                url="https://docs.python.org",
+                title="Python Documentation",
+                domain="docs.python.org",
+                authority_score=1.0,
+                is_official=True,
+            )
+            mock_search.return_value = [
+                EnhancedDocumentationContext(
+                    source="https://docs.python.org",
+                    title="Python Documentation",
+                    snippet="Python is a programming language",
+                    relevance_score=0.8,
+                    attribution=attribution,
+                )
+            ]
+
+            gateway = ContextGateway()
+            context = await gateway.prepare_context(
+                query="How to use Python decorators?",
+                workspace_path=temp_workspace,
+                search_docs=True,
+                enable_source_attribution=True,
+            )
+
+            mock_search.assert_called_once()
+            assert len(context.documentation) > 0
+            assert context.documentation[0].source == "https://docs.python.org"
+            assert context.documentation[0].attribution == attribution
+            assert context.source_attributions
+            assert context.source_attributions[0].url == "https://docs.python.org"
 
 
 # =============================================================================
@@ -394,6 +442,56 @@ class TestMultiRepoIntegration:
             
             # Should have repository information
             assert len(repos) >= 2
+
+    @pytest.mark.asyncio
+    async def test_context_gateway_uses_multi_repo(self, multi_repo_workspace, mock_gemini_response):
+        """Test ContextGateway uses multi-repo discovery when enabled."""
+        with patch('app.core.context.query_analyzer.QueryAnalyzer.analyze') as mock_analyze, \
+             patch('app.core.context.code_searcher.CodeSearcher.search') as mock_code_search, \
+             patch('app.core.context.multi_repo_discoverer.MultiRepoFileDiscoverer.discover_multi_repo') as mock_discover:
+
+            mock_analyze.return_value = mock_gemini_response
+            mock_code_search.return_value = []
+            mock_discover.return_value = (
+                [
+                    EnhancedFileContext(
+                        path="service-a/api.py",
+                        relevance_score=0.9,
+                        summary="API handler",
+                        key_elements=["handle_request"],
+                        line_count=10,
+                        size_kb=1.0,
+                        repository="service-a",
+                    )
+                ],
+                [
+                    RepoInfo(
+                        path=f"{multi_repo_workspace}/service-a",
+                        name="service-a",
+                        git_root=f"{multi_repo_workspace}/service-a",
+                    ),
+                    RepoInfo(
+                        path=f"{multi_repo_workspace}/service-b",
+                        name="service-b",
+                        git_root=f"{multi_repo_workspace}/service-b",
+                    ),
+                ],
+                []
+            )
+
+            gateway = ContextGateway()
+            gateway._enable_cache = False
+            context = await gateway.prepare_context(
+                query="Fix the API bug",
+                workspace_path=multi_repo_workspace,
+                search_docs=False,
+                enable_multi_repo=True,
+            )
+
+            mock_discover.assert_called_once()
+            assert len(context.repository_info) == 2
+            assert context.relevant_files
+            assert context.relevant_files[0].repository == "service-a"
     
     @pytest.mark.asyncio
     async def test_cross_repo_dependency_detection(self, multi_repo_workspace):

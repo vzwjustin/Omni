@@ -16,6 +16,8 @@ from server.handlers.validation import (
     validate_string_list,
     validate_boolean,
     validate_float,
+    # Core sanitization functions re-exported from app.core.validation
+    sanitize_query as core_sanitize_query,
 )
 
 
@@ -101,6 +103,16 @@ class TestValidateQuery:
         """Non-string query raises ValidationError."""
         with pytest.raises(ValidationError, match="must be a string"):
             validate_query(12345)
+
+    def test_suspicious_patterns_rejected_by_sanitize_query(self):
+        """Suspicious injection-like patterns are rejected by core sanitize_query.
+
+        Note: The handler's validate_query only checks type and length.
+        For security-focused sanitization with XSS pattern checking,
+        use the core sanitize_query function.
+        """
+        with pytest.raises(ValidationError, match="suspicious pattern"):
+            core_sanitize_query("<script>alert('XSS')</script>")
 
 
 class TestValidatePath:

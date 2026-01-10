@@ -7,12 +7,7 @@ All user input should be sanitized through these functions.
 
 import re
 from typing import Optional
-from app.core.errors import OmniCortexError
-
-
-class ValidationError(OmniCortexError):
-    """Input validation failed."""
-    pass
+from app.core.errors import OmniCortexError, ValidationError
 
 
 # Maximum input lengths (from constants)
@@ -166,7 +161,12 @@ def validate_framework_name(framework: Optional[str]) -> Optional[str]:
     """
     Validate framework name.
 
-    Framework names should match the registered format.
+    Framework names must:
+    - Start with a lowercase letter
+    - Contain only lowercase letters, numbers, and underscores
+    - Be at most 100 characters long
+
+    This is the authoritative validation used by both core and handlers.
     """
     if framework is None:
         return None
@@ -174,15 +174,15 @@ def validate_framework_name(framework: Optional[str]) -> Optional[str]:
     if not isinstance(framework, str):
         raise ValidationError("framework must be a string")
 
-    # Allow lowercase alphanumeric with underscores
-    if not re.match(r'^[a-z0-9_]+$', framework):
+    if len(framework) > 100:
+        raise ValidationError("framework name too long (max 100 chars)")
+
+    # Framework names must start with letter, then alphanumeric with underscores
+    if not re.match(r'^[a-z][a-z0-9_]*$', framework):
         raise ValidationError(
             "framework name contains invalid characters",
             details={"framework": framework}
         )
-
-    if len(framework) > 128:
-        raise ValidationError("framework name too long")
 
     return framework
 

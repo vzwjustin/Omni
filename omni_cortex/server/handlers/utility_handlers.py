@@ -300,6 +300,8 @@ async def handle_prepare_context(arguments: dict) -> list[TextContent]:
                 code_context=code_context,
                 file_list=file_list,
                 search_docs=search_docs,
+                enable_multi_repo=enable_multi_repo,
+                enable_source_attribution=enable_source_attribution,
             )
         finally:
             # Restore original setting
