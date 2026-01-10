@@ -44,6 +44,12 @@ __all__ = [
     "handle_manage_claude_md",
     "handle_prepare_context_streaming",
     "handle_context_cache_status",
+    # Token reduction
+    "handle_serialize_to_toon",
+    "handle_deserialize_from_toon",
+    "handle_compress_prompt",
+    "handle_compress_context",
+    "handle_token_reduction_compare",
     # Validation
     "ValidationError",
     "validate_thread_id",
@@ -88,6 +94,12 @@ _EXPORTS: dict[str, tuple[str, str]] = {
     "handle_manage_claude_md": (".utility_handlers", "handle_manage_claude_md"),
     "handle_prepare_context_streaming": (".utility_handlers", "handle_prepare_context_streaming"),
     "handle_context_cache_status": (".utility_handlers", "handle_context_cache_status"),
+    # Token reduction
+    "handle_serialize_to_toon": (".utility_handlers", "handle_serialize_to_toon"),
+    "handle_deserialize_from_toon": (".utility_handlers", "handle_deserialize_from_toon"),
+    "handle_compress_prompt": (".utility_handlers", "handle_compress_prompt"),
+    "handle_compress_context": (".utility_handlers", "handle_compress_context"),
+    "handle_token_reduction_compare": (".utility_handlers", "handle_token_reduction_compare"),
     # Validation
     "ValidationError": (".validation", "ValidationError"),
     "validate_thread_id": (".validation", "validate_thread_id"),
