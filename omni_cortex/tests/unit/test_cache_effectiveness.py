@@ -21,37 +21,39 @@ def cache():
     return ContextCache(ttl_settings=ttl_settings)
 
 
-def test_cache_hit_tracking(cache):
+@pytest.mark.asyncio
+async def test_cache_hit_tracking(cache):
     """Test that cache hits are tracked correctly."""
     # Initial stats should be empty
     stats = cache.get_stats()
     assert stats["cache_hits"] == {}
     assert stats["cache_misses"] == {}
-    
+
     # Simulate a cache miss
-    cache._track_cache_miss("query_analysis")
-    
+    await cache._track_cache_miss_async("query_analysis")
+
     stats = cache.get_stats()
     assert stats["cache_misses"]["query_analysis"] == 1
     assert stats["cache_hits"].get("query_analysis", 0) == 0
-    
+
     # Simulate a cache hit
-    cache._track_cache_hit("query_analysis", is_stale=False, age_seconds=100.0)
-    
+    await cache._track_cache_hit_async("query_analysis", is_stale=False, age_seconds=100.0)
+
     stats = cache.get_stats()
     assert stats["cache_hits"]["query_analysis"] == 1
     assert stats["cache_misses"]["query_analysis"] == 1
 
 
-def test_token_savings_calculation(cache):
+@pytest.mark.asyncio
+async def test_token_savings_calculation(cache):
     """Test that token savings are calculated correctly."""
     # Track hits for different cache types
-    cache._track_cache_hit("query_analysis", is_stale=False, age_seconds=100.0)
-    cache._track_cache_hit("file_discovery", is_stale=False, age_seconds=200.0)
-    cache._track_cache_hit("documentation", is_stale=False, age_seconds=300.0)
-    
+    await cache._track_cache_hit_async("query_analysis", is_stale=False, age_seconds=100.0)
+    await cache._track_cache_hit_async("file_discovery", is_stale=False, age_seconds=200.0)
+    await cache._track_cache_hit_async("documentation", is_stale=False, age_seconds=300.0)
+
     stats = cache.get_stats()
-    
+
     # Check that tokens were saved
     assert stats["tokens_saved"]["query_analysis"] == 500  # Expected estimate
     assert stats["tokens_saved"]["file_discovery"] == 2000  # Expected estimate
@@ -59,19 +61,20 @@ def test_token_savings_calculation(cache):
     assert stats["total_tokens_saved"] == 4000  # Sum of all
 
 
-def test_stale_hit_tracking(cache):
+@pytest.mark.asyncio
+async def test_stale_hit_tracking(cache):
     """Test that stale cache hits are tracked separately."""
     # Track regular hit
-    cache._track_cache_hit("query_analysis", is_stale=False, age_seconds=100.0)
-    
+    await cache._track_cache_hit_async("query_analysis", is_stale=False, age_seconds=100.0)
+
     # Track stale hit
-    cache._track_cache_hit("query_analysis", is_stale=True, age_seconds=5000.0)
-    
+    await cache._track_cache_hit_async("query_analysis", is_stale=True, age_seconds=5000.0)
+
     stats = cache.get_stats()
-    
+
     # Regular hits should be tracked
     assert stats["cache_hits"]["query_analysis"] == 1
-    
+
     # Stale hits should be tracked separately
     assert stats["stale_hits"]["query_analysis"] == 1
 
@@ -92,44 +95,46 @@ def test_invalidation_tracking(cache):
     assert stats["invalidations"]["manual"] == 1
 
 
-def test_hit_rate_calculation(cache):
+@pytest.mark.asyncio
+async def test_hit_rate_calculation(cache):
     """Test that hit rates are calculated correctly."""
     # Simulate some hits and misses
-    cache._track_cache_hit("query_analysis", is_stale=False, age_seconds=100.0)
-    cache._track_cache_hit("query_analysis", is_stale=False, age_seconds=200.0)
-    cache._track_cache_hit("query_analysis", is_stale=False, age_seconds=300.0)
-    cache._track_cache_miss("query_analysis")
-    
+    await cache._track_cache_hit_async("query_analysis", is_stale=False, age_seconds=100.0)
+    await cache._track_cache_hit_async("query_analysis", is_stale=False, age_seconds=200.0)
+    await cache._track_cache_hit_async("query_analysis", is_stale=False, age_seconds=300.0)
+    await cache._track_cache_miss_async("query_analysis")
+
     stats = cache.get_stats()
-    
+
     # Hit rate should be 3/4 = 0.75
     assert stats["hit_rates"]["query_analysis"] == 0.75
 
 
-def test_effectiveness_dashboard(cache):
+@pytest.mark.asyncio
+async def test_effectiveness_dashboard(cache):
     """Test that effectiveness dashboard returns formatted data."""
     # Add some cache activity
-    cache._track_cache_hit("query_analysis", is_stale=False, age_seconds=100.0)
-    cache._track_cache_hit("file_discovery", is_stale=False, age_seconds=200.0)
-    cache._track_cache_miss("query_analysis")
+    await cache._track_cache_hit_async("query_analysis", is_stale=False, age_seconds=100.0)
+    await cache._track_cache_hit_async("file_discovery", is_stale=False, age_seconds=200.0)
+    await cache._track_cache_miss_async("query_analysis")
     cache._track_invalidation("workspace_change", 2)
-    
+
     dashboard = cache.get_effectiveness_dashboard()
-    
+
     # Check summary section
     assert "summary" in dashboard
     assert "overall_hit_rate" in dashboard["summary"]
     assert "total_tokens_saved" in dashboard["summary"]
-    
+
     # Check by_cache_type section
     assert "by_cache_type" in dashboard
     assert "query_analysis" in dashboard["by_cache_type"]
     assert "file_discovery" in dashboard["by_cache_type"]
-    
+
     # Check cache_health section
     assert "cache_health" in dashboard
     assert "size_utilization" in dashboard["cache_health"]
-    
+
     # Check invalidations section
     assert "invalidations" in dashboard
     assert dashboard["invalidations"]["workspace_changes"] == 2
@@ -165,15 +170,16 @@ def test_clear_tracks_invalidation(cache):
     assert len(cache._cache) == 0
 
 
-def test_multiple_cache_types(cache):
+@pytest.mark.asyncio
+async def test_multiple_cache_types(cache):
     """Test tracking across multiple cache types."""
     # Track activity for all cache types
     for cache_type in ["query_analysis", "file_discovery", "documentation"]:
-        cache._track_cache_hit(cache_type, is_stale=False, age_seconds=100.0)
-        cache._track_cache_miss(cache_type)
-    
+        await cache._track_cache_hit_async(cache_type, is_stale=False, age_seconds=100.0)
+        await cache._track_cache_miss_async(cache_type)
+
     stats = cache.get_stats()
-    
+
     # All cache types should have metrics
     for cache_type in ["query_analysis", "file_discovery", "documentation"]:
         assert stats["cache_hits"][cache_type] == 1
@@ -190,17 +196,18 @@ def test_zero_division_in_hit_rate(cache):
         assert stats["hit_rates"][cache_type] == 0.0
 
 
-def test_dashboard_formatting(cache):
+@pytest.mark.asyncio
+async def test_dashboard_formatting(cache):
     """Test that dashboard values are properly formatted."""
     # Add some activity
-    cache._track_cache_hit("query_analysis", is_stale=False, age_seconds=100.0)
-    cache._track_cache_miss("query_analysis")
-    
+    await cache._track_cache_hit_async("query_analysis", is_stale=False, age_seconds=100.0)
+    await cache._track_cache_miss_async("query_analysis")
+
     dashboard = cache.get_effectiveness_dashboard()
-    
+
     # Check that percentages are formatted
     assert "%" in dashboard["summary"]["overall_hit_rate"]
     assert "%" in dashboard["by_cache_type"]["query_analysis"]["hit_rate"]
-    
+
     # Check that numbers have commas
     assert "," in dashboard["summary"]["total_tokens_saved"] or dashboard["summary"]["total_tokens_saved"] == "500"
