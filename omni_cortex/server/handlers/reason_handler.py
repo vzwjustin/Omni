@@ -5,10 +5,10 @@ The smart routing handler that uses HyperRouter for framework selection.
 Integrates with ContextGateway for automatic context preparation.
 """
 
-import logging
 import sys
 import traceback
 
+import structlog
 from mcp.types import TextContent
 
 from app.core.audit import log_tool_call
@@ -21,7 +21,7 @@ from .validation import (
     validate_thread_id,
 )
 
-logger = logging.getLogger("omni-cortex")
+logger = structlog.get_logger("omni-cortex.reason_handler")
 
 
 async def handle_reason(

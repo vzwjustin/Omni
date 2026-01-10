@@ -4,8 +4,7 @@ RAG/Search Tool Handlers
 Handles vector store search tools.
 """
 
-import logging
-
+import structlog
 from mcp.types import TextContent
 
 from app.langchain_integration import search_vectorstore, VectorstoreSearchError
@@ -18,7 +17,7 @@ from .validation import (
     validate_text,
 )
 
-logger = logging.getLogger("omni-cortex")
+logger = structlog.get_logger("omni-cortex.rag_handlers")
 
 
 async def handle_search_documentation(arguments: dict, manager) -> list[TextContent]:

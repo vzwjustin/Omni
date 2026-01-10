@@ -5,8 +5,7 @@ Handles think_* tools for specific framework execution.
 Integrates with ContextGateway for automatic context preparation.
 """
 
-import logging
-
+import structlog
 from mcp.types import TextContent
 
 from app.langchain_integration import get_memory, save_to_langchain_memory
@@ -28,7 +27,7 @@ from .validation import (
     validate_framework_name,
 )
 
-logger = logging.getLogger("omni-cortex")
+logger = structlog.get_logger("omni-cortex.framework_handlers")
 
 
 async def handle_think_framework(
