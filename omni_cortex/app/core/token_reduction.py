@@ -320,7 +320,7 @@ def reduce_tokens(
                     "method": "toon",
                     "original_tokens": count_tokens(content),
                     "reduced_tokens": count_tokens(toon_str),
-                    "reduction_percent": (1 - count_tokens(toon_str) / count_tokens(content)) * 100
+                    "reduction_percent": (1 - count_tokens(toon_str) / count_tokens(content)) * 100 if count_tokens(content) > 0 else 0.0
                 }
         except json.JSONDecodeError:
             pass

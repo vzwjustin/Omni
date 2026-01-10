@@ -108,7 +108,7 @@ class LLMLinguaCompressor:
             return_word_label: Include word-level compression labels in output
 
         Returns:
-            Dictionary with compressed_prompt, original_tokens, compressed_tokens,
+            Dictionary with compressed_prompt, origin_tokens, compressed_tokens,
             ratio, and optionally word_labels
         """
         self._lazy_init()
@@ -117,10 +117,9 @@ class LLMLinguaCompressor:
             logger.warning("Compressor not available, returning original prompt")
             return {
                 "compressed_prompt": prompt,
-                "original_tokens": -1,
+                "origin_tokens": -1,
                 "compressed_tokens": -1,
                 "ratio": 1.0,
-                "origin_tokens": -1,
                 "compressed": False,
                 "error": "Compressor not initialized"
             }
@@ -170,10 +169,9 @@ class LLMLinguaCompressor:
             logger.error("Prompt compression failed", error=str(e))
             return {
                 "compressed_prompt": prompt,
-                "original_tokens": -1,
+                "origin_tokens": -1,
                 "compressed_tokens": -1,
                 "ratio": 1.0,
-                "origin_tokens": -1,
                 "compressed": False,
                 "error": str(e)
             }
@@ -213,7 +211,7 @@ class LLMLinguaCompressor:
                 "compressed_prompt": compressed_prompt,
                 "original_instruction": instruction,
                 "compressed_context": context_result["compressed_prompt"],
-                "original_tokens": context_result.get("origin_tokens", -1),
+                "origin_tokens": context_result.get("origin_tokens", -1),
                 "compressed_tokens": context_result.get("compressed_tokens", -1),
                 "ratio": context_result.get("ratio", rate),
                 "compressed": True
@@ -272,7 +270,7 @@ class LLMLinguaCompressor:
         original_chars = len(original_prompt)
         compressed_chars = len(compressed_result.get("compressed_prompt", ""))
 
-        original_tokens = compressed_result.get("origin_tokens", -1)
+        origin_tokens = compressed_result.get("origin_tokens", -1)
         compressed_tokens = compressed_result.get("compressed_tokens", -1)
 
         return {
@@ -281,11 +279,11 @@ class LLMLinguaCompressor:
             "char_reduction": original_chars - compressed_chars,
             "char_reduction_percent": ((original_chars - compressed_chars) / original_chars * 100)
             if original_chars > 0 else 0,
-            "original_tokens": original_tokens,
+            "origin_tokens": origin_tokens,
             "compressed_tokens": compressed_tokens,
-            "token_reduction": original_tokens - compressed_tokens if original_tokens > 0 else -1,
-            "token_reduction_percent": ((original_tokens - compressed_tokens) / original_tokens * 100)
-            if original_tokens > 0 else 0,
+            "token_reduction": origin_tokens - compressed_tokens if origin_tokens > 0 else -1,
+            "token_reduction_percent": ((origin_tokens - compressed_tokens) / origin_tokens * 100)
+            if origin_tokens > 0 else 0,
             "compression_ratio": compressed_result.get("ratio", 1.0)
         }
 
