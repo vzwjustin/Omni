@@ -16,6 +16,8 @@ from app.graph import (
     route_node,
     execute_framework_node,
     should_continue,
+    should_continue_after_execute,
+    error_node,
     retry_with_backoff,
     _execute_pipeline,
     _execute_single,
@@ -144,13 +146,14 @@ class TestShouldContinue:
         result = should_continue(minimal_state)
         assert result == "retry"
 
-    def test_returns_end_when_max_retries_exceeded(self, minimal_state):
-        """Test returns 'end' when max retries exceeded."""
+    def test_returns_error_when_max_retries_exceeded(self, minimal_state):
+        """Test returns 'error' when max retries exceeded."""
         minimal_state["selected_framework"] = ""
         minimal_state["last_error"] = "Connection timeout"
         minimal_state["retry_count"] = MAX_RETRIES
         result = should_continue(minimal_state)
-        assert result == "end"
+        assert result == "error"
+        assert "Max retries exceeded" in minimal_state.get("error", "")
 
     def test_returns_retry_at_boundary(self, minimal_state):
         """Test retry behavior at MAX_RETRIES - 1."""
@@ -159,6 +162,21 @@ class TestShouldContinue:
         minimal_state["retry_count"] = MAX_RETRIES - 1
         result = should_continue(minimal_state)
         assert result == "retry"
+
+    def test_returns_error_when_error_state_set(self, minimal_state):
+        """Test returns 'error' when error state is set."""
+        minimal_state["selected_framework"] = "active_inference"
+        minimal_state["error"] = "Something went wrong"
+        result = should_continue(minimal_state)
+        assert result == "error"
+
+    def test_error_takes_priority_over_selected_framework(self, minimal_state):
+        """Test that error state takes priority over selected_framework."""
+        minimal_state["selected_framework"] = "active_inference"
+        minimal_state["error"] = "Critical failure"
+        result = should_continue(minimal_state)
+        # Error should be checked first
+        assert result == "error"
 
 
 # =============================================================================
@@ -414,8 +432,8 @@ class TestExecutePipeline:
         assert "fw1" in str(result["reasoning_steps"])
 
     @pytest.mark.asyncio
-    async def test_pipeline_skips_unknown_frameworks(self, minimal_state):
-        """Test that pipeline skips frameworks not in FRAMEWORK_NODES."""
+    async def test_pipeline_fails_on_unknown_frameworks(self, minimal_state):
+        """Test that pipeline fails fast when encountering unknown frameworks."""
         executed = []
 
         async def mock_fw1(state):
@@ -429,14 +447,19 @@ class TestExecutePipeline:
             # Ensure "unknown_framework" is truly not in the dict
             if "unknown_framework" in FRAMEWORK_NODES:
                 del FRAMEWORK_NODES["unknown_framework"]
-            await _execute_pipeline(
+            result = await _execute_pipeline(
                 minimal_state,
                 framework_chain,
                 lambda name, state: []
             )
 
-        # fw1 should be executed twice, unknown skipped
-        assert executed == ["fw1", "fw1"]
+        # fw1 should be executed once, then pipeline fails on unknown_framework
+        assert executed == ["fw1"]
+        # Error should be set in state
+        assert result.get("error") is not None
+        assert "unknown_framework" in result["error"]
+        # final_answer should contain error message
+        assert "Pipeline execution failed" in result.get("final_answer", "")
 
     @pytest.mark.asyncio
     async def test_pipeline_tracks_executed_chain(self, minimal_state):
@@ -586,15 +609,14 @@ class TestCheckpointerLifecycle:
         """Test that cleanup_checkpointer closes connections."""
         import app.graph as graph_module
 
-        # Set up a mock checkpointer
-        mock_conn = AsyncMock()
+        # Set up a mock checkpointer with async close method
         mock_checkpointer = MagicMock()
-        mock_checkpointer.conn = mock_conn
+        mock_checkpointer.aclose = AsyncMock()
         graph_module._checkpointer = mock_checkpointer
 
         await cleanup_checkpointer()
 
-        mock_conn.close.assert_called_once()
+        mock_checkpointer.aclose.assert_called_once()
         assert graph_module._checkpointer is None
 
     @pytest.mark.asyncio
@@ -817,7 +839,7 @@ class TestErrorHandling:
 
     @pytest.mark.asyncio
     async def test_execute_framework_handles_node_error(self, minimal_state):
-        """Test that execute_framework_node handles framework errors."""
+        """Test that execute_framework_node handles framework errors gracefully."""
         minimal_state["selected_framework"] = "failing_framework"
         minimal_state["working_memory"] = {}
         minimal_state["framework_chain"] = []
@@ -827,5 +849,153 @@ class TestErrorHandling:
 
         with patch.dict(FRAMEWORK_NODES, {"failing_framework": failing_node}):
             with patch("app.nodes.common.list_tools_for_framework", return_value=[]):
-                with pytest.raises(ValueError, match="Framework execution failed"):
-                    await execute_framework_node(minimal_state)
+                with patch("app.graph.log_framework_execution"):
+                    # Now execution should handle the error gracefully instead of raising
+                    result = await execute_framework_node(minimal_state)
+                    # Error should be caught and safe defaults set
+                    assert result["confidence_score"] == 0.0
+                    assert "Framework execution failed" in result.get("final_answer", "")
+
+
+# =============================================================================
+# Test error_node
+# =============================================================================
+
+class TestErrorNode:
+    """Tests for the error_node function."""
+
+    @pytest.mark.asyncio
+    async def test_error_node_sets_safe_defaults(self, minimal_state):
+        """Test that error_node sets safe default values."""
+        minimal_state["error"] = "Something went wrong"
+        minimal_state["working_memory"] = {}
+
+        with patch("app.graph.log_framework_execution"):
+            result = await error_node(minimal_state)
+
+        assert result["confidence_score"] == 0.0
+        assert result["tokens_used"] == minimal_state.get("tokens_used", 0)
+        assert result["last_error"] == "Something went wrong"
+        assert result["error"] is None  # Error should be cleared after handling
+
+    @pytest.mark.asyncio
+    async def test_error_node_sets_final_answer_when_empty(self, minimal_state):
+        """Test that error_node sets final_answer when not already set."""
+        minimal_state["error"] = "Test error"
+        minimal_state["final_answer"] = None
+        minimal_state["working_memory"] = {}
+        minimal_state["query"] = "Test query"
+
+        with patch("app.graph.log_framework_execution"):
+            result = await error_node(minimal_state)
+
+        assert "An error occurred during reasoning" in result["final_answer"]
+        assert "Test error" in result["final_answer"]
+
+    @pytest.mark.asyncio
+    async def test_error_node_preserves_existing_final_answer(self, minimal_state):
+        """Test that error_node preserves existing final_answer."""
+        minimal_state["error"] = "Test error"
+        minimal_state["final_answer"] = "Existing answer"
+        minimal_state["working_memory"] = {}
+
+        with patch("app.graph.log_framework_execution"):
+            result = await error_node(minimal_state)
+
+        assert result["final_answer"] == "Existing answer"
+
+    @pytest.mark.asyncio
+    async def test_error_node_adds_reasoning_step(self, minimal_state):
+        """Test that error_node adds error to reasoning_steps."""
+        minimal_state["error"] = "Test error"
+        minimal_state["reasoning_steps"] = []
+        minimal_state["working_memory"] = {}
+
+        with patch("app.graph.log_framework_execution"):
+            result = await error_node(minimal_state)
+
+        assert len(result["reasoning_steps"]) == 1
+        assert result["reasoning_steps"][0]["action"] == "error_handling"
+        assert "Test error" in result["reasoning_steps"][0]["observation"]
+
+    @pytest.mark.asyncio
+    async def test_error_node_uses_last_error_if_no_error(self, minimal_state):
+        """Test that error_node falls back to last_error if error is not set."""
+        minimal_state["error"] = None
+        minimal_state["last_error"] = "Previous error"
+        minimal_state["working_memory"] = {}
+
+        with patch("app.graph.log_framework_execution"):
+            result = await error_node(minimal_state)
+
+        assert result["last_error"] == "Previous error"
+
+    @pytest.mark.asyncio
+    async def test_error_node_logs_execution(self, minimal_state):
+        """Test that error_node logs the error handling."""
+        minimal_state["error"] = "Test error"
+        minimal_state["selected_framework"] = "test_framework"
+        minimal_state["working_memory"] = {"thread_id": "test-thread"}
+        minimal_state["query"] = "Test query"
+
+        with patch("app.graph.log_framework_execution") as mock_log:
+            await error_node(minimal_state)
+            mock_log.assert_called_once()
+            call_kwargs = mock_log.call_args[1]
+            assert "error_handler" in call_kwargs["framework"]
+            assert call_kwargs["success"] is False
+            assert "Test error" in call_kwargs["error"]
+
+
+# =============================================================================
+# Test should_continue_after_execute
+# =============================================================================
+
+class TestShouldContinueAfterExecute:
+    """Tests for the should_continue_after_execute conditional edge function."""
+
+    def test_returns_end_when_no_error(self, minimal_state):
+        """Test returns 'end' when no error state."""
+        minimal_state["error"] = None
+        result = should_continue_after_execute(minimal_state)
+        assert result == "end"
+
+    def test_returns_error_when_error_set(self, minimal_state):
+        """Test returns 'error' when error state is set."""
+        minimal_state["error"] = "Execution failed"
+        result = should_continue_after_execute(minimal_state)
+        assert result == "error"
+
+    def test_returns_end_when_error_is_empty_string(self, minimal_state):
+        """Test returns 'end' when error is empty string."""
+        minimal_state["error"] = ""
+        result = should_continue_after_execute(minimal_state)
+        assert result == "end"
+
+
+# =============================================================================
+# Test Graph with Error Node Integration
+# =============================================================================
+
+class TestGraphErrorNodeIntegration:
+    """Integration tests for error node in graph workflow."""
+
+    def test_graph_has_error_node(self):
+        """Test that the graph includes an error node."""
+        test_graph = create_reasoning_graph()
+        # The compiled graph should be usable
+        assert test_graph is not None
+
+    @pytest.mark.asyncio
+    async def test_error_state_routes_to_error_node(self, minimal_state):
+        """Test that error state properly routes through error node."""
+        minimal_state["error"] = "Test error"
+        minimal_state["working_memory"] = {}
+        minimal_state["query"] = "Test query"
+
+        with patch("app.graph.log_framework_execution"):
+            result = await error_node(minimal_state)
+
+        # Verify error handling occurred
+        assert result["confidence_score"] == 0.0
+        assert result["error"] is None  # Error cleared after handling

@@ -35,6 +35,10 @@ from .routing.complexity import ComplexityEstimator
 from .routing.vibes import VibeMatcher
 from .settings import get_settings
 
+# Precomputed frozenset for O(1) framework membership testing
+# Used in _parse_specialist_response and _extract_framework for fast validation
+FRAMEWORK_SET: frozenset[str] = frozenset(FRAMEWORKS.keys())
+
 logger = structlog.get_logger("router")
 
 
@@ -106,9 +110,16 @@ class HyperRouter:
         settings = get_settings()
         self._cache_max_size = settings.routing_cache_max_size
         self._cache_ttl_seconds = settings.routing_cache_ttl_seconds
-        # Lock for thread-safe cache operations in async context
-        # Initialize immediately to prevent race conditions
-        self._cache_lock = asyncio.Lock()
+        # Lazy initialization: asyncio.Lock() requires an event loop
+        # which may not exist at module load time when global router is created
+        self.__cache_lock: Optional[asyncio.Lock] = None
+
+    @property
+    def _cache_lock(self) -> asyncio.Lock:
+        """Lazily initialize the asyncio lock when first needed."""
+        if self.__cache_lock is None:
+            self.__cache_lock = asyncio.Lock()
+        return self.__cache_lock
 
     # ==========================================================================
     # ROUTING CACHE
@@ -286,16 +297,31 @@ class HyperRouter:
         Invoke the specialist LLM agent for framework selection.
         Returns None on failure to allow graceful fallback.
         """
+        # Timeout for LLM calls to prevent indefinite hangs
+        LLM_TIMEOUT_SECONDS = 30.0
+
         try:
             from ..langchain_integration import get_chat_model
 
             prompt = self._get_specialist_prompt(category, query, context)
             llm = get_chat_model("fast")
-            response = await llm.ainvoke(prompt)
+
+            # Wrap LLM call with timeout to prevent indefinite blocking
+            response = await asyncio.wait_for(
+                llm.ainvoke(prompt),
+                timeout=LLM_TIMEOUT_SECONDS
+            )
 
             response_text = self._extract_response_text(response)
             return self._parse_specialist_response(response_text)
 
+        except asyncio.TimeoutError:
+            logger.warning(
+                "specialist_agent_timeout",
+                category=category,
+                timeout_seconds=LLM_TIMEOUT_SECONDS,
+                hint="LLM call timed out, falling back to local pattern matching"
+            )
         except RateLimitError as e:
             logger.warning(
                 "gemini_billing_issue",
@@ -355,7 +381,8 @@ class HyperRouter:
             fw.strip()
             for fw in frameworks_line.replace("->", ",").replace("→", ",").split(",")
         ]
-        selected = [fw for fw in selected if fw in FRAMEWORKS]
+        # O(1) set membership check for each framework in the chain
+        selected = [fw for fw in selected if fw in FRAMEWORK_SET]
 
         if not selected:
             return None
@@ -458,9 +485,19 @@ class HyperRouter:
         return "self_discover", "Fallback: routing failed, using self_discover."
 
     def _extract_framework(self, response: str) -> Optional[str]:
-        """Extract framework name from LLM response."""
+        """Extract framework name from LLM response.
+
+        Note: This method iterates over all 62 frameworks to find substring matches.
+        This is intentional as framework names may appear anywhere in the response
+        and may contain underscores (e.g., active_inference).
+
+        The O(62 * M) complexity is acceptable because:
+        - 62 frameworks is a fixed constant
+        - Response text M is typically < 500 chars
+        - This method is called infrequently (only as fallback)
+        """
         response_lower = response.lower()
-        for framework in FRAMEWORKS:
+        for framework in FRAMEWORK_SET:
             if framework in response_lower:
                 return framework
         return None
@@ -494,8 +531,8 @@ class HyperRouter:
         file_list = state.get("file_list")
         preferred = state.get("preferred_framework")
 
-        # Check for explicit preference first
-        if preferred and preferred in FRAMEWORKS:
+        # Check for explicit preference first (O(1) set lookup)
+        if preferred and preferred in FRAMEWORK_SET:
             framework_chain = [preferred]
             reason = "User specified"
         elif use_ai:
@@ -536,6 +573,8 @@ class HyperRouter:
         state["routing_category"] = category
 
         # Inject Past Learnings (Episodic Memory)
+        # Always initialize to empty list for consistent downstream access
+        state["episodic_memory"] = []
         try:
             from ..collection_manager import get_collection_manager
             cm = get_collection_manager()
@@ -546,6 +585,7 @@ class HyperRouter:
             # INTENTIONAL BROAD CATCH: Episodic memory is an enhancement, not a requirement.
             # Routing should succeed even if memory retrieval fails (e.g., ChromaDB unavailable,
             # embedding service down). The core routing logic must remain operational.
+            # state["episodic_memory"] already set to [] above for graceful degradation
             logger.warning(
                 "episodic_memory_search_failed",
                 error=str(e)[:CONTENT.QUERY_LOG],
@@ -553,9 +593,15 @@ class HyperRouter:
                 query=query[:CONTENT.QUERY_LOG] if query else ""
             )
 
+        # Add reasoning step with size limit to prevent unbounded growth
+        MAX_REASONING_STEPS = 100
         if "reasoning_steps" not in state:
             state["reasoning_steps"] = []
-        state["reasoning_steps"].append({
+        reasoning_steps = state["reasoning_steps"]
+        # Ensure it's a list (defensive check for malformed state)
+        if not isinstance(reasoning_steps, list):
+            reasoning_steps = []
+        reasoning_steps.append({
             "step": "routing",
             "framework": framework_chain[0] if framework_chain else "self_discover",
             "framework_chain": framework_chain,
@@ -564,6 +610,10 @@ class HyperRouter:
             "complexity": complexity,
             "method": "hierarchical_ai" if use_ai else "heuristic"
         })
+        # Trim to max size, keeping most recent entries
+        if len(reasoning_steps) > MAX_REASONING_STEPS:
+            reasoning_steps = reasoning_steps[-MAX_REASONING_STEPS:]
+        state["reasoning_steps"] = reasoning_steps
 
         return state
 

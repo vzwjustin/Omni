@@ -9,8 +9,13 @@ import time
 import asyncio
 from enum import Enum
 from typing import Callable, Any, Optional
+
+import structlog
+
 from app.core.errors import CircuitBreakerOpenError
 from app.core.logging_utils import safe_repr
+
+logger = structlog.get_logger(__name__)
 
 
 class CircuitState(Enum):
@@ -64,7 +69,16 @@ class CircuitBreaker:
         self.state = CircuitState.CLOSED
         self.last_failure_time: Optional[float] = None
         self.last_attempt_time: Optional[float] = None
-        self.lock = asyncio.Lock()
+        # Lazy initialization: asyncio.Lock() requires an event loop
+        # which may not exist at module load time when global instances are created
+        self._lock: Optional[asyncio.Lock] = None
+
+    @property
+    def lock(self) -> asyncio.Lock:
+        """Lazily initialize the asyncio lock when first needed."""
+        if self._lock is None:
+            self._lock = asyncio.Lock()
+        return self._lock
 
     async def call(self, func: Callable, *args, **kwargs) -> Any:
         """
@@ -91,7 +105,13 @@ class CircuitBreaker:
                    (current_time - self.last_failure_time) >= self.timeout:
                     self.state = CircuitState.HALF_OPEN
                     self.success_count = 0
-                    print(f"Circuit breaker '{self.name}' transitioning to HALF_OPEN (testing recovery)")
+                    logger.info(
+                        "Circuit breaker transitioning to HALF_OPEN",
+                        name=self.name,
+                        state="HALF_OPEN",
+                        failure_count=self.failure_count,
+                        reason="testing recovery",
+                    )
                 else:
                     # Still in OPEN state, reject request
                     time_remaining = self.timeout - (current_time - (self.last_failure_time or 0))
@@ -113,7 +133,13 @@ class CircuitBreaker:
                     if self.success_count >= 2:  # Require 2 successes to close
                         self.state = CircuitState.CLOSED
                         self.failure_count = 0
-                        print(f"Circuit breaker '{self.name}' CLOSED (service recovered)")
+                        logger.info(
+                            "Circuit breaker CLOSED",
+                            name=self.name,
+                            state="CLOSED",
+                            success_count=self.success_count,
+                            reason="service recovered",
+                        )
                 elif self.state == CircuitState.CLOSED:
                     # Successful call in CLOSED state, reset failure count
                     self.failure_count = 0
@@ -129,15 +155,24 @@ class CircuitBreaker:
                 if self.state == CircuitState.HALF_OPEN:
                     # Failed in HALF_OPEN, go back to OPEN
                     self.state = CircuitState.OPEN
-                    print(f"Circuit breaker '{self.name}' back to OPEN (test failed)")
+                    logger.warning(
+                        "Circuit breaker back to OPEN",
+                        name=self.name,
+                        state="OPEN",
+                        failure_count=self.failure_count,
+                        reason="test failed",
+                    )
                 elif self.state == CircuitState.CLOSED:
                     # Check if we should open the circuit
                     if self.failure_count >= self.failure_threshold:
                         self.state = CircuitState.OPEN
-                        print(
-                            f"Circuit breaker '{self.name}' OPENED "
-                            f"({self.failure_count} failures, "
-                            f"error: {safe_repr(e, 100)})"
+                        logger.warning(
+                            "Circuit breaker OPENED",
+                            name=self.name,
+                            state="OPEN",
+                            failure_count=self.failure_count,
+                            failure_threshold=self.failure_threshold,
+                            error=safe_repr(e, 100),
                         )
 
             # Re-raise the exception
@@ -160,7 +195,11 @@ class CircuitBreaker:
         self.failure_count = 0
         self.success_count = 0
         self.last_failure_time = None
-        print(f"Circuit breaker '{self.name}' manually reset to CLOSED")
+        logger.info(
+            "Circuit breaker manually reset",
+            name=self.name,
+            state="CLOSED",
+        )
 
 
 # ============================================================================

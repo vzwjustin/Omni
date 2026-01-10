@@ -8,6 +8,7 @@ LangGraph orchestrates, LangChain handles memory/RAG.
 
 import asyncio
 import logging
+import signal
 import sys
 from typing import Any
 
@@ -146,13 +147,20 @@ def create_server() -> Server:
 
             tools.append(Tool(
                 name="reason",
-                description="Execute reasoning with auto-selected framework. Uses 62 thinking frameworks internally. Pass context from prepare_context for best results.",
+                description="Execute reasoning with auto-selected framework. Set execute=true for Gemini to actually analyze code and return specific findings. Uses 62 thinking frameworks internally.",
                 inputSchema={
                     "type": "object",
                     "properties": {
                         "query": {"type": "string", "description": "Your task or question"},
                         "context": {"type": "string", "description": "Context from prepare_context or code snippets"},
-                        "thread_id": {"type": "string", "description": "Thread ID for memory persistence"}
+                        "thread_id": {"type": "string", "description": "Thread ID for memory persistence"},
+                        "execute": {"type": "boolean", "description": "If true, Gemini executes actual analysis and returns specific findings. If false (default), returns framework template."},
+                        "workspace_path": {"type": "string", "description": "Path to workspace for file discovery (used with execute=true)"},
+                        "file_list": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Specific files to analyze (optional, used with execute=true)"
+                        }
                     },
                     "required": ["query"]
                 }
@@ -199,16 +207,23 @@ def create_server() -> Server:
                 }
             ))
 
-        # Smart routing tool
+        # Smart routing tool with execution mode
         tools.append(Tool(
             name="reason",
-            description="Smart reasoning: auto-selects best framework based on task analysis, returns structured prompt with memory context",
+            description="Smart reasoning: auto-selects best framework. Set execute=true for Gemini to actually analyze code and return specific findings with file:line locations.",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "query": {"type": "string", "description": "Your task or question"},
                     "context": {"type": "string", "description": "Code or additional context"},
-                    "thread_id": {"type": "string", "description": "Thread ID for memory persistence"}
+                    "thread_id": {"type": "string", "description": "Thread ID for memory persistence"},
+                    "execute": {"type": "boolean", "description": "If true, Gemini executes actual code analysis. If false (default), returns framework guidance."},
+                    "workspace_path": {"type": "string", "description": "Path to workspace for auto file discovery (used with execute=true)"},
+                    "file_list": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Specific files to analyze (optional, used with execute=true)"
+                    }
                 },
                 "required": ["query"]
             }
@@ -542,6 +557,73 @@ def create_server() -> Server:
     return server
 
 
+async def graceful_shutdown(shutdown_event: asyncio.Event, timeout: float = 10.0) -> None:
+    """Perform graceful shutdown with timeout.
+
+    Args:
+        shutdown_event: Event to signal shutdown completion
+        timeout: Maximum time to wait for cleanup (default: 10s)
+    """
+    from app.graph import cleanup_checkpointer
+
+    logger.info("graceful_shutdown_started", timeout_seconds=timeout)
+
+    try:
+        # Run cleanup with timeout
+        await asyncio.wait_for(cleanup_checkpointer(), timeout=timeout)
+        logger.info("graceful_shutdown_complete", status="success")
+    except asyncio.TimeoutError:
+        logger.warning("graceful_shutdown_timeout", timeout_seconds=timeout)
+    except Exception as e:
+        logger.error("graceful_shutdown_error", error=str(e), error_type=type(e).__name__)
+    finally:
+        shutdown_event.set()
+
+
+def setup_signal_handlers(loop: asyncio.AbstractEventLoop, shutdown_event: asyncio.Event) -> None:
+    """Set up signal handlers for graceful shutdown.
+
+    Uses asyncio.add_signal_handler on Unix systems for proper async signal handling.
+    Falls back to signal.signal on Windows (with limitations).
+
+    Args:
+        loop: The asyncio event loop
+        shutdown_event: Event to signal when shutdown should begin
+    """
+    def handle_signal(sig: signal.Signals) -> None:
+        """Handle shutdown signal."""
+        sig_name = sig.name if hasattr(sig, 'name') else str(sig)
+        logger.info("signal_received", signal=sig_name, action="initiating_shutdown")
+
+        # Create shutdown task if not already shutting down
+        if not shutdown_event.is_set():
+            loop.create_task(graceful_shutdown(shutdown_event))
+
+    # Unix-specific: use asyncio.add_signal_handler for proper async handling
+    if sys.platform != 'win32':
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            try:
+                loop.add_signal_handler(sig, lambda s=sig: handle_signal(s))
+                logger.debug("signal_handler_registered", signal=sig.name)
+            except (ValueError, OSError) as e:
+                # May fail if not in main thread or if signal is not valid
+                logger.warning("signal_handler_registration_failed",
+                              signal=sig.name, error=str(e))
+    else:
+        # Windows: limited signal support, use signal.signal
+        # Note: On Windows, only SIGINT (Ctrl+C) is reliably supported
+        def sync_handler(signum: int, frame: Any) -> None:
+            sig = signal.Signals(signum)
+            handle_signal(sig)
+
+        try:
+            signal.signal(signal.SIGINT, sync_handler)
+            signal.signal(signal.SIGTERM, sync_handler)
+            logger.debug("signal_handlers_registered", platform="windows")
+        except (ValueError, OSError) as e:
+            logger.warning("signal_handler_registration_failed", error=str(e))
+
+
 async def main():
     logger.info("=" * 60)
     logger.info("Omni-Cortex MCP - Operating System for Vibe Coders")
@@ -561,20 +643,58 @@ async def main():
         logger.info(f"  {len(FRAMEWORKS)} think_* tools + 21 utilities")
     logger.info("=" * 60)
 
+    # Set up shutdown event and signal handlers
+    shutdown_event = asyncio.Event()
+    loop = asyncio.get_running_loop()
+    setup_signal_handlers(loop, shutdown_event)
+    logger.info("signal_handlers_configured", signals=["SIGTERM", "SIGINT"])
+
     try:
         server = create_server()
         async with stdio_server() as (read_stream, write_stream):
-            await server.run(read_stream, write_stream, server.create_initialization_options())
+            # Run server until shutdown is signaled or server exits
+            server_task = asyncio.create_task(
+                server.run(read_stream, write_stream, server.create_initialization_options())
+            )
+            shutdown_task = asyncio.create_task(shutdown_event.wait())
+
+            # Wait for either server to exit or shutdown signal
+            done, pending = await asyncio.wait(
+                [server_task, shutdown_task],
+                return_when=asyncio.FIRST_COMPLETED
+            )
+
+            # Cancel pending tasks
+            for task in pending:
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+
+            # Check if server raised an exception
+            for task in done:
+                if task is server_task and task.exception():
+                    raise task.exception()
+
+    except asyncio.CancelledError:
+        logger.info("server_cancelled", reason="shutdown_signal")
     finally:
         # CRITICAL: Always cleanup resources on shutdown (especially important for Docker)
         # Ensures SQLite connections are closed and prevents "database locked" errors on restart
-        from app.graph import cleanup_checkpointer
-        logger.info("shutting_down", action="cleanup_resources")
-        try:
-            await cleanup_checkpointer()
-            logger.info("server_shutdown_complete")
-        except Exception as e:
-            logger.error("shutdown_cleanup_failed", error=str(e), error_type=type(e).__name__)
+        if not shutdown_event.is_set():
+            # If we haven't done graceful shutdown yet, do it now
+            from app.graph import cleanup_checkpointer
+            logger.info("shutting_down", action="cleanup_resources")
+            try:
+                await asyncio.wait_for(cleanup_checkpointer(), timeout=10.0)
+                logger.info("server_shutdown_complete")
+            except asyncio.TimeoutError:
+                logger.warning("shutdown_cleanup_timeout", timeout_seconds=10.0)
+            except Exception as e:
+                logger.error("shutdown_cleanup_failed", error=str(e), error_type=type(e).__name__)
+        else:
+            logger.info("server_shutdown_complete", reason="graceful_shutdown_already_completed")
 
 
 if __name__ == "__main__":

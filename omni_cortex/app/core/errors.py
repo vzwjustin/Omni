@@ -55,11 +55,15 @@ class SandboxTimeoutError(ExecutionError):
 
 
 # Memory errors
-class MemoryError(OmniCortexError):
+class OmniMemoryError(OmniCortexError):
     """Memory operations failed."""
 
 
-class ThreadNotFoundError(MemoryError):
+# Alias for backward compatibility (shadows built-in, use OmniMemoryError for clarity)
+MemoryError = OmniMemoryError
+
+
+class ThreadNotFoundError(OmniMemoryError):
     """Requested thread_id not in memory store."""
 
 

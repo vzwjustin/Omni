@@ -43,6 +43,10 @@ from .context import (
     ComponentStatus,
     QualityMetrics,
     MultiRepoFileDiscoverer,
+    ThinkingModeOptimizer,
+    ThinkingModeDecision,
+    ThinkingLevel,
+    get_thinking_mode_optimizer,
 )
 from .context.fallback_analysis import (
     get_fallback_analyzer,
@@ -332,6 +336,7 @@ class EnhancedStructuredContext(StructuredContext):
     - Token budget usage and transparency
     - Component status and errors
     - Repository information for multi-repo contexts
+    - Thinking mode decision for adaptive reasoning
     """
     # Cache information
     cache_metadata: Optional[CacheMetadata] = None
@@ -349,6 +354,9 @@ class EnhancedStructuredContext(StructuredContext):
     repository_info: List[Any] = field(default_factory=list)  # List[RepoInfo] - avoid circular import
     cross_repo_dependencies: List[Any] = field(default_factory=list)
     source_attributions: List[Any] = field(default_factory=list)
+
+    # Thinking mode decision for adaptive reasoning
+    thinking_mode_decision: Optional[ThinkingModeDecision] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary with enhanced fields."""
@@ -417,6 +425,16 @@ class EnhancedStructuredContext(StructuredContext):
                 for attr in self.source_attributions
             ]
 
+        if self.thinking_mode_decision:
+            base_dict["thinking_mode_decision"] = {
+                "use_thinking_mode": self.thinking_mode_decision.use_thinking_mode,
+                "thinking_level": self.thinking_mode_decision.thinking_level.value,
+                "reason": self.thinking_mode_decision.reason,
+                "estimated_token_cost": self.thinking_mode_decision.estimated_token_cost,
+                "complexity": self.thinking_mode_decision.complexity,
+                "budget_available": self.thinking_mode_decision.budget_available,
+            }
+
         return base_dict
 
 
@@ -477,6 +495,7 @@ class ContextGateway:
         self._metrics: Optional[Any] = None
         self._budget_integration: Optional[Any] = None
         self._relevance_tracker: Optional[Any] = None
+        self._thinking_mode_optimizer: Optional[ThinkingModeOptimizer] = None
 
         # Initialize enhanced components if enabled
         if self._settings.enable_circuit_breaker:
@@ -490,6 +509,9 @@ class ContextGateway:
 
         if self._settings.enable_relevance_tracking:
             self._init_relevance_tracking()
+
+        if self._settings.enable_adaptive_thinking_mode:
+            self._init_thinking_mode_optimizer()
 
     def _init_circuit_breakers(self) -> None:
         """Initialize circuit breakers for each component."""
@@ -515,6 +537,11 @@ class ContextGateway:
         """Initialize relevance tracker."""
         from .context import get_relevance_tracker
         self._relevance_tracker = get_relevance_tracker()
+
+    def _init_thinking_mode_optimizer(self) -> None:
+        """Initialize thinking mode optimizer for adaptive reasoning."""
+        self._thinking_mode_optimizer = get_thinking_mode_optimizer()
+        logger.info("thinking_mode_optimizer_initialized")
 
     def _get_multi_repo_discoverer(self) -> MultiRepoFileDiscoverer:
         """Lazily initialize multi-repo discoverer."""
@@ -744,11 +771,34 @@ class ContextGateway:
                         for c in code_result
                     ]
                 
+                # Determine thinking mode for cached results
+                cached_thinking_mode_decision: Optional[ThinkingModeDecision] = None
+                cached_complexity = query_analysis.get("complexity", "medium")
+                cached_task_type = query_analysis.get("task_type", "general")
+                if self._thinking_mode_optimizer:
+                    try:
+                        available_budget = self._settings.token_budget_medium_complexity
+                        if cached_complexity == "low":
+                            available_budget = self._settings.token_budget_low_complexity
+                        elif cached_complexity == "high":
+                            available_budget = self._settings.token_budget_high_complexity
+                        elif cached_complexity == "very_high":
+                            available_budget = self._settings.token_budget_very_high_complexity
+
+                        cached_thinking_mode_decision = self._thinking_mode_optimizer.decide_thinking_mode(
+                            query=query,
+                            complexity=cached_complexity,
+                            available_budget=available_budget,
+                            task_type=cached_task_type,
+                        )
+                    except Exception as e:
+                        logger.warning("thinking_mode_decision_failed_cached", error=str(e))
+
                 # Jump to context assembly
                 context = EnhancedStructuredContext(
-                    task_type=query_analysis.get("task_type", "general"),
+                    task_type=cached_task_type,
                     task_summary=query_analysis.get("summary", query),
-                    complexity=query_analysis.get("complexity", "medium"),
+                    complexity=cached_complexity,
                     relevant_files=converted_files,
                     entry_point=query_analysis.get("entry_point"),
                     documentation=doc_contexts,
@@ -766,8 +816,9 @@ class ContextGateway:
                     repository_info=repository_info,
                     cross_repo_dependencies=cross_repo_dependencies,
                     source_attributions=source_attributions,
+                    thinking_mode_decision=cached_thinking_mode_decision,
                 )
-                
+
                 logger.info(
                     "context_gateway_complete_cached",
                     task_type=context.task_type,
@@ -775,8 +826,10 @@ class ContextGateway:
                     docs=len(context.documentation),
                     code_searches=len(context.code_search),
                     framework=context.recommended_framework,
+                    thinking_mode=cached_thinking_mode_decision.thinking_level.value if cached_thinking_mode_decision else None,
+                    thinking_enabled=cached_thinking_mode_decision.use_thinking_mode if cached_thinking_mode_decision else False,
                 )
-                
+
                 return context
 
         # Phase 1: Discovery & Search (Parallel with named tasks)
@@ -1121,6 +1174,38 @@ class ContextGateway:
         task_type = query_analysis.get("task_type", "general")
         complexity = query_analysis.get("complexity", "medium")
         token_budget_usage = None
+        thinking_mode_decision: Optional[ThinkingModeDecision] = None
+
+        # Determine thinking mode based on complexity (if enabled)
+        if self._thinking_mode_optimizer:
+            try:
+                # Get available token budget for thinking mode decision
+                available_budget = self._settings.token_budget_medium_complexity
+                if complexity == "low":
+                    available_budget = self._settings.token_budget_low_complexity
+                elif complexity == "high":
+                    available_budget = self._settings.token_budget_high_complexity
+                elif complexity == "very_high":
+                    available_budget = self._settings.token_budget_very_high_complexity
+
+                thinking_mode_decision = self._thinking_mode_optimizer.decide_thinking_mode(
+                    query=query,
+                    complexity=complexity,
+                    available_budget=available_budget,
+                    task_type=task_type,
+                )
+
+                logger.info(
+                    "thinking_mode_decision_made",
+                    use_thinking_mode=thinking_mode_decision.use_thinking_mode,
+                    thinking_level=thinking_mode_decision.thinking_level.value,
+                    reason=thinking_mode_decision.reason,
+                    complexity=complexity,
+                    task_type=task_type,
+                )
+            except Exception as e:
+                logger.warning("thinking_mode_decision_failed", error=str(e))
+                # Continue without thinking mode decision
 
         # Convert to enhanced models for budget optimization
         enhanced_files = [
@@ -1227,6 +1312,7 @@ class ContextGateway:
             repository_info=repository_info,
             cross_repo_dependencies=cross_repo_dependencies,
             source_attributions=source_attributions,
+            thinking_mode_decision=thinking_mode_decision,
         )
 
         # Phase 7: Record Final Metrics
@@ -1269,6 +1355,8 @@ class ContextGateway:
             duration_seconds=f"{total_duration:.2f}",
             quality_score=quality_metrics.context_coverage_score if quality_metrics else None,
             budget_within=token_budget_usage.within_budget if token_budget_usage else None,
+            thinking_mode=thinking_mode_decision.thinking_level.value if thinking_mode_decision else None,
+            thinking_enabled=thinking_mode_decision.use_thinking_mode if thinking_mode_decision else False,
         )
 
         return context
