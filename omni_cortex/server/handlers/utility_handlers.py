@@ -622,3 +622,264 @@ async def handle_context_cache_status(arguments: dict) -> list[TextContent]:
             "error": str(e),
             "hint": "Cache may not be initialized or enabled"
         }, indent=2))]
+
+
+# =============================================================================
+# Token Reduction Tools (TOON + LLMLingua-2)
+# =============================================================================
+
+async def handle_serialize_to_toon(arguments: dict) -> list[TextContent]:
+    """
+    Serialize structured data to TOON format for token reduction.
+
+    TOON (Token-Oriented Object Notation) reduces tokens by 20-60% compared to JSON,
+    especially for arrays of uniform objects.
+
+    Args:
+        data: JSON string or structured data to serialize
+
+    Returns:
+        TOON-formatted string with comparison statistics
+    """
+    try:
+        data_str = validate_text(arguments.get("data"), "data", max_length=500000, required=True)
+    except ValidationError as e:
+        return [TextContent(type="text", text=json.dumps({
+            "error": f"Validation error: {str(e)}"
+        }, indent=2))]
+
+    try:
+        from app.core.token_reduction import get_manager
+        from app.core.context_utils import count_tokens
+
+        # Parse JSON input
+        data = json.loads(data_str)
+
+        # Get token reduction manager
+        manager = get_manager()
+
+        # Serialize to TOON
+        toon_str = manager.serialize_to_toon(data)
+
+        # Get comparison stats
+        comparison = manager.get_format_comparison(data)
+
+        result = {
+            "toon_output": toon_str,
+            "statistics": comparison,
+            "success": True
+        }
+
+        return [TextContent(type="text", text=json.dumps(result, indent=2))]
+
+    except json.JSONDecodeError as e:
+        return [TextContent(type="text", text=json.dumps({
+            "error": f"Invalid JSON input: {str(e)}"
+        }, indent=2))]
+    except Exception as e:
+        logger.error("toon_serialization_failed", error=str(e))
+        return [TextContent(type="text", text=json.dumps({
+            "error": str(e)
+        }, indent=2))]
+
+
+async def handle_deserialize_from_toon(arguments: dict) -> list[TextContent]:
+    """
+    Deserialize TOON format back to JSON.
+
+    Args:
+        toon_data: TOON-formatted string
+
+    Returns:
+        JSON representation of the data
+    """
+    try:
+        toon_str = validate_text(arguments.get("toon_data"), "toon_data", max_length=500000, required=True)
+    except ValidationError as e:
+        return [TextContent(type="text", text=json.dumps({
+            "error": f"Validation error: {str(e)}"
+        }, indent=2))]
+
+    try:
+        from app.core.token_reduction import deserialize_from_toon
+
+        # Deserialize from TOON
+        data = deserialize_from_toon(toon_str)
+
+        result = {
+            "data": data,
+            "success": True
+        }
+
+        return [TextContent(type="text", text=json.dumps(result, indent=2))]
+
+    except Exception as e:
+        logger.error("toon_deserialization_failed", error=str(e))
+        return [TextContent(type="text", text=json.dumps({
+            "error": str(e)
+        }, indent=2))]
+
+
+async def handle_compress_prompt(arguments: dict) -> list[TextContent]:
+    """
+    Compress prompt using LLMLingua-2 for 50-80% token reduction.
+
+    Microsoft's LLMLingua-2 uses BERT-based token classification to intelligently
+    compress prompts while preserving semantic meaning.
+
+    Args:
+        prompt: Prompt text to compress
+        rate: Compression rate (0.1-0.9, default 0.5)
+        min_tokens: Only compress if prompt exceeds this token count (default from settings)
+
+    Returns:
+        Compressed prompt with statistics
+    """
+    try:
+        prompt = validate_text(arguments.get("prompt"), "prompt", max_length=500000, required=True)
+        rate = validate_float(arguments.get("rate"), "rate", default=0.5, min_value=0.1, max_value=0.9)
+        min_tokens = validate_int(arguments.get("min_tokens"), "min_tokens", default=None, min_value=1000)
+    except ValidationError as e:
+        return [TextContent(type="text", text=json.dumps({
+            "error": f"Validation error: {str(e)}"
+        }, indent=2))]
+
+    try:
+        from app.core.token_reduction import get_manager
+
+        manager = get_manager()
+        result = manager.compress_prompt(prompt, rate=rate, min_tokens=min_tokens)
+
+        # Add stats if compression succeeded
+        if result.get("compressed", False):
+            stats = manager.get_compressor.get_compression_stats(prompt, result)
+            result["statistics"] = stats
+
+        return [TextContent(type="text", text=json.dumps(result, indent=2))]
+
+    except Exception as e:
+        logger.error("prompt_compression_failed", error=str(e))
+        return [TextContent(type="text", text=json.dumps({
+            "error": str(e),
+            "hint": "LLMLingua may not be installed or initialized. Run: pip install llmlingua"
+        }, indent=2))]
+
+
+async def handle_compress_context(arguments: dict) -> list[TextContent]:
+    """
+    Compress context while preserving instruction (useful for RAG).
+
+    This is ideal for scenarios where you have a user instruction and retrieved context.
+    The instruction is preserved while the context is compressed.
+
+    Args:
+        instruction: User instruction to preserve
+        context: Context to compress
+        rate: Compression rate (0.1-0.9, default 0.5)
+
+    Returns:
+        Compressed result with preserved instruction
+    """
+    try:
+        instruction = validate_text(arguments.get("instruction"), "instruction", max_length=50000, required=True)
+        context = validate_text(arguments.get("context"), "context", max_length=500000, required=True)
+        rate = validate_float(arguments.get("rate"), "rate", default=0.5, min_value=0.1, max_value=0.9)
+    except ValidationError as e:
+        return [TextContent(type="text", text=json.dumps({
+            "error": f"Validation error: {str(e)}"
+        }, indent=2))]
+
+    try:
+        from app.core.token_reduction import get_manager
+
+        manager = get_manager()
+        result = manager.compress_context(instruction, context, rate=rate)
+
+        return [TextContent(type="text", text=json.dumps(result, indent=2))]
+
+    except Exception as e:
+        logger.error("context_compression_failed", error=str(e))
+        return [TextContent(type="text", text=json.dumps({
+            "error": str(e),
+            "hint": "LLMLingua may not be installed. Run: pip install llmlingua"
+        }, indent=2))]
+
+
+async def handle_token_reduction_compare(arguments: dict) -> list[TextContent]:
+    """
+    Compare different token reduction strategies.
+
+    Args:
+        content: Content to analyze (text or JSON string)
+
+    Returns:
+        Comparison of JSON, TOON, and LLMLingua compression methods
+    """
+    try:
+        content = validate_text(arguments.get("content"), "content", max_length=500000, required=True)
+    except ValidationError as e:
+        return [TextContent(type="text", text=json.dumps({
+            "error": f"Validation error: {str(e)}"
+        }, indent=2))]
+
+    try:
+        from app.core.token_reduction import get_manager, reduce_tokens
+        from app.core.context_utils import count_tokens
+
+        manager = get_manager()
+        result = {
+            "original": {
+                "content": content[:200] + "..." if len(content) > 200 else content,
+                "tokens": count_tokens(content),
+                "chars": len(content)
+            },
+            "methods": {}
+        }
+
+        # Try TOON serialization
+        try:
+            data = json.loads(content)
+            if isinstance(data, (dict, list)):
+                comparison = manager.get_format_comparison(data)
+                result["methods"]["toon"] = {
+                    "applicable": True,
+                    "tokens": comparison["toon"]["tokens"],
+                    "chars": comparison["toon"]["chars"],
+                    "reduction_percent": comparison["savings"]["reduction_percent"],
+                    "recommendation": comparison["recommendation"]
+                }
+        except json.JSONDecodeError:
+            result["methods"]["toon"] = {
+                "applicable": False,
+                "reason": "Content is not valid JSON"
+            }
+
+        # Try LLMLingua compression
+        try:
+            compress_result = manager.compress_prompt(content, rate=0.5)
+            if compress_result.get("compressed", False):
+                result["methods"]["llmlingua"] = {
+                    "applicable": True,
+                    "compressed_tokens": compress_result.get("compressed_tokens", -1),
+                    "original_tokens": compress_result.get("origin_tokens", -1),
+                    "ratio": compress_result.get("ratio", 1.0),
+                    "reduction_percent": (1 - compress_result.get("ratio", 1.0)) * 100
+                }
+            else:
+                result["methods"]["llmlingua"] = {
+                    "applicable": False,
+                    "reason": compress_result.get("reason", "Compression not available")
+                }
+        except Exception as e:
+            result["methods"]["llmlingua"] = {
+                "applicable": False,
+                "reason": str(e)
+            }
+
+        return [TextContent(type="text", text=json.dumps(result, indent=2))]
+
+    except Exception as e:
+        logger.error("token_reduction_compare_failed", error=str(e))
+        return [TextContent(type="text", text=json.dumps({
+            "error": str(e)
+        }, indent=2))]
