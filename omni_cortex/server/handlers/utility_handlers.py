@@ -35,6 +35,7 @@ from .validation import (
     validate_string_list,
     validate_boolean,
     validate_float,
+    validate_int,
     validate_category,
 )
 
@@ -745,14 +746,18 @@ async def handle_compress_prompt(arguments: dict) -> list[TextContent]:
         }, indent=2))]
 
     try:
-        from app.core.token_reduction import get_manager
+        from app.core.token_reduction import get_manager, get_reduction_stats
 
         manager = get_manager()
         result = manager.compress_prompt(prompt, rate=rate, min_tokens=min_tokens)
 
         # Add stats if compression succeeded
         if result.get("compressed", False):
-            stats = manager.get_compressor.get_compression_stats(prompt, result)
+            stats = get_reduction_stats(
+                original=prompt,
+                reduced=result.get("compressed_prompt", prompt),
+                method="llmlingua"
+            )
             result["statistics"] = stats
 
         return [TextContent(type="text", text=json.dumps(result, indent=2))]

@@ -30,6 +30,8 @@ References:
 import json
 from typing import Any, Dict, List, Union
 
+from .context_utils import count_tokens
+
 
 class TOONEncoder:
     """Encoder for converting JSON/Python objects to TOON format."""
@@ -315,8 +317,9 @@ def get_compression_ratio(json_str: str, toon_str: str) -> float:
     Returns:
         Compression ratio (e.g., 0.4 means 40% of original size)
     """
-    # Simple character-based ratio (token count would be more accurate but requires tiktoken)
-    return len(toon_str) / len(json_str) if len(json_str) > 0 else 1.0
+    original_tokens = count_tokens(json_str)
+    compressed_tokens = count_tokens(toon_str)
+    return compressed_tokens / original_tokens if original_tokens > 0 else 1.0
 
 
 def get_token_savings(json_str: str, toon_str: str) -> Dict[str, Union[int, float]]:
@@ -330,15 +333,24 @@ def get_token_savings(json_str: str, toon_str: str) -> Dict[str, Union[int, floa
     Returns:
         Dictionary with compression statistics
     """
+    # Character-based stats
     json_len = len(json_str)
     toon_len = len(toon_str)
-    saved = json_len - toon_len
-    ratio = get_compression_ratio(json_str, toon_str)
+    saved_chars = json_len - toon_len
+
+    # Token-based stats
+    original_tokens = count_tokens(json_str)
+    compressed_tokens = count_tokens(toon_str)
+    saved_tokens = original_tokens - compressed_tokens
+    ratio = compressed_tokens / original_tokens if original_tokens > 0 else 1.0
 
     return {
         "original_chars": json_len,
         "compressed_chars": toon_len,
-        "saved_chars": saved,
+        "saved_chars": saved_chars,
+        "original_tokens": original_tokens,
+        "compressed_tokens": compressed_tokens,
+        "saved_tokens": saved_tokens,
         "compression_ratio": ratio,
         "reduction_percent": (1 - ratio) * 100
     }

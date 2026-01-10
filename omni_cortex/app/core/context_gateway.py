@@ -146,6 +146,25 @@ class StructuredContext:
     token_budget: int = LLM.CONTEXT_TOKEN_BUDGET  # Max tokens for Claude prompt
     actual_tokens: int = 0  # Actual token count after generation
 
+    def _format_toon_list(self, items: List[Dict[str, Any]]) -> Optional[str]:
+        """
+        Format a list of dictionaries using TOON encoding.
+
+        Args:
+            items: List of dictionaries to encode
+
+        Returns:
+            Formatted TOON string with code blocks, or None on error
+        """
+        try:
+            from .toon import TOONEncoder
+            encoder = TOONEncoder(delimiter="|", threshold=2)
+            toon_str = encoder.encode(items)
+            return f"\n```toon\n{toon_str}\n```"
+        except Exception as e:
+            logger.warning("TOON encoding failed", error=str(e))
+            return None
+
     def to_claude_prompt(self, use_toon_optimization: bool = True) -> str:
         """
         Format as rich context prompt for Claude with smart token optimization.
@@ -179,24 +198,21 @@ class StructuredContext:
 
             if use_toon and len(self.relevant_files) >= 3:
                 # TOON format: more efficient but LOSSLESS
-                try:
-                    from .toon import TOONEncoder
-                    encoder = TOONEncoder(delimiter="|", threshold=2)
+                # Build uniform structure (keeps ALL detail)
+                file_data = []
+                for f in self.relevant_files[:10]:
+                    file_data.append({
+                        "path": f.path,
+                        "score": f"{f.relevance_score:.2f}",
+                        "summary": f.summary,  # FULL summary preserved
+                        "elements": ', '.join(f.key_elements[:5]) if f.key_elements else ""
+                    })
 
-                    # Build uniform structure (keeps ALL detail)
-                    file_data = []
-                    for f in self.relevant_files[:10]:
-                        file_data.append({
-                            "path": f.path,
-                            "score": f"{f.relevance_score:.2f}",
-                            "summary": f.summary,  # FULL summary preserved
-                            "elements": ', '.join(f.key_elements[:5]) if f.key_elements else ""
-                        })
-
-                    toon_str = encoder.encode(file_data)
-                    file_lines.append(f"\n```toon\n{toon_str}\n```")
+                toon_result = self._format_toon_list(file_data)
+                if toon_result:
+                    file_lines.append(toon_result)
                     file_lines.append("*Format: TOON (20-30% more token efficient, lossless)*")
-                except Exception:
+                else:
                     # Graceful fallback if TOON fails
                     use_toon = False
 
@@ -216,29 +232,26 @@ class StructuredContext:
 
             if use_toon and len(self.documentation) >= 3:
                 # TOON for doc metadata (lossless), but keep snippets separate & full
-                try:
-                    from .toon import TOONEncoder
-                    encoder = TOONEncoder(delimiter="|", threshold=2)
+                # Metadata in TOON format
+                doc_metadata = []
+                for i, doc in enumerate(self.documentation[:5]):
+                    doc_metadata.append({
+                        "id": f"doc{i+1}",
+                        "title": doc.title,
+                        "source": doc.source,
+                        "score": f"{doc.relevance_score:.2f}"
+                    })
 
-                    # Metadata in TOON format
-                    doc_metadata = []
-                    for i, doc in enumerate(self.documentation[:5]):
-                        doc_metadata.append({
-                            "id": f"doc{i+1}",
-                            "title": doc.title,
-                            "source": doc.source,
-                            "score": f"{doc.relevance_score:.2f}"
-                        })
-
-                    toon_meta = encoder.encode(doc_metadata)
-                    doc_lines.append(f"\n```toon\n{toon_meta}\n```\n")
+                toon_result = self._format_toon_list(doc_metadata)
+                if toon_result:
+                    doc_lines.append(toon_result + "\n")
 
                     # Full snippets (never compressed, fully detailed)
                     for i, doc in enumerate(self.documentation[:5]):
                         doc_lines.append(f"### {doc.title} (doc{i+1})")
                         doc_lines.append(f"```\n{doc.snippet}\n```")  # FULL snippet, zero compression
-
-                except Exception:
+                else:
+                    # Graceful fallback if TOON fails
                     use_toon = False
 
             if not use_toon or len(self.documentation) < 3:

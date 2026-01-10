@@ -134,15 +134,17 @@ original_users = deserialize_from_toon(toon_str)
 **⚠️ IMPORTANT**: Only use when losing some detail is acceptable!
 
 ```python
-from app.core.token_reduction import compress_prompt
+from app.core.token_reduction import get_manager
 
 # Example: Compressing documentation
 long_docs = """
 [Large documentation text with examples and explanations...]
 """
 
+manager = get_manager()
+
 # Compress by 50%
-result = compress_prompt(long_docs, rate=0.5)
+result = manager.compress_prompt(long_docs, rate=0.5)
 compressed = result["compressed_prompt"]
 
 # Stats
