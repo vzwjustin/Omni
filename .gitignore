@@ -56,3 +56,4 @@ chroma/
 *.db
 *.sqlite3
 .venv/
+omni_cortex_experimental/
