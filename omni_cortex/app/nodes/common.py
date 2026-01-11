@@ -499,10 +499,7 @@ async def call_deep_reasoner(
     # Check if Quiet-STaR is enabled
     if state and state.get("working_memory", {}).get("quiet_star_enabled"):
         quiet_instruction = state.get("working_memory", {}).get("quiet_instruction", "")
-        if system:
-            system = quiet_instruction + "\n\n" + system
-        else:
-            system = quiet_instruction
+        system = quiet_instruction + "\n\n" + system if system else quiet_instruction
 
     # Get the LLM client using the centralized helper
     client = _get_llm_client(

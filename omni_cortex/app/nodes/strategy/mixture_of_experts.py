@@ -184,10 +184,7 @@ WEIGHT_5: [0.0-1.0]
 
     # Normalize weights to sum to 1
     total = sum(weights)
-    if total > 0:
-        weights = [w / total for w in weights]
-    else:
-        weights = [1.0 / len(experts)] * len(experts)
+    weights = [w / total for w in weights] if total > 0 else [1.0 / len(experts)] * len(experts)
 
     return weights[: len(experts)]
 

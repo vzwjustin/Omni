@@ -119,7 +119,7 @@ List queries.""",
     # Retrieve for each (simulated)
     retrievals = []
     queries_list = diverse_queries.split("\n")[:5]  # Limit to 5
-    for i, q in enumerate(queries_list):
+    for _i, q in enumerate(queries_list):
         if q.strip():
             retrieval = await sampler.request_sample(
                 f"Top-K for query: {q}\n\nContext: {context}\n\nRelevant chunks:", temperature=0.5

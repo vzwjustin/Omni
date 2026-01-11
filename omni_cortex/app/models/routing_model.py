@@ -161,7 +161,6 @@ def get_routing_model() -> GeminiRoutingWrapper:
     # Try new google-genai package first
     try:
         from google import genai
-        from google.genai import types
 
         client = genai.Client(api_key=settings.google_api_key)
 

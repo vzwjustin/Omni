@@ -79,12 +79,6 @@ def compress_content(content: str, target_reduction: float = 0.3) -> dict:
     ]
 
     # Patterns for lines to remove
-    skip_patterns = [
-        r"^\s*#(?!\s*type:)",  # comments (but not type hints)
-        r'^\s*"""[\s\S]*?"""',  # docstrings (handled separately)
-        r"^\s*'''[\s\S]*?'''",  # docstrings
-        r"^\s*$",  # empty lines
-    ]
 
     in_docstring = False
     docstring_char = None

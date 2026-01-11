@@ -267,7 +267,7 @@ Provide comprehensive test suite.""",
     )
 
     # Verify
-    verify = await sampler.request_sample(
+    await sampler.request_sample(
         f"Verify all tests pass:\n\nTests: {tests[:300]}...\n\nCode: {refactored[:300]}...\n\nDo all tests pass?",
         temperature=0.3,
     )
@@ -518,7 +518,7 @@ Provide both implementation and test suite.""",
                 }
 
         # Fix issues
-        analysis = await sampler.request_sample(
+        await sampler.request_sample(
             f"Analyze failures:\n\n{test_results}\n\nWhy did tests fail?", temperature=0.5
         )
 

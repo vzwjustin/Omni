@@ -223,7 +223,7 @@ JWT"""
                 if proc.returncode == 0 and stdout:
                     output = stdout.decode("utf-8", errors="ignore")
                     lines = output.split("\n")
-                    file_count = len(set(line.split(":")[0] for line in lines if ":" in line))
+                    file_count = len({line.split(":")[0] for line in lines if ":" in line})
 
                     results.append(
                         CodeSearchContext(

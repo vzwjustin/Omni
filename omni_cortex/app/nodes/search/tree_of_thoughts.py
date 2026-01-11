@@ -155,7 +155,7 @@ async def _score_thought(
 ) -> float:
     """Score a thought using the Process Reward Model."""
 
-    path_context = "\n".join(node.path())
+    "\n".join(node.path())
 
     score = await process_reward_model(
         step=node.thought,

@@ -218,9 +218,8 @@ def validate_boolean(value: any, field_name: str = "value") -> bool:
         if lower in ("false", "0", "no", "off"):
             return False
 
-    if isinstance(value, int):
-        if value in (0, 1):
-            return bool(value)
+    if isinstance(value, int) and value in (0, 1):
+        return bool(value)
 
     raise ValidationError(f"{field_name} must be a boolean", details={"value": str(value)[:100]})
 

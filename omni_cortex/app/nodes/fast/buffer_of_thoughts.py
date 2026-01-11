@@ -113,7 +113,7 @@ RELEVANCE:
     except Exception as e:
         logger.debug(
             "score_parsing_failed",
-            response=score_response[:50] if "score_response" in locals() else response[:50],
+            response=response[:50],
             error=str(e),
         )
 

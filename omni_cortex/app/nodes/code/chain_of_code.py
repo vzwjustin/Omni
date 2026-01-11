@@ -86,10 +86,7 @@ Write concise, executable Python code:
     response, _ = await call_fast_synthesizer(prompt, state, max_tokens=512)
 
     # Extract code
-    if "```" in response:
-        code = response.split("```")[0].strip()
-    else:
-        code = response.strip()
+    code = response.split("```")[0].strip() if "```" in response else response.strip()
 
     return code
 

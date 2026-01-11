@@ -180,10 +180,7 @@ def get_embeddings() -> Any:
 
     # Use dedicated embedding provider if set
     provider = getattr(settings, "embedding_provider", None)
-    if not provider or provider == "":
-        provider = settings.llm_provider.lower()
-    else:
-        provider = provider.lower()
+    provider = settings.llm_provider.lower() if not provider or provider == "" else provider.lower()
 
     model = getattr(settings, "embedding_model", "text-embedding-3-small")
 

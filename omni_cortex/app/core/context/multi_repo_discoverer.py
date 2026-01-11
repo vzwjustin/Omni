@@ -186,7 +186,7 @@ class MultiRepoFileDiscoverer(FileDiscoverer):
         # Search for nested repositories
         # Limit depth to avoid excessive scanning
         max_depth = 3
-        for root, dirs, files in os.walk(workspace_path):
+        for root, dirs, _files in os.walk(workspace_path):
             # Calculate current depth
             depth = root[len(workspace_path) :].count(os.sep)
             if depth >= max_depth:
@@ -737,21 +737,20 @@ class MultiRepoFileDiscoverer(FileDiscoverer):
                     if (
                         normalized_repo in normalized_service
                         or normalized_service in normalized_repo
-                    ):
-                        if repo_name != source_repo.name:
-                            dep_key = (source_repo.name, repo_name, "api_call")
-                            if dep_key not in seen_deps:
-                                dependencies.append(
-                                    CrossRepoDependency(
-                                        source_repo=source_repo.name,
-                                        target_repo=repo_name,
-                                        dependency_type="api_call",
-                                        source_file=file_path,
-                                        target_file=None,
-                                        confidence=0.7,
-                                    )
+                    ) and repo_name != source_repo.name:
+                        dep_key = (source_repo.name, repo_name, "api_call")
+                        if dep_key not in seen_deps:
+                            dependencies.append(
+                                CrossRepoDependency(
+                                    source_repo=source_repo.name,
+                                    target_repo=repo_name,
+                                    dependency_type="api_call",
+                                    source_file=file_path,
+                                    target_file=None,
+                                    confidence=0.7,
                                 )
-                                seen_deps.add(dep_key)
+                            )
+                            seen_deps.add(dep_key)
 
         # Pattern 3: Configuration references
         # Example: SERVICE_URL = "other-service:8080"
@@ -771,21 +770,20 @@ class MultiRepoFileDiscoverer(FileDiscoverer):
                     if (
                         normalized_repo in normalized_service
                         or normalized_service in normalized_repo
-                    ):
-                        if repo_name != source_repo.name:
-                            dep_key = (source_repo.name, repo_name, "config_reference")
-                            if dep_key not in seen_deps:
-                                dependencies.append(
-                                    CrossRepoDependency(
-                                        source_repo=source_repo.name,
-                                        target_repo=repo_name,
-                                        dependency_type="config_reference",
-                                        source_file=file_path,
-                                        target_file=None,
-                                        confidence=0.6,
-                                    )
+                    ) and repo_name != source_repo.name:
+                        dep_key = (source_repo.name, repo_name, "config_reference")
+                        if dep_key not in seen_deps:
+                            dependencies.append(
+                                CrossRepoDependency(
+                                    source_repo=source_repo.name,
+                                    target_repo=repo_name,
+                                    dependency_type="config_reference",
+                                    source_file=file_path,
+                                    target_file=None,
+                                    confidence=0.6,
                                 )
-                                seen_deps.add(dep_key)
+                            )
+                            seen_deps.add(dep_key)
 
         return dependencies
 

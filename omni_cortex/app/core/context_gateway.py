@@ -1352,7 +1352,7 @@ class ContextGateway:
                     1.0, (len(converted_files) / max_files) * 0.7 + (len(doc_contexts) / 5) * 0.3
                 )
                 diversity_score = len(
-                    set(f.path.split("/")[0] for f in converted_files if "/" in f.path)
+                    {f.path.split("/")[0] for f in converted_files if "/" in f.path}
                 ) / max(1, len(converted_files))
 
                 quality_metrics = QualityMetrics(

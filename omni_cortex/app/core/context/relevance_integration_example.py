@@ -249,7 +249,7 @@ async def example_workflow():
     solution_text = """
     I found the bug in app/auth.py. The issue was in the validate_token function.
     I also referenced the authentication documentation to ensure the fix follows best practices.
-    
+
     Here's the fix:
     ```python
     # app/auth.py

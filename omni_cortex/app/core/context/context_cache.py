@@ -666,7 +666,7 @@ class ContextCache:
                 sorted_entries = sorted(self._cache.items(), key=lambda x: x[1].created_at)
 
                 removed = 0
-                for cache_key, entry in sorted_entries:
+                for cache_key, _entry in sorted_entries:
                     if self._current_size_bytes < self._max_size_bytes * 0.8:
                         break
                     # Check key still exists
@@ -701,7 +701,7 @@ class ContextCache:
 
         # Calculate hit rates
         hit_rates = {}
-        for cache_type in self._ttl_settings.keys():
+        for cache_type in self._ttl_settings:
             hits = self._cache_stats["hits"].get(cache_type, 0)
             misses = self._cache_stats["misses"].get(cache_type, 0)
             total = hits + misses
@@ -779,7 +779,7 @@ class ContextCache:
         }
 
         # Add per-cache-type metrics
-        for cache_type in self._ttl_settings.keys():
+        for cache_type in self._ttl_settings:
             hits = stats["cache_hits"].get(cache_type, 0)
             misses = stats["cache_misses"].get(cache_type, 0)
             stale_hits = stats["stale_hits"].get(cache_type, 0)

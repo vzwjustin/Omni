@@ -12,6 +12,7 @@ import heapq
 import json
 import time
 from functools import lru_cache
+from typing import TYPE_CHECKING
 
 import structlog
 
@@ -32,6 +33,9 @@ from .routing.complexity import ComplexityEstimator
 from .routing.vibes import VibeMatcher
 from .settings import get_settings
 from .vibe_dictionary import VIBE_DICTIONARY
+
+if TYPE_CHECKING:
+    from .schemas import GeminiRouterOutput
 
 # Precomputed frozenset for O(1) framework membership testing
 # Used in _parse_specialist_response and _extract_framework for fast validation

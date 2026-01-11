@@ -141,7 +141,7 @@ Write clear spec with:
     )
 
     # Confirm consistency
-    confirmed = await sampler.request_sample(
+    await sampler.request_sample(
         f"Check internal consistency:\n\n{rephrased}\n\nAny contradictions? Clear?", temperature=0.4
     )
 
@@ -306,7 +306,7 @@ async def metaqa(sampler: ClientSampler, query: str, context: str) -> dict[str, 
     variants = []
     transformations = ["rewording", "constraint tweak", "perspective shift"]
 
-    for i, transform in enumerate(transformations):
+    for _i, transform in enumerate(transformations):
         variant = await sampler.request_sample(
             f"Transform via {transform}:\n\nOriginal: {query}\n\nCreate variant that preserves meaning.",
             temperature=0.7,

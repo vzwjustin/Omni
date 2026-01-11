@@ -414,7 +414,7 @@ class RelevanceTracker:
         # Separate by element type
         files = [e for e in elements if e.element_type == "file"]
         docs = [e for e in elements if e.element_type == "documentation"]
-        code_searches = [e for e in elements if e.element_type == "code_search"]
+        [e for e in elements if e.element_type == "code_search"]
 
         feedback = {
             "high_value_files": [

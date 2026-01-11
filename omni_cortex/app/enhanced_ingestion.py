@@ -64,7 +64,7 @@ def process_python_file(file_path: Path, content: str) -> list[tuple[str, dict[s
 
     if structure_chunks:
         # Add structured chunks
-        for chunk_content, metadata, line_start, line_end in structure_chunks:
+        for chunk_content, metadata, _line_start, _line_end in structure_chunks:
             # Enhance metadata with context
             metadata.imports = imports
             metadata.framework_name = framework_name

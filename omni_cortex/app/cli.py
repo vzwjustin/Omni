@@ -329,7 +329,7 @@ async def cmd_health(args: argparse.Namespace) -> int:
     try:
         from app.memory.manager import get_memory
 
-        mem = await get_memory("health-check")
+        await get_memory("health-check")
         checks.append(("Memory", "OK", True))
     except Exception as e:
         checks.append(("Memory", f"Error: {e}", False))

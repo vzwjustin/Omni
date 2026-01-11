@@ -686,7 +686,7 @@ Be specific and actionable. Focus on what Claude needs to execute effectively.""
                     )
 
                     # Quick test call
-                    response = client.models.generate_content(
+                    client.models.generate_content(
                         model=model,
                         contents=contents,
                         config=config,

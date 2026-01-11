@@ -314,10 +314,7 @@ class ThinkingModeOptimizer:
             return True
 
         # Gemini 3 models all support thinking mode
-        if "gemini-3" in model_name.lower() or "gemini-2.0" in model_name.lower():
-            return True
-
-        return False
+        return bool("gemini-3" in model_name.lower() or "gemini-2.0" in model_name.lower())
 
 
 # Global singleton

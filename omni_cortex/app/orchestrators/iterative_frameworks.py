@@ -211,7 +211,7 @@ Start working on the solution."""
 
     current_solution = await sampler.request_sample(initial_prompt, temperature=0.6)
 
-    for i in range(max_iterations):
+    for _i in range(max_iterations):
         # Assess if we need strategy injection
         assess_prompt = f"""Assess the current solution progress:
 
@@ -404,7 +404,7 @@ async def react(sampler: ClientSampler, query: str, context: str) -> dict[str, A
     chain = []
     max_iterations = 5
 
-    for iteration in range(max_iterations):
+    for _iteration in range(max_iterations):
         # Thought
         thought_prompt = f"""THOUGHT: What do I need to figure out next?
 
@@ -415,7 +415,7 @@ async def react(sampler: ClientSampler, query: str, context: str) -> dict[str, A
 {context}
 
 ## Previous Steps
-{chr(10).join(f"{step["type"]}: {step["content"][:80]}..." for step in chain[-3:]) if chain else "None"}
+{chr(10).join("{}: {}...".format(step["type"], step["content"][:80]) for step in chain[-3:]) if chain else "None"}
 
 What's the next logical step in reasoning?"""
 
@@ -461,7 +461,7 @@ Answer YES or NO with brief explanation."""
     # Final answer based on chain
     final_prompt = f"""Provide final solution based on reasoning chain:
 
-{chr(10).join(f"{step["type"]}: {step["content"][: CONTENT.QUERY_LOG]}..." for step in chain)}
+{chr(10).join("{}: {}...".format(step["type"], step["content"][: CONTENT.QUERY_LOG]) for step in chain)}
 
 Original problem: {query}
 
@@ -494,7 +494,7 @@ async def reflexion(sampler: ClientSampler, query: str, context: str) -> dict[st
 
 Context: {context}
 
-{f"Previous learnings: {chr(10).join(a["reflection"][: CONTENT.QUERY_LOG] + "..." for a in attempts)}" if attempts else "First attempt - do your best."}
+{"Previous learnings: " + chr(10).join(a["reflection"][: CONTENT.QUERY_LOG] + "..." for a in attempts) if attempts else "First attempt - do your best."}
 
 Provide solution:"""
 
@@ -560,7 +560,7 @@ Context: {context}"""
 
     critiques = []
 
-    for iteration in range(max_iterations):
+    for _iteration in range(max_iterations):
         # Critique
         critique_prompt = f"""Critique this solution:
 

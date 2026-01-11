@@ -446,7 +446,7 @@ class QualityScorer:
         scores.append(avg_relevance)
 
         # 2. Source diversity (prefer multiple sources)
-        sources = set(getattr(d, "source", "") for d in doc_contexts)
+        sources = {getattr(d, "source", "") for d in doc_contexts}
         source_diversity = min(1.0, len(sources) / 3.0)  # Normalize to 3 sources
         scores.append(source_diversity)
 
@@ -568,7 +568,7 @@ class MultiRepoUtils:
         repositories = []
 
         try:
-            for root, dirs, files in os.walk(workspace_path):
+            for root, dirs, _files in os.walk(workspace_path):
                 # Limit search depth
                 depth = root[len(workspace_path) :].count(os.sep)
                 if depth >= MULTI_REPO.MAX_REPO_DEPTH:

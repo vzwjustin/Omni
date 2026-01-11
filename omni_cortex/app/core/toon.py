@@ -111,7 +111,7 @@ class TOONEncoder:
             return "[]"
 
         keys = list(arr[0].keys())
-        spacing = "  " * indent
+        "  " * indent
 
         # Header: {key1|key2|key3}
         header = f"{{{self.delimiter.join(keys)}}}"

@@ -209,7 +209,7 @@ class RateLimiter:
         """
         # Calculate total input size
         total_size = 0
-        for key, value in arguments.items():
+        for _key, value in arguments.items():
             if isinstance(value, str):
                 total_size += len(value.encode("utf-8", errors="ignore"))
             elif isinstance(value, list):

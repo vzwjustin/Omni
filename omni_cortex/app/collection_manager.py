@@ -328,7 +328,7 @@ class CollectionManager:
     def route_to_collection(self, metadata: dict[str, Any]) -> str:
         """Determine which collection a document belongs to based on metadata."""
         category = metadata.get("category", "")
-        file_type = metadata.get("file_type", "")
+        metadata.get("file_type", "")
 
         if category == "framework":
             return "frameworks"

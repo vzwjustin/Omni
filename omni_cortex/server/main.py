@@ -53,6 +53,8 @@ structlog.configure(
     cache_logger_on_first_use=True,
 )
 
+import contextlib
+
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool
@@ -818,10 +820,8 @@ async def main():
             # Cancel pending tasks
             for task in pending:
                 task.cancel()
-                try:
+                with contextlib.suppress(asyncio.CancelledError):
                     await task
-                except asyncio.CancelledError:
-                    pass
 
             # Check if server raised an exception
             for task in done:

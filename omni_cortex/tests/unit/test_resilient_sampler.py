@@ -8,9 +8,9 @@ from app.core.sampling import (
     ClientSampler,
     SamplingNotSupportedError,
     extract_score,
-    extract_code_blocks,
     extract_json_object,
 )
+from app.nodes.common import extract_code_blocks
 from app.core.errors import SamplerTimeout, SamplerCircuitOpen, LLMError
 
 

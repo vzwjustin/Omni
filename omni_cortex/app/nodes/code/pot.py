@@ -225,9 +225,8 @@ class _SafetyValidator(ast.NodeVisitor):
         if isinstance(node.func, ast.Name):
             if node.func.id in _DANGEROUS_FUNCS:
                 self.errors.append(f"Call to '{node.func.id}' is not allowed")
-        elif isinstance(node.func, ast.Attribute):
-            if node.func.attr in _DANGEROUS_METHODS:
-                self.errors.append(f"Call to '.{node.func.attr}' is not allowed")
+        elif isinstance(node.func, ast.Attribute) and node.func.attr in _DANGEROUS_METHODS:
+            self.errors.append(f"Call to '.{node.func.attr}' is not allowed")
         self.generic_visit(node)
 
     def visit_Attribute(self, node: ast.Attribute) -> None:

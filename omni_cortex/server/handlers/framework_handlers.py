@@ -58,7 +58,7 @@ async def handle_think_framework(
 
     # Validate framework exists in registry (uses raise_on_unknown=True)
     try:
-        fw_info = get_framework_info(fw_name, raise_on_unknown=True)
+        get_framework_info(fw_name, raise_on_unknown=True)
     except FrameworkNotFoundError as e:
         return [TextContent(type="text", text=f"Unknown framework: {fw_name}. {e}")]
 

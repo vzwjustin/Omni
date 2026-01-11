@@ -6,6 +6,7 @@ Run this during development to catch issues early.
 """
 
 import re
+import sys
 from dataclasses import dataclass
 
 from .registry import FRAMEWORKS, FrameworkCategory, FrameworkDefinition
@@ -132,7 +133,7 @@ class FrameworkValidator:
 
         # Check for duplicate vibes
         if definition.vibes:
-            unique_vibes = set(v.lower() for v in definition.vibes)
+            unique_vibes = {v.lower() for v in definition.vibes}
             if len(unique_vibes) < len(definition.vibes):
                 self.issues.append(
                     ValidationIssue(
@@ -271,6 +272,6 @@ if __name__ == "__main__":
 
     summary = validator.get_summary()
     if summary["error"] > 0:
-        exit(1)
+        sys.exit(1)
     else:
-        exit(0)
+        sys.exit(0)

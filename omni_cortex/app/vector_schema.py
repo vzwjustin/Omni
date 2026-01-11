@@ -268,7 +268,7 @@ class MarkdownAnalyzer:
         current_section = ""
         current_header = ""
 
-        for i, part in enumerate(sections):
+        for _i, part in enumerate(sections):
             if re.match(r"^#{1,6}\s+", part):
                 # Save previous section
                 if current_section.strip():

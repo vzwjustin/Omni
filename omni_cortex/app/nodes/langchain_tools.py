@@ -43,7 +43,7 @@ async def call_langchain_tool(
     # SECURITY CHECK: Sandbox enforcement for dangerous tools
     if tool_name == "execute_code":
         # Check environment setting
-        settings = get_settings()
+        get_settings()
 
         # STRICT ENFORCEMENT: Unless explicitly overridden by env var, BLOCK unsafe execution.
         # This prevents accidental RCE in production environments.

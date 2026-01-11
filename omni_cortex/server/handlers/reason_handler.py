@@ -99,7 +99,6 @@ async def handle_reason(
 
     # AUTO-CONTEXT: If no context provided, use ContextGateway to prepare rich context
     # This bridges the gap between prepare_context and reason tools
-    context_was_prepared = False
     if not context or context == "None provided":
         try:
             gateway = get_context_gateway()
@@ -111,7 +110,6 @@ async def handle_reason(
                 search_docs=True,
             )
             context = structured_context.to_claude_prompt()
-            context_was_prepared = True
             logger.info("auto_context_prepared", query_preview=query[:50])
         except Exception as e:
             # Graceful degradation: proceed without auto-context if gateway fails
@@ -134,7 +132,6 @@ async def handle_reason(
         brief = router_output.claude_code_brief
         pipeline = router_output.pipeline
         gate = router_output.integrity_gate
-        telemetry = router_output.telemetry
 
         # Compact header - single line metadata
         stages = "→".join([s.framework_id for s in pipeline.stages])

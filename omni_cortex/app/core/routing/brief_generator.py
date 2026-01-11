@@ -19,6 +19,7 @@ from .task_analysis import (
 
 if TYPE_CHECKING:
     from ..schemas import (
+        ClaudeCodeBrief,
         DetectedSignal,
         GeminiRouterOutput,
         OutputType,

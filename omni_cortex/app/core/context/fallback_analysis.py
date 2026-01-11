@@ -656,7 +656,7 @@ class ComponentFallbackMethods:
         logger.info("fallback_code_search", query=query[:100])
 
         # Simple keyword extraction (no AI)
-        keywords = [word for word in query.split() if len(word) > 3]
+        [word for word in query.split() if len(word) > 3]
 
         status = ComponentStatusInfo(
             status=ComponentStatus.FALLBACK,

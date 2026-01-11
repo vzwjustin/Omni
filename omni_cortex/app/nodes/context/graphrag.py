@@ -326,7 +326,7 @@ async def graphrag_node(state: GraphState) -> GraphState:
 {graph_viz}
 
 ## Relevant Paths
-{chr(10).join(f"Path {i}: {" → ".join(entities[eid - 1].name for eid in path if eid <= len(entities))}" for i, path in enumerate(paths, 1))}
+{chr(10).join("Path {}: {}".format(i, " → ".join(entities[eid - 1].name for eid in path if eid <= len(entities))) for i, path in enumerate(paths, 1))}
 
 ## Answer
 {answer}

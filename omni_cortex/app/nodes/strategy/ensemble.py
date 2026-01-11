@@ -195,10 +195,7 @@ QUALITY: [0.0-1.0]
 
     # Normalize
     total = sum(weights)
-    if total > 0:
-        weights = [w / total for w in weights]
-    else:
-        weights = [1.0 / len(methods)] * len(methods)
+    weights = [w / total for w in weights] if total > 0 else [1.0 / len(methods)] * len(methods)
 
     return weights
 

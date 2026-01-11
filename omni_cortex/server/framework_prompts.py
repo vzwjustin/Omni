@@ -986,4 +986,4 @@ def get_framework_prompt(name: str, query: str, context: str = "None provided") 
 
 def get_framework_categories() -> list[str]:
     """Get list of unique categories."""
-    return list(set(fw["category"] for fw in FRAMEWORKS.values()))
+    return list({fw["category"] for fw in FRAMEWORKS.values()})

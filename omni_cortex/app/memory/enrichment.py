@@ -64,9 +64,10 @@ async def enhance_state_with_langchain(state: GraphState, thread_id: str) -> Gra
         if settings.openai_api_key or settings.openrouter_api_key or settings.google_api_key:
             rag_available = True
         else:
-            from langchain_huggingface import HuggingFaceEmbeddings
+            import importlib.util
 
-            rag_available = True
+            if importlib.util.find_spec("langchain_huggingface") is not None:
+                rag_available = True
     except ImportError as e:
         logger.debug("rag_embedding_check_failed", error=str(e))
 
