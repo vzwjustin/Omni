@@ -4,49 +4,15 @@ Prometheus Metrics for Omni-Cortex
 Provides observability for framework execution, routing decisions,
 and system performance.
 
-Gracefully degrades when prometheus_client is not installed.
+Requires prometheus_client to be installed (included in requirements.txt).
 """
 
 import structlog
+from prometheus_client import Counter, Gauge, Histogram, Info
 
 logger = structlog.get_logger("metrics")
 
-# Try to import prometheus_client, provide stubs if not available
-try:
-    from prometheus_client import Counter, Gauge, Histogram, Info
-
-    PROMETHEUS_AVAILABLE = True
-except ImportError:
-    PROMETHEUS_AVAILABLE = False
-    logger.info("prometheus_client not installed, metrics disabled")
-
-    # Stub classes that do nothing
-    class _StubMetric:
-        def __init__(self, *args, **kwargs):
-            pass
-
-        def labels(self, **kwargs):
-            return self
-
-        def inc(self, amount=1):
-            pass
-
-        def dec(self, amount=1):
-            pass
-
-        def set(self, value):
-            pass
-
-        def observe(self, value):
-            pass
-
-        def info(self, val):
-            pass
-
-    Counter = _StubMetric
-    Histogram = _StubMetric
-    Gauge = _StubMetric
-    Info = _StubMetric
+PROMETHEUS_AVAILABLE = True
 
 
 # =============================================================================
