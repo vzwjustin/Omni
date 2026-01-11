@@ -133,20 +133,20 @@ class ClientSampler:
                 ),
                 timeout=30.0,  # 30 second timeout
             )
-        except asyncio.TimeoutError:
+        except asyncio.TimeoutError as e:
             raise SamplingNotSupportedError(
                 "Sampling request timed out. Client may not support sampling."
-            )
+            ) from e
         except AttributeError as e:
-            raise SamplingNotSupportedError(f"Session doesn't support create_message: {e}")
+            raise SamplingNotSupportedError(f"Session doesn't support create_message: {e}") from e
         except NotImplementedError as e:
-            raise SamplingNotSupportedError(f"Client doesn't implement sampling: {e}")
+            raise SamplingNotSupportedError(f"Client doesn't implement sampling: {e}") from e
         except Exception as e:
             error_str = str(e)
             if "sampling" in error_str.lower() or "not supported" in error_str.lower():
-                raise SamplingNotSupportedError(f"Sampling not supported: {e}")
+                raise SamplingNotSupportedError(f"Sampling not supported: {e}") from e
             if "timeout" in error_str.lower():
-                raise SamplingNotSupportedError(f"Sampling timed out: {e}")
+                raise SamplingNotSupportedError(f"Sampling timed out: {e}") from e
             # Re-raise other errors
             logger.error("sampling_request_failed", error=error_str)
             raise
@@ -465,7 +465,7 @@ async def call_llm_with_fallback(
             raise SamplingNotSupportedError(
                 f"LangChain LLM fallback failed: {e}. "
                 "Check that LLM_PROVIDER and API key are configured."
-            )
+            ) from e
 
     # Neither sampling nor LangChain available
     raise SamplingNotSupportedError(

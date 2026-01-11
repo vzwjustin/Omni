@@ -285,14 +285,14 @@ class AnalysisExecutor:
                 execution_time_ms=execution_time,
             )
 
-        except asyncio.TimeoutError:
-            raise LLMError("Analysis timed out - try with fewer files or a simpler query")
+        except asyncio.TimeoutError as e:
+            raise LLMError("Analysis timed out - try with fewer files or a simpler query") from e
         except json.JSONDecodeError as e:
             logger.error("analysis_json_parse_error", error=str(e))
-            raise LLMError(f"Failed to parse analysis response: {e}")
+            raise LLMError(f"Failed to parse analysis response: {e}") from e
         except Exception as e:
             logger.error("analysis_execution_failed", error=str(e))
-            raise LLMError(f"Analysis failed: {e}")
+            raise LLMError(f"Analysis failed: {e}") from e
 
     def _build_analysis_prompt(
         self,

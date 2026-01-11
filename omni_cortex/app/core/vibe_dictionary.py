@@ -21,7 +21,6 @@ Usage:
 
 from functools import lru_cache
 
-
 # =========================================================================
 # VIBE DICTIONARY: Casual activation phrases for vibe coders
 # =========================================================================

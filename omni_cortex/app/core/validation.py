@@ -235,10 +235,10 @@ def validate_integer(
     """
     try:
         int_value = int(value)
-    except (ValueError, TypeError):
+    except (ValueError, TypeError) as e:
         raise ValidationError(
             f"{field_name} must be an integer", details={"value": str(value)[:100]}
-        )
+        ) from e
 
     if min_value is not None and int_value < min_value:
         raise ValidationError(
@@ -264,8 +264,8 @@ def validate_float(
     """
     try:
         float_value = float(value)
-    except (ValueError, TypeError):
-        raise ValidationError(f"{field_name} must be a number", details={"value": str(value)[:100]})
+    except (ValueError, TypeError) as e:
+        raise ValidationError(f"{field_name} must be a number", details={"value": str(value)[:100]}) from e
 
     if min_value is not None and float_value < min_value:
         raise ValidationError(
