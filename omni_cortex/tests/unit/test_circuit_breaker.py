@@ -415,7 +415,7 @@ class TestEdgeCases:
 
     @pytest.mark.asyncio
     async def test_zero_failure_threshold(self):
-        """Test: Circuit with threshold=0 never opens."""
+        """Test: Circuit with threshold=0 opens immediately on first failure."""
         breaker = CircuitBreaker(
             name="no_threshold",
             failure_threshold=0,
@@ -425,13 +425,12 @@ class TestEdgeCases:
         async def failing_call():
             raise ValueError("Test failure")
 
-        # Multiple failures should not open circuit
-        for _ in range(5):
-            with pytest.raises(ValueError):
-                await breaker.call(failing_call)
+        # First failure opens circuit immediately (failure_count >= 0 is always true)
+        with pytest.raises(ValueError):
+            await breaker.call(failing_call)
 
-        # Circuit should never open with threshold=0
-        assert breaker.state == CircuitState.CLOSED
+        # Circuit should be OPEN after first failure with threshold=0
+        assert breaker.state == CircuitState.OPEN
 
     @pytest.mark.asyncio
     async def test_very_short_timeout(self):

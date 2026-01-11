@@ -87,7 +87,7 @@ def clean_env(monkeypatch):
 class TestDefaultValues:
     """Tests for default values of all settings."""
 
-    def test_api_keys_default_to_none(self, _clean_env):
+    def test_api_keys_default_to_none(self, clean_env):  # noqa: ARG002
         """API keys should default to None."""
         settings = OmniCortexSettings()
         assert settings.google_api_key is None
@@ -95,25 +95,25 @@ class TestDefaultValues:
         assert settings.openai_api_key is None
         assert settings.openrouter_api_key is None
 
-    def test_server_defaults(self, _clean_env):
+    def test_server_defaults(self, clean_env):  # noqa: ARG002
         """Server settings should have correct defaults."""
         settings = OmniCortexSettings()
         assert settings.mcp_server_host == "0.0.0.0"
         assert settings.mcp_server_port == 8000
 
-    def test_model_defaults(self, _clean_env):
+    def test_model_defaults(self, clean_env):  # noqa: ARG002
         """Model defaults should be set correctly."""
         settings = OmniCortexSettings()
         assert settings.DEFAULT_MODEL_NAME == "gemini-3-flash-preview"
         assert settings.DEFAULT_EMBEDDING_MODEL == "text-embedding-3-small"
 
-    def test_routing_defaults(self, _clean_env):
+    def test_routing_defaults(self, clean_env):  # noqa: ARG002
         """Routing settings should have correct defaults."""
         settings = OmniCortexSettings()
         assert settings.routing_model == "gemini-3-flash-preview"
         assert settings.routing_temperature == 0.7
 
-    def test_llm_defaults(self, _clean_env):
+    def test_llm_defaults(self, clean_env):  # noqa: ARG002
         """LLM settings should have correct defaults."""
         settings = OmniCortexSettings()
         assert settings.llm_provider == "google"
@@ -121,18 +121,18 @@ class TestDefaultValues:
         assert settings.fast_synthesis_model == "gemini-3-flash-preview"
         assert settings.openrouter_base_url == "https://openrouter.ai/api/v1"
 
-    def test_memory_defaults(self, _clean_env):
+    def test_memory_defaults(self, clean_env):  # noqa: ARG002
         """Memory settings should have correct defaults."""
         settings = OmniCortexSettings()
         assert settings.max_memory_threads == 100
         assert settings.max_messages_per_thread == 20
 
-    def test_sandbox_defaults(self, _clean_env):
+    def test_sandbox_defaults(self, clean_env):  # noqa: ARG002
         """Sandbox settings should have correct defaults."""
         settings = OmniCortexSettings()
         assert settings.sandbox_timeout == 5.0
 
-    def test_rag_defaults(self, _clean_env):
+    def test_rag_defaults(self, clean_env):  # noqa: ARG002
         """RAG/Vector store settings should have correct defaults."""
         settings = OmniCortexSettings()
         assert settings.chroma_persist_dir == Path("/app/data/chroma")
@@ -140,7 +140,7 @@ class TestDefaultValues:
         assert settings.embedding_provider == "openrouter"
         assert settings.embedding_model == "text-embedding-3-small"
 
-    def test_framework_limits_defaults(self, _clean_env):
+    def test_framework_limits_defaults(self, clean_env):  # noqa: ARG002
         """Framework limit settings should have correct defaults."""
         settings = OmniCortexSettings()
         assert settings.max_reasoning_depth == 10
@@ -148,13 +148,13 @@ class TestDefaultValues:
         assert settings.debate_max_rounds == 5
         assert settings.reasoning_memory_bound == 50
 
-    def test_routing_cache_defaults(self, _clean_env):
+    def test_routing_cache_defaults(self, clean_env):  # noqa: ARG002
         """Routing cache settings should have correct defaults."""
         settings = OmniCortexSettings()
         assert settings.routing_cache_max_size == 256
         assert settings.routing_cache_ttl_seconds == 300
 
-    def test_feature_flags_defaults(self, _clean_env):
+    def test_feature_flags_defaults(self, clean_env):  # noqa: ARG002
         """Feature flag defaults should be correct."""
         settings = OmniCortexSettings()
         assert settings.enable_auto_ingest is True
@@ -164,19 +164,19 @@ class TestDefaultValues:
         assert settings.use_langchain_llm is False
         assert settings.lean_mode is True
 
-    def test_path_defaults(self, _clean_env):
+    def test_path_defaults(self, clean_env):  # noqa: ARG002
         """Path settings should have correct defaults."""
         settings = OmniCortexSettings()
         assert settings.checkpoint_path == Path("/app/data/checkpoints.sqlite")
         assert settings.watch_root is None
 
-    def test_logging_defaults(self, _clean_env):
+    def test_logging_defaults(self, clean_env):  # noqa: ARG002
         """Logging settings should have correct defaults."""
         settings = OmniCortexSettings()
         assert settings.log_level == "INFO"
         assert settings.production_logging is False
 
-    def test_rate_limit_defaults(self, _clean_env):
+    def test_rate_limit_defaults(self, clean_env):  # noqa: ARG002
         """Rate limit settings should have correct defaults."""
         settings = OmniCortexSettings()
         assert settings.rate_limit_llm_rpm == 30
@@ -186,7 +186,7 @@ class TestDefaultValues:
         assert settings.rate_limit_global_rpm == 200
         assert settings.rate_limit_execute_rpm == 10
 
-    def test_cache_settings_defaults(self, _clean_env):
+    def test_cache_settings_defaults(self, clean_env):  # noqa: ARG002
         """Cache settings should have correct defaults."""
         settings = OmniCortexSettings()
         assert settings.enable_context_cache is True
@@ -197,7 +197,7 @@ class TestDefaultValues:
         assert settings.cache_max_size_mb == 100
         assert settings.enable_stale_cache_fallback is True
 
-    def test_circuit_breaker_defaults(self, _clean_env):
+    def test_circuit_breaker_defaults(self, clean_env):  # noqa: ARG002
         """Circuit breaker settings should have correct defaults."""
         settings = OmniCortexSettings()
         assert settings.circuit_breaker_failure_threshold == 5
@@ -205,14 +205,14 @@ class TestDefaultValues:
         assert settings.circuit_breaker_half_open_timeout == 30
         assert settings.enable_circuit_breaker is True
 
-    def test_streaming_defaults(self, _clean_env):
+    def test_streaming_defaults(self, clean_env):  # noqa: ARG002
         """Streaming settings should have correct defaults."""
         settings = OmniCortexSettings()
         assert settings.enable_streaming_context is True
         assert settings.streaming_progress_interval == 0.5
         assert settings.enable_completion_estimation is True
 
-    def test_multi_repo_defaults(self, _clean_env):
+    def test_multi_repo_defaults(self, clean_env):  # noqa: ARG002
         """Multi-repository settings should have correct defaults."""
         settings = OmniCortexSettings()
         assert settings.enable_multi_repo_discovery is True
@@ -221,7 +221,7 @@ class TestDefaultValues:
         assert settings.multi_repo_analysis_timeout == 30.0
         assert settings.enable_cross_repo_dependencies is True
 
-    def test_token_budget_defaults(self, _clean_env):
+    def test_token_budget_defaults(self, clean_env):  # noqa: ARG002
         """Token budget settings should have correct defaults."""
         settings = OmniCortexSettings()
         assert settings.enable_dynamic_token_budget is True
@@ -231,14 +231,14 @@ class TestDefaultValues:
         assert settings.token_budget_very_high_complexity == 120000
         assert settings.enable_content_optimization is True
 
-    def test_documentation_settings_defaults(self, _clean_env):
+    def test_documentation_settings_defaults(self, clean_env):  # noqa: ARG002
         """Documentation settings should have correct defaults."""
         settings = OmniCortexSettings()
         assert settings.enable_source_attribution is True
         assert settings.enable_documentation_prioritization is True
         assert settings.documentation_authority_threshold == 0.7
 
-    def test_metrics_defaults(self, _clean_env):
+    def test_metrics_defaults(self, clean_env):  # noqa: ARG002
         """Metrics settings should have correct defaults."""
         settings = OmniCortexSettings()
         assert settings.enable_enhanced_metrics is True
@@ -248,7 +248,7 @@ class TestDefaultValues:
         assert settings.metrics_retention_days == 30
         assert settings.enable_prometheus_metrics is True
 
-    def test_thinking_mode_defaults(self, _clean_env):
+    def test_thinking_mode_defaults(self, clean_env):  # noqa: ARG002
         """Thinking mode settings should have correct defaults."""
         settings = OmniCortexSettings()
         assert settings.enable_adaptive_thinking_mode is True
@@ -263,7 +263,7 @@ class TestDefaultValues:
 class TestValidateLogLevel:
     """Tests for log_level field validator."""
 
-    def test_valid_log_levels(self, _clean_env):
+    def test_valid_log_levels(self, clean_env):  # noqa: ARG002
         """All valid log levels should be accepted."""
         for level in ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]:
             clean_env.setenv("LOG_LEVEL", level)
@@ -271,7 +271,7 @@ class TestValidateLogLevel:
             settings = OmniCortexSettings()
             assert settings.log_level == level
 
-    def test_case_insensitive_log_level(self, _clean_env):
+    def test_case_insensitive_log_level(self, clean_env):  # noqa: ARG002
         """Log level should be case-insensitive and converted to uppercase."""
         for level in ["debug", "Info", "WARNING", "eRrOr", "critical"]:
             clean_env.setenv("LOG_LEVEL", level)
@@ -279,14 +279,14 @@ class TestValidateLogLevel:
             settings = OmniCortexSettings()
             assert settings.log_level == level.upper()
 
-    def test_invalid_log_level_raises(self, _clean_env):
+    def test_invalid_log_level_raises(self, clean_env):  # noqa: ARG002
         """Invalid log level should raise ValidationError."""
         clean_env.setenv("LOG_LEVEL", "VERBOSE")
         with pytest.raises(ValidationError) as exc_info:
             OmniCortexSettings()
         assert "log_level must be one of" in str(exc_info.value)
 
-    def test_invalid_log_level_typo(self, _clean_env):
+    def test_invalid_log_level_typo(self, clean_env):  # noqa: ARG002
         """Common typos should raise ValidationError."""
         for invalid in ["WARN", "TRACE", "FATAL", "ALL"]:
             clean_env.setenv("LOG_LEVEL", invalid)
@@ -298,7 +298,7 @@ class TestValidateLogLevel:
 class TestValidateLlmProvider:
     """Tests for llm_provider field validator."""
 
-    def test_valid_llm_providers(self, _clean_env):
+    def test_valid_llm_providers(self, clean_env):  # noqa: ARG002
         """All valid LLM providers should be accepted."""
         valid_providers = ["pass-through", "openrouter", "anthropic", "openai", "google"]
         for provider in valid_providers:
@@ -307,7 +307,7 @@ class TestValidateLlmProvider:
             settings = OmniCortexSettings()
             assert settings.llm_provider == provider
 
-    def test_case_insensitive_llm_provider(self, _clean_env):
+    def test_case_insensitive_llm_provider(self, clean_env):  # noqa: ARG002
         """LLM provider should be case-insensitive and converted to lowercase."""
         for provider in ["GOOGLE", "Google", "ANTHROPIC", "OpenAI"]:
             clean_env.setenv("LLM_PROVIDER", provider)
@@ -315,14 +315,14 @@ class TestValidateLlmProvider:
             settings = OmniCortexSettings()
             assert settings.llm_provider == provider.lower()
 
-    def test_invalid_llm_provider_raises(self, _clean_env):
+    def test_invalid_llm_provider_raises(self, clean_env):  # noqa: ARG002
         """Invalid LLM provider should raise ValidationError."""
         clean_env.setenv("LLM_PROVIDER", "azure")
         with pytest.raises(ValidationError) as exc_info:
             OmniCortexSettings()
         assert "llm_provider must be one of" in str(exc_info.value)
 
-    def test_invalid_llm_provider_typo(self, _clean_env):
+    def test_invalid_llm_provider_typo(self, clean_env):  # noqa: ARG002
         """Common provider typos should raise ValidationError."""
         for invalid in ["gpt", "claude", "gemini", "llama"]:
             clean_env.setenv("LLM_PROVIDER", invalid)
@@ -334,7 +334,7 @@ class TestValidateLlmProvider:
 class TestValidateEmbeddingProvider:
     """Tests for embedding_provider field validator."""
 
-    def test_valid_embedding_providers(self, _clean_env):
+    def test_valid_embedding_providers(self, clean_env):  # noqa: ARG002
         """All valid embedding providers should be accepted."""
         valid_providers = ["openrouter", "openai", "huggingface", "gemini", "google"]
         for provider in valid_providers:
@@ -343,7 +343,7 @@ class TestValidateEmbeddingProvider:
             settings = OmniCortexSettings()
             assert settings.embedding_provider == provider
 
-    def test_case_insensitive_embedding_provider(self, _clean_env):
+    def test_case_insensitive_embedding_provider(self, clean_env):  # noqa: ARG002
         """Embedding provider should be case-insensitive and converted to lowercase."""
         for provider in ["OPENAI", "HuggingFace", "GEMINI"]:
             clean_env.setenv("EMBEDDING_PROVIDER", provider)
@@ -351,7 +351,7 @@ class TestValidateEmbeddingProvider:
             settings = OmniCortexSettings()
             assert settings.embedding_provider == provider.lower()
 
-    def test_invalid_embedding_provider_raises(self, _clean_env):
+    def test_invalid_embedding_provider_raises(self, clean_env):  # noqa: ARG002
         """Invalid embedding provider should raise ValidationError."""
         clean_env.setenv("EMBEDDING_PROVIDER", "cohere")
         with pytest.raises(ValidationError) as exc_info:
@@ -362,7 +362,7 @@ class TestValidateEmbeddingProvider:
 class TestValidateThinkingModeThreshold:
     """Tests for thinking_mode_complexity_threshold field validator."""
 
-    def test_valid_thresholds(self, _clean_env):
+    def test_valid_thresholds(self, clean_env):  # noqa: ARG002
         """All valid thresholds should be accepted."""
         valid_thresholds = ["low", "medium", "high", "very_high"]
         for threshold in valid_thresholds:
@@ -371,7 +371,7 @@ class TestValidateThinkingModeThreshold:
             settings = OmniCortexSettings()
             assert settings.thinking_mode_complexity_threshold == threshold
 
-    def test_case_insensitive_threshold(self, _clean_env):
+    def test_case_insensitive_threshold(self, clean_env):  # noqa: ARG002
         """Threshold should be case-insensitive and converted to lowercase."""
         for threshold in ["LOW", "Medium", "HIGH", "VERY_HIGH"]:
             clean_env.setenv("THINKING_MODE_COMPLEXITY_THRESHOLD", threshold)
@@ -379,7 +379,7 @@ class TestValidateThinkingModeThreshold:
             settings = OmniCortexSettings()
             assert settings.thinking_mode_complexity_threshold == threshold.lower()
 
-    def test_invalid_threshold_raises(self, _clean_env):
+    def test_invalid_threshold_raises(self, clean_env):  # noqa: ARG002
         """Invalid threshold should raise ValidationError."""
         clean_env.setenv("THINKING_MODE_COMPLEXITY_THRESHOLD", "extreme")
         with pytest.raises(ValidationError) as exc_info:
@@ -390,20 +390,20 @@ class TestValidateThinkingModeThreshold:
 class TestValidateChromaDir:
     """Tests for chroma_persist_dir path conversion."""
 
-    def test_string_converted_to_path(self, _clean_env):
+    def test_string_converted_to_path(self, clean_env):  # noqa: ARG002
         """String should be converted to Path object."""
         clean_env.setenv("CHROMA_PERSIST_DIR", "/custom/chroma/path")
         settings = OmniCortexSettings()
         assert isinstance(settings.chroma_persist_dir, Path)
         assert settings.chroma_persist_dir == Path("/custom/chroma/path")
 
-    def test_path_remains_path(self, _clean_env):
+    def test_path_remains_path(self, clean_env):  # noqa: ARG002
         """Path object should remain as Path."""
         settings = OmniCortexSettings(chroma_persist_dir=Path("/my/path"))
         assert isinstance(settings.chroma_persist_dir, Path)
         assert settings.chroma_persist_dir == Path("/my/path")
 
-    def test_relative_path_string(self, _clean_env):
+    def test_relative_path_string(self, clean_env):  # noqa: ARG002
         """Relative path string should be converted to Path."""
         clean_env.setenv("CHROMA_PERSIST_DIR", "data/chroma")
         settings = OmniCortexSettings()
@@ -418,7 +418,7 @@ class TestValidateChromaDir:
 class TestNumericFieldBounds:
     """Tests for numeric field bounds (ge, le constraints)."""
 
-    def test_routing_temperature_bounds(self, _clean_env):
+    def test_routing_temperature_bounds(self, clean_env):  # noqa: ARG002
         """routing_temperature must be between 0.0 and 2.0."""
         # Valid values
         for temp in [0.0, 0.5, 1.0, 1.5, 2.0]:
@@ -439,7 +439,7 @@ class TestNumericFieldBounds:
             reset_settings()
             OmniCortexSettings()
 
-    def test_max_memory_threads_bounds(self, _clean_env):
+    def test_max_memory_threads_bounds(self, clean_env):  # noqa: ARG002
         """max_memory_threads must be between 1 and 10000."""
         # Valid boundary values
         clean_env.setenv("MAX_MEMORY_THREADS", "1")
@@ -463,7 +463,7 @@ class TestNumericFieldBounds:
             reset_settings()
             OmniCortexSettings()
 
-    def test_sandbox_timeout_bounds(self, _clean_env):
+    def test_sandbox_timeout_bounds(self, clean_env):  # noqa: ARG002
         """sandbox_timeout must be between 0.1 and 60.0."""
         # Valid boundary values
         clean_env.setenv("SANDBOX_TIMEOUT", "0.1")
@@ -487,7 +487,7 @@ class TestNumericFieldBounds:
             reset_settings()
             OmniCortexSettings()
 
-    def test_rag_default_k_bounds(self, _clean_env):
+    def test_rag_default_k_bounds(self, clean_env):  # noqa: ARG002
         """rag_default_k must be between 1 and 50."""
         clean_env.setenv("RAG_DEFAULT_K", "1")
         settings = OmniCortexSettings()
@@ -508,7 +508,7 @@ class TestNumericFieldBounds:
             reset_settings()
             OmniCortexSettings()
 
-    def test_max_reasoning_depth_bounds(self, _clean_env):
+    def test_max_reasoning_depth_bounds(self, clean_env):  # noqa: ARG002
         """max_reasoning_depth must be between 1 and 100."""
         clean_env.setenv("MAX_REASONING_DEPTH", "1")
         settings = OmniCortexSettings()
@@ -524,7 +524,7 @@ class TestNumericFieldBounds:
             reset_settings()
             OmniCortexSettings()
 
-    def test_mcts_max_rollouts_bounds(self, _clean_env):
+    def test_mcts_max_rollouts_bounds(self, clean_env):  # noqa: ARG002
         """mcts_max_rollouts must be between 1 and 500."""
         clean_env.setenv("MCTS_MAX_ROLLOUTS", "1")
         settings = OmniCortexSettings()
@@ -540,7 +540,7 @@ class TestNumericFieldBounds:
             reset_settings()
             OmniCortexSettings()
 
-    def test_debate_max_rounds_bounds(self, _clean_env):
+    def test_debate_max_rounds_bounds(self, clean_env):  # noqa: ARG002
         """debate_max_rounds must be between 1 and 20."""
         clean_env.setenv("DEBATE_MAX_ROUNDS", "1")
         settings = OmniCortexSettings()
@@ -556,7 +556,7 @@ class TestNumericFieldBounds:
             reset_settings()
             OmniCortexSettings()
 
-    def test_reasoning_memory_bound_bounds(self, _clean_env):
+    def test_reasoning_memory_bound_bounds(self, clean_env):  # noqa: ARG002
         """reasoning_memory_bound must be between 10 and 200."""
         clean_env.setenv("REASONING_MEMORY_BOUND", "10")
         settings = OmniCortexSettings()
@@ -572,7 +572,7 @@ class TestNumericFieldBounds:
             reset_settings()
             OmniCortexSettings()
 
-    def test_routing_cache_max_size_bounds(self, _clean_env):
+    def test_routing_cache_max_size_bounds(self, clean_env):  # noqa: ARG002
         """routing_cache_max_size must be between 16 and 1024."""
         clean_env.setenv("ROUTING_CACHE_MAX_SIZE", "16")
         settings = OmniCortexSettings()
@@ -588,7 +588,7 @@ class TestNumericFieldBounds:
             reset_settings()
             OmniCortexSettings()
 
-    def test_routing_cache_ttl_bounds(self, _clean_env):
+    def test_routing_cache_ttl_bounds(self, clean_env):  # noqa: ARG002
         """routing_cache_ttl_seconds must be between 60 and 3600."""
         clean_env.setenv("ROUTING_CACHE_TTL_SECONDS", "60")
         settings = OmniCortexSettings()
@@ -604,7 +604,7 @@ class TestNumericFieldBounds:
             reset_settings()
             OmniCortexSettings()
 
-    def test_rate_limit_bounds(self, _clean_env):
+    def test_rate_limit_bounds(self, clean_env):  # noqa: ARG002
         """Rate limit fields should respect their bounds."""
         # Test rate_limit_llm_rpm (1-1000)
         clean_env.setenv("RATE_LIMIT_LLM_RPM", "0")
@@ -623,7 +623,7 @@ class TestNumericFieldBounds:
             reset_settings()
             OmniCortexSettings()
 
-    def test_streaming_progress_interval_bounds(self, _clean_env):
+    def test_streaming_progress_interval_bounds(self, clean_env):  # noqa: ARG002
         """streaming_progress_interval must be between 0.1 and 5.0."""
         clean_env.setenv("STREAMING_PROGRESS_INTERVAL", "0.1")
         settings = OmniCortexSettings()
@@ -639,7 +639,7 @@ class TestNumericFieldBounds:
             reset_settings()
             OmniCortexSettings()
 
-    def test_documentation_authority_threshold_bounds(self, _clean_env):
+    def test_documentation_authority_threshold_bounds(self, clean_env):  # noqa: ARG002
         """documentation_authority_threshold must be between 0.0 and 1.0."""
         clean_env.setenv("DOCUMENTATION_AUTHORITY_THRESHOLD", "0.0")
         settings = OmniCortexSettings()
@@ -660,7 +660,7 @@ class TestNumericFieldBounds:
             reset_settings()
             OmniCortexSettings()
 
-    def test_token_budget_bounds(self, _clean_env):
+    def test_token_budget_bounds(self, clean_env):  # noqa: ARG002
         """Token budget fields should respect their bounds."""
         # token_budget_low_complexity (10000-200000)
         clean_env.setenv("TOKEN_BUDGET_LOW_COMPLEXITY", "9999")
@@ -679,7 +679,7 @@ class TestNumericFieldBounds:
             reset_settings()
             OmniCortexSettings()
 
-    def test_thinking_mode_token_threshold_bounds(self, _clean_env):
+    def test_thinking_mode_token_threshold_bounds(self, clean_env):  # noqa: ARG002
         """thinking_mode_token_threshold must be between 5000 and 100000."""
         clean_env.setenv("THINKING_MODE_TOKEN_THRESHOLD", "5000")
         settings = OmniCortexSettings()
@@ -695,7 +695,7 @@ class TestNumericFieldBounds:
             reset_settings()
             OmniCortexSettings()
 
-    def test_metrics_retention_days_bounds(self, _clean_env):
+    def test_metrics_retention_days_bounds(self, clean_env):  # noqa: ARG002
         """metrics_retention_days must be between 1 and 365."""
         clean_env.setenv("METRICS_RETENTION_DAYS", "1")
         settings = OmniCortexSettings()
@@ -719,20 +719,20 @@ class TestNumericFieldBounds:
 class TestSingleton:
     """Tests for get_settings() and reset_settings() singleton pattern."""
 
-    def test_get_settings_returns_singleton(self, _clean_env):
+    def test_get_settings_returns_singleton(self, clean_env):  # noqa: ARG002
         """get_settings() should return the same instance."""
         settings1 = get_settings()
         settings2 = get_settings()
         assert settings1 is settings2
 
-    def test_reset_settings_clears_singleton(self, _clean_env):
+    def test_reset_settings_clears_singleton(self, clean_env):  # noqa: ARG002
         """reset_settings() should clear the singleton."""
         settings1 = get_settings()
         reset_settings()
         settings2 = get_settings()
         assert settings1 is not settings2
 
-    def test_get_settings_creates_new_after_reset(self, _clean_env):
+    def test_get_settings_creates_new_after_reset(self, clean_env):  # noqa: ARG002
         """After reset, get_settings creates new instance with current env."""
         # Set an env var
         clean_env.setenv("LOG_LEVEL", "DEBUG")
@@ -745,7 +745,7 @@ class TestSingleton:
         settings2 = get_settings()
         assert settings2.log_level == "ERROR"
 
-    def test_singleton_persists_modifications(self, _clean_env):
+    def test_singleton_persists_modifications(self, clean_env):  # noqa: ARG002
         """Modifications to singleton should persist across get_settings calls."""
         settings = get_settings()
         # Note: Pydantic models are typically immutable, but we verify the same
@@ -763,7 +763,7 @@ class TestSingleton:
 class TestThreadSafety:
     """Tests for thread-safety of get_settings()."""
 
-    def test_concurrent_get_settings(self, _clean_env):
+    def test_concurrent_get_settings(self, clean_env):  # noqa: ARG002
         """Multiple threads calling get_settings should get the same instance."""
         results = []
         errors = []
@@ -788,7 +788,7 @@ class TestThreadSafety:
         # All should be the same instance
         assert len(set(results)) == 1
 
-    def test_concurrent_reset_and_get(self, _clean_env):
+    def test_concurrent_reset_and_get(self, clean_env):  # noqa: ARG002
         """Interleaved reset and get should not cause race conditions."""
         results = []
         errors = []
@@ -810,7 +810,7 @@ class TestThreadSafety:
         # Results should contain valid instance IDs (not None)
         assert all(r is not None for r in results)
 
-    def test_thread_safety_with_env_changes(self, _clean_env):
+    def test_thread_safety_with_env_changes(self, clean_env):  # noqa: ARG002
         """Thread-safe initialization with environment variable changes."""
         results = {}
         errors = []
@@ -844,7 +844,7 @@ class TestThreadSafety:
 class TestEnvironmentVariableLoading:
     """Tests for loading settings from environment variables."""
 
-    def test_api_key_from_env(self, _clean_env):
+    def test_api_key_from_env(self, clean_env):  # noqa: ARG002
         """API keys should be loaded from environment variables."""
         clean_env.setenv("GOOGLE_API_KEY", "test-google-key")
         clean_env.setenv("OPENAI_API_KEY", "test-openai-key")
@@ -852,7 +852,7 @@ class TestEnvironmentVariableLoading:
         assert settings.google_api_key == "test-google-key"
         assert settings.openai_api_key == "test-openai-key"
 
-    def test_server_config_from_env(self, _clean_env):
+    def test_server_config_from_env(self, clean_env):  # noqa: ARG002
         """Server configuration should be loaded from environment variables."""
         clean_env.setenv("MCP_SERVER_HOST", "127.0.0.1")
         clean_env.setenv("MCP_SERVER_PORT", "9000")
@@ -860,7 +860,7 @@ class TestEnvironmentVariableLoading:
         assert settings.mcp_server_host == "127.0.0.1"
         assert settings.mcp_server_port == 9000
 
-    def test_boolean_from_env(self, _clean_env):
+    def test_boolean_from_env(self, clean_env):  # noqa: ARG002
         """Boolean settings should be loaded from environment variables."""
         clean_env.setenv("LEAN_MODE", "false")
         clean_env.setenv("ENABLE_AUTO_INGEST", "False")
@@ -870,7 +870,7 @@ class TestEnvironmentVariableLoading:
         assert settings.enable_auto_ingest is False
         assert settings.production_logging is True
 
-    def test_integer_from_env(self, _clean_env):
+    def test_integer_from_env(self, clean_env):  # noqa: ARG002
         """Integer settings should be loaded from environment variables."""
         clean_env.setenv("MAX_MEMORY_THREADS", "500")
         clean_env.setenv("RAG_DEFAULT_K", "10")
@@ -878,7 +878,7 @@ class TestEnvironmentVariableLoading:
         assert settings.max_memory_threads == 500
         assert settings.rag_default_k == 10
 
-    def test_float_from_env(self, _clean_env):
+    def test_float_from_env(self, clean_env):  # noqa: ARG002
         """Float settings should be loaded from environment variables."""
         clean_env.setenv("SANDBOX_TIMEOUT", "10.5")
         clean_env.setenv("ROUTING_TEMPERATURE", "1.2")
@@ -886,7 +886,7 @@ class TestEnvironmentVariableLoading:
         assert settings.sandbox_timeout == 10.5
         assert settings.routing_temperature == 1.2
 
-    def test_path_from_env(self, _clean_env):
+    def test_path_from_env(self, clean_env):  # noqa: ARG002
         """Path settings should be loaded from environment variables."""
         clean_env.setenv("CHROMA_PERSIST_DIR", "/custom/chroma")
         clean_env.setenv("CHECKPOINT_PATH", "/data/checkpoint.db")
@@ -894,20 +894,20 @@ class TestEnvironmentVariableLoading:
         assert settings.chroma_persist_dir == Path("/custom/chroma")
         assert settings.checkpoint_path == Path("/data/checkpoint.db")
 
-    def test_optional_path_from_env(self, _clean_env):
+    def test_optional_path_from_env(self, clean_env):  # noqa: ARG002
         """Optional path settings should be loaded from environment variables."""
         clean_env.setenv("WATCH_ROOT", "/workspace")
         settings = OmniCortexSettings()
         assert settings.watch_root == Path("/workspace")
 
-    def test_alias_works_correctly(self, _clean_env):
+    def test_alias_works_correctly(self, clean_env):  # noqa: ARG002
         """Field aliases should work for environment variable loading."""
         # The alias is the environment variable name
         clean_env.setenv("DEEP_REASONING_MODEL", "custom-model")
         settings = OmniCortexSettings()
         assert settings.deep_reasoning_model == "custom-model"
 
-    def test_multiple_settings_from_env(self, _clean_env):
+    def test_multiple_settings_from_env(self, clean_env):  # noqa: ARG002
         """Multiple settings should be loaded simultaneously."""
         clean_env.setenv("LLM_PROVIDER", "anthropic")
         clean_env.setenv("EMBEDDING_PROVIDER", "openai")
@@ -931,7 +931,7 @@ class TestEnvironmentVariableLoading:
 class TestConfigClass:
     """Tests for Config class settings."""
 
-    def test_extra_ignore(self, _clean_env):
+    def test_extra_ignore(self, clean_env):  # noqa: ARG002
         """Extra fields should be ignored, not raise errors."""
         # This should not raise an error even with an unknown field
         clean_env.setenv("UNKNOWN_SETTING", "some_value")
@@ -939,14 +939,14 @@ class TestConfigClass:
         # Should complete without error and not have the unknown attribute
         assert not hasattr(settings, "unknown_setting")
 
-    def test_env_file_setting(self, _clean_env):
+    def test_env_file_setting(self, clean_env):  # noqa: ARG002
         """Config should reference .env file."""
         # Check that the Config class has the expected settings
         assert OmniCortexSettings.model_config.get("env_file") == ".env"
         assert OmniCortexSettings.model_config.get("env_file_encoding") == "utf-8"
         assert OmniCortexSettings.model_config.get("extra") == "ignore"
 
-    def test_settings_immutability(self, _clean_env):
+    def test_settings_immutability(self, clean_env):  # noqa: ARG002
         """Settings should follow Pydantic model behavior."""
         settings = OmniCortexSettings()
         # Pydantic models are typically immutable by default
@@ -961,7 +961,7 @@ class TestConfigClass:
 class TestEdgeCases:
     """Tests for edge cases and special scenarios."""
 
-    def test_empty_string_env_var(self, _clean_env):
+    def test_empty_string_env_var(self, clean_env):  # noqa: ARG002
         """Empty string environment variables should be handled."""
         # For optional fields, empty string should work
         clean_env.setenv("GOOGLE_API_KEY", "")
@@ -969,40 +969,40 @@ class TestEdgeCases:
         # Empty string is truthy for strings but typically treated as unset
         assert settings.google_api_key == ""
 
-    def test_whitespace_in_string_values(self, _clean_env):
+    def test_whitespace_in_string_values(self, clean_env):  # noqa: ARG002
         """Whitespace should be preserved in string values."""
         clean_env.setenv("ROUTING_MODEL", "  model-name  ")
         settings = OmniCortexSettings()
         # Pydantic typically strips whitespace for string fields
         assert settings.routing_model == "  model-name  "
 
-    def test_special_characters_in_api_key(self, _clean_env):
+    def test_special_characters_in_api_key(self, clean_env):  # noqa: ARG002
         """Special characters in API keys should be preserved."""
         api_key = "sk-abc123!@#$%^&*()_+-=[]{}|;:',.<>?/~`"
         clean_env.setenv("OPENAI_API_KEY", api_key)
         settings = OmniCortexSettings()
         assert settings.openai_api_key == api_key
 
-    def test_numeric_string_for_port(self, _clean_env):
+    def test_numeric_string_for_port(self, clean_env):  # noqa: ARG002
         """Port should be parsed from numeric string."""
         clean_env.setenv("MCP_SERVER_PORT", "8080")
         settings = OmniCortexSettings()
         assert settings.mcp_server_port == 8080
         assert isinstance(settings.mcp_server_port, int)
 
-    def test_invalid_integer_raises(self, _clean_env):
+    def test_invalid_integer_raises(self, clean_env):  # noqa: ARG002
         """Invalid integer string should raise ValidationError."""
         clean_env.setenv("MCP_SERVER_PORT", "not_a_number")
         with pytest.raises(ValidationError):
             OmniCortexSettings()
 
-    def test_invalid_float_raises(self, _clean_env):
+    def test_invalid_float_raises(self, clean_env):  # noqa: ARG002
         """Invalid float string should raise ValidationError."""
         clean_env.setenv("SANDBOX_TIMEOUT", "not_a_float")
         with pytest.raises(ValidationError):
             OmniCortexSettings()
 
-    def test_invalid_boolean_handling(self, _clean_env):
+    def test_invalid_boolean_handling(self, clean_env):  # noqa: ARG002
         """Invalid boolean strings should be handled according to Pydantic rules."""
         # Pydantic accepts various truthy/falsy values
         clean_env.setenv("LEAN_MODE", "yes")  # Pydantic accepts this as True
@@ -1011,7 +1011,7 @@ class TestEdgeCases:
         # Modern Pydantic (v2) is strict about boolean parsing
         # This test verifies the behavior
 
-    def test_all_rate_limits_configurable(self, _clean_env):
+    def test_all_rate_limits_configurable(self, clean_env):  # noqa: ARG002
         """All rate limit settings should be configurable."""
         clean_env.setenv("RATE_LIMIT_LLM_RPM", "50")
         clean_env.setenv("RATE_LIMIT_SEARCH_RPM", "100")
@@ -1029,7 +1029,7 @@ class TestEdgeCases:
         assert settings.rate_limit_global_rpm == 300
         assert settings.rate_limit_execute_rpm == 20
 
-    def test_all_cache_settings_configurable(self, _clean_env):
+    def test_all_cache_settings_configurable(self, clean_env):  # noqa: ARG002
         """All cache settings should be configurable."""
         clean_env.setenv("ENABLE_CONTEXT_CACHE", "false")
         clean_env.setenv("CACHE_QUERY_ANALYSIS_TTL", "7200")
@@ -1047,7 +1047,7 @@ class TestEdgeCases:
         assert settings.cache_max_entries == 2000
         assert settings.cache_max_size_mb == 200
 
-    def test_all_circuit_breaker_settings_configurable(self, _clean_env):
+    def test_all_circuit_breaker_settings_configurable(self, clean_env):  # noqa: ARG002
         """All circuit breaker settings should be configurable."""
         clean_env.setenv("CIRCUIT_BREAKER_FAILURE_THRESHOLD", "10")
         clean_env.setenv("CIRCUIT_BREAKER_RECOVERY_TIMEOUT", "120")
@@ -1061,7 +1061,7 @@ class TestEdgeCases:
         assert settings.circuit_breaker_half_open_timeout == 60
         assert settings.enable_circuit_breaker is False
 
-    def test_all_multi_repo_settings_configurable(self, _clean_env):
+    def test_all_multi_repo_settings_configurable(self, clean_env):  # noqa: ARG002
         """All multi-repository settings should be configurable."""
         clean_env.setenv("ENABLE_MULTI_REPO_DISCOVERY", "false")
         clean_env.setenv("MULTI_REPO_MAX_REPOSITORIES", "20")
