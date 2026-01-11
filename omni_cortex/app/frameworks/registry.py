@@ -13,6 +13,7 @@ Previous sync locations (now deprecated - import from here instead):
 
 from dataclasses import dataclass, field
 from enum import Enum
+from functools import lru_cache
 from typing import Any
 
 
@@ -2656,6 +2657,7 @@ register(
 # =============================================================================
 
 
+@lru_cache(maxsize=128)
 def get_framework(name: str) -> FrameworkDefinition:
     """Get a framework by name.
 
@@ -2667,6 +2669,9 @@ def get_framework(name: str) -> FrameworkDefinition:
 
     Raises:
         FrameworkNotFoundError: If framework doesn't exist
+        
+    Note:
+        Cached for performance (maxsize=128). Same name returns cached result.
     """
     if name not in FRAMEWORKS:
         raise FrameworkNotFoundError(
@@ -2676,18 +2681,34 @@ def get_framework(name: str) -> FrameworkDefinition:
     return FRAMEWORKS[name]
 
 
+@lru_cache(maxsize=64)
 def get_framework_safe(name: str) -> FrameworkDefinition | None:
-    """Get a framework by name, returning None if not found."""
+    """Get a framework by name, returning None if not found.
+    
+    Note:
+        Cached for performance (maxsize=64). Same name returns cached result.
+    """
     return FRAMEWORKS.get(name)
 
 
-def get_frameworks_by_category(category: FrameworkCategory) -> list[FrameworkDefinition]:
-    """Get all frameworks in a specific category."""
-    return [f for f in FRAMEWORKS.values() if f.category == category]
+@lru_cache(maxsize=16)
+def get_frameworks_by_category(category: FrameworkCategory) -> tuple[FrameworkDefinition, ...]:
+    """Get all frameworks in a specific category.
+    
+    Note:
+        Returns tuple instead of list to enable caching (lists aren't hashable).
+        Cached for performance (maxsize=16, one per category).
+    """
+    return tuple(f for f in FRAMEWORKS.values() if f.category == category)
 
 
+@lru_cache(maxsize=1)
 def get_all_vibes() -> dict[str, list[str]]:
-    """Get all vibes for all frameworks (for vibe dictionary compatibility)."""
+    """Get all vibes for all frameworks (for vibe dictionary compatibility).
+    
+    Note:
+        Cached (maxsize=1). Dictionary is immutable after framework registration.
+    """
     return {name: fw.vibes for name, fw in FRAMEWORKS.items()}
 
 
@@ -2708,8 +2729,13 @@ def get_frameworks_dict() -> dict[str, str]:
     return {name: fw.description for name, fw in FRAMEWORKS.items()}
 
 
+@lru_cache(maxsize=1)
 def list_by_category() -> dict[str, list[str]]:
-    """List framework names organized by category."""
+    """List framework names organized by category.
+    
+    Note:
+        Cached (maxsize=1). Dictionary is immutable after framework registration.
+    """
     result: dict[str, list[str]] = {}
     for cat in FrameworkCategory:
         frameworks = get_frameworks_by_category(cat)
@@ -2723,8 +2749,13 @@ def count() -> int:
     return len(FRAMEWORKS)
 
 
+@lru_cache(maxsize=256)
 def find_by_vibe(vibe: str) -> FrameworkDefinition | None:
-    """Find a framework that matches a vibe pattern."""
+    """Find a framework that matches a vibe pattern.
+    
+    Note:
+        Cached for performance (maxsize=256). Same vibe returns cached result.
+    """
     vibe_lower = vibe.lower()
     for spec in FRAMEWORKS.values():
         if any(v.lower() in vibe_lower for v in spec.vibes):
