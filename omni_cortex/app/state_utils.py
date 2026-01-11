@@ -37,6 +37,13 @@ def update_state(original_state: GraphState, updates: dict[str, Any]) -> GraphSt
     # Create a shallow copy - fast O(1)
     new_state = original_state.copy()
 
+    # Copy list fields to prevent mutation of original state (LangGraph immutability)
+    # These are the mutable list fields that could cause issues if shared
+    list_fields = ["file_list", "framework_chain", "reasoning_steps", "quiet_thoughts", "episodic_memory"]
+    for field in list_fields:
+        if field in new_state and isinstance(new_state[field], list):
+            new_state[field] = new_state[field].copy()
+
     for key, value in updates.items():
         # Handle nested dictionary updates for working_memory specifically
         # We must copy the inner dict to avoid mutating the original reference

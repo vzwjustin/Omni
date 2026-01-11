@@ -130,7 +130,8 @@ class RateLimiter:
 
     def __init__(self, config: RateLimitConfig | None = None):
         self.config = config or RateLimitConfig()
-        self._lock = asyncio.Lock()
+        # Lazy init: asyncio.Lock() requires event loop, defer until first use
+        self.__lock: asyncio.Lock | None = None
 
         # Create buckets (tokens = capacity, refill = per second)
         self._buckets: dict[str, TokenBucket] = {
@@ -156,6 +157,13 @@ class RateLimiter:
 
         # Default bucket for unknown tools (think_* tools)
         self._default_category = "utility"
+
+    @property
+    def _lock(self) -> asyncio.Lock:
+        """Lazy-initialized asyncio.Lock to avoid event loop issues at import time."""
+        if self.__lock is None:
+            self.__lock = asyncio.Lock()
+        return self.__lock
 
     def _get_category(self, tool_name: str) -> str:
         """Get the rate limit category for a tool."""

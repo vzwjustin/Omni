@@ -375,6 +375,24 @@ class StreamingContextGateway(ContextGateway):
                 raise
             except Exception as e:
                 comp_time = time.time() - comp_start
+
+                # Re-raise critical configuration errors instead of silently returning []
+                # This helps debugging when setup is incorrect
+                error_str = str(e).lower()
+                is_config_error = any(
+                    term in error_str
+                    for term in ["api key", "authentication", "permission denied", "not configured"]
+                )
+
+                if is_config_error:
+                    logger.error(
+                        "file_discovery_config_error",
+                        error=str(e),
+                        error_type=type(e).__name__,
+                    )
+                    raise  # Re-raise config errors
+
+                # For expected errors (file not found, etc.), log and continue
                 logger.warning("file_discovery_failed", error=str(e))
                 self._emit_progress(
                     component="file_discovery",

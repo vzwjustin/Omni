@@ -276,8 +276,25 @@ class AnalysisExecutor:
 
                 # Validate: only accept findings for files we actually provided
                 if provided_paths and file_path not in provided_paths:
-                    # Check partial match (e.g., "app/core/router.py" vs "router.py")
-                    matched = any(file_path.endswith(p) or p.endswith(file_path) for p in provided_paths)
+                    # Normalize paths and check for exact basename match with full path verification
+                    # This prevents "malicious_utils.py" from matching "utils.py"
+                    import os
+                    normalized_reported = os.path.normpath(file_path)
+                    matched = False
+                    for p in provided_paths:
+                        normalized_provided = os.path.normpath(p)
+                        # Allow match if normalized paths are equal OR if one is a suffix with path separator
+                        if normalized_reported == normalized_provided:
+                            matched = True
+                            break
+                        # Check if reported path ends with /provided_path (proper suffix match)
+                        if normalized_reported.endswith(os.sep + normalized_provided):
+                            matched = True
+                            break
+                        if normalized_provided.endswith(os.sep + normalized_reported):
+                            matched = True
+                            break
+
                     if not matched:
                         hallucinated_count += 1
                         logger.warning(

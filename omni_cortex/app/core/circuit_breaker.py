@@ -76,6 +76,8 @@ class CircuitBreaker:
         # Lazy initialization: asyncio.Lock() requires an event loop
         # which may not exist at module load time when global instances are created
         self._lock: asyncio.Lock | None = None
+        # Prevents thundering herd in HALF_OPEN state - only one probe at a time
+        self._probing = False
 
     @property
     def lock(self) -> asyncio.Lock:
@@ -100,6 +102,8 @@ class CircuitBreaker:
             CircuitBreakerOpenError: If circuit is OPEN
             Any exception from func if circuit is CLOSED or HALF_OPEN
         """
+        is_probe_request = False
+
         async with self.lock:
             current_time = time.time()
 
@@ -125,6 +129,16 @@ class CircuitBreaker:
                         f"Circuit breaker '{self.name}' is OPEN (retry in {time_remaining:.1f}s)"
                     )
 
+            # HALF_OPEN thundering herd prevention: only allow one probe request at a time
+            if self.state == CircuitState.HALF_OPEN:
+                if self._probing:
+                    # Another request is already probing, reject this one
+                    raise CircuitBreakerOpenError(
+                        f"Circuit breaker '{self.name}' is HALF_OPEN (probe in progress)"
+                    )
+                self._probing = True
+                is_probe_request = True
+
         # Execute function (outside lock to allow concurrent requests in CLOSED state)
         try:
             self.last_attempt_time = time.time()
@@ -132,6 +146,9 @@ class CircuitBreaker:
 
             # Success - update state
             async with self.lock:
+                if is_probe_request:
+                    self._probing = False  # Reset probe flag
+
                 if self.state == CircuitState.HALF_OPEN:
                     # Successful test in HALF_OPEN
                     self.success_count += 1
@@ -154,6 +171,9 @@ class CircuitBreaker:
         except Exception as e:
             # Failure - update state
             async with self.lock:
+                if is_probe_request:
+                    self._probing = False  # Reset probe flag
+
                 self.failure_count += 1
                 self.last_failure_time = time.time()
 

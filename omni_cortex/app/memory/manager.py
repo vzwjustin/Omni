@@ -58,7 +58,9 @@ async def get_memory(thread_id: str) -> OmniCortexMemory:
 
         # Evict oldest if over capacity
         if len(_memory_store) >= MAX_MEMORY_THREADS:
-            _memory_store.popitem(last=False)
+            # Clear memory before eviction to ensure references are dropped
+            evicted_id, evicted_mem = _memory_store.popitem(last=False)
+            evicted_mem.clear()  # Explicit cleanup of messages and history
 
         mem = OmniCortexMemory(thread_id)
         _memory_store[thread_id] = mem
