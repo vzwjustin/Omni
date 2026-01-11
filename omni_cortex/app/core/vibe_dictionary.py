@@ -19,6 +19,8 @@ Usage:
         return framework  # "active_inference"
 """
 
+from functools import lru_cache
+
 
 # =========================================================================
 # VIBE DICTIONARY: Casual activation phrases for vibe coders
@@ -1441,6 +1443,7 @@ VIBE_DICTIONARY = {
 }
 
 
+@lru_cache(maxsize=256)
 def match_vibes(query: str) -> str | None:
     """
     Check query against vibe dictionary with weighted scoring.
@@ -1455,6 +1458,9 @@ def match_vibes(query: str) -> str | None:
 
     Returns:
         Framework name if strong match found, None otherwise.
+        
+    Note:
+        Cached for performance (maxsize=256). Same query returns cached result.
     """
     query_lower = query.lower()
 
