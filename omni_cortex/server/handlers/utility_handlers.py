@@ -281,6 +281,20 @@ async def handle_health(arguments: dict, manager, lean_mode: bool) -> list[TextC
                 "enabled": settings.enable_enhanced_metrics,
                 "prometheus": settings.enable_prometheus_metrics,
             },
+            "rate_limiting": {
+                "enabled": True,
+                "llm_rpm": settings.rate_limit_llm_rpm,
+                "search_rpm": settings.rate_limit_search_rpm,
+                "memory_rpm": settings.rate_limit_memory_rpm,
+                "utility_rpm": settings.rate_limit_utility_rpm,
+                "global_rpm": settings.rate_limit_global_rpm,
+            },
+        },
+        "infrastructure": {
+            "rate_limiting": "Active - per-tool and global limits",
+            "circuit_breakers": "Active - LLM calls, embeddings, ChromaDB",
+            "prometheus_metrics": "Active - /metrics endpoint available",
+            "caching": "Active - match_vibes (256 entries)",
         },
     }
 
