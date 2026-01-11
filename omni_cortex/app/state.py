@@ -7,6 +7,7 @@ Refactored to use composition and strictly typed sub-states.
 
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import dataclass, field
 from typing import Any, TypedDict
 
@@ -105,16 +106,19 @@ class MemoryStore:
 
     Implements both working memory (current session) and
     episodic memory (historical patterns).
+
+    Uses deque for thread-safe bounded collections that automatically
+    discard oldest items when maxlen is reached.
     """
 
     # Working memory: cleared each session
     working: dict[str, Any] = field(default_factory=dict)
 
-    # Episodic memory: persists across sessions
-    episodic: list[dict[str, Any]] = field(default_factory=list)
+    # Episodic memory: persists across sessions (thread-safe bounded deque)
+    episodic: deque[dict[str, Any]] = field(default_factory=lambda: deque(maxlen=1000))
 
-    # Thought buffer: successful reasoning templates
-    thought_templates: list[dict[str, Any]] = field(default_factory=list)
+    # Thought buffer: successful reasoning templates (thread-safe bounded deque)
+    thought_templates: deque[dict[str, Any]] = field(default_factory=lambda: deque(maxlen=500))
 
     # Statistics
     total_queries: int = 0
@@ -122,18 +126,12 @@ class MemoryStore:
     framework_usage: dict[str, int] = field(default_factory=dict)
 
     def add_episode(self, episode: dict[str, Any]) -> None:
-        """Add a completed reasoning episode to memory."""
-        self.episodic.append(episode)
-        # Keep only the last 1000 episodes
-        if len(self.episodic) > 1000:
-            self.episodic = self.episodic[-1000:]
+        """Add a completed reasoning episode to memory (thread-safe)."""
+        self.episodic.append(episode)  # deque auto-discards oldest when full
 
     def add_thought_template(self, template: dict[str, Any]) -> None:
-        """Add a successful thought template to the buffer."""
-        self.thought_templates.append(template)
-        # Keep only the last 500 templates
-        if len(self.thought_templates) > 500:
-            self.thought_templates = self.thought_templates[-500:]
+        """Add a successful thought template to the buffer (thread-safe)."""
+        self.thought_templates.append(template)  # deque auto-discards oldest when full
 
     def find_similar_templates(
         self, task_type: str, keywords: list[str], limit: int = 5

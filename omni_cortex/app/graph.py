@@ -346,10 +346,19 @@ async def route_node(state: GraphState) -> GraphState:
     # Enhance state with LangChain memory if thread_id available
     thread_id = state.get("working_memory", {}).get("thread_id")
     if thread_id:
-        state = await enhance_state_with_langchain(state, thread_id)
-        # Re-ensure working_memory after enhancement (state may be replaced)
-        state["working_memory"] = state.get("working_memory") or {}
-        logger.info("state_enhanced_with_memory", thread_id=thread_id)
+        try:
+            state = await enhance_state_with_langchain(state, thread_id)
+            # Re-ensure working_memory after enhancement (state may be replaced)
+            state["working_memory"] = state.get("working_memory") or {}
+            logger.info("state_enhanced_with_memory", thread_id=thread_id)
+        except Exception as e:
+            # Graceful degradation: continue with base state if memory enhancement fails
+            logger.warning(
+                "memory_enhancement_failed",
+                thread_id=thread_id,
+                error=str(e),
+                error_type=type(e).__name__,
+            )
 
     # Make LangChain tools available to router if needed
     state["working_memory"]["available_tools"] = [tool.name for tool in AVAILABLE_TOOLS]

@@ -265,7 +265,13 @@ class AnalysisExecutor:
             findings = []
             hallucinated_count = 0
 
-            for f in result_data.get("findings", []):
+            # Handle case where Gemini returns list directly instead of {"findings": [...]}
+            if isinstance(result_data, list):
+                raw_findings = result_data
+            else:
+                raw_findings = result_data.get("findings", [])
+
+            for f in raw_findings:
                 file_path = f.get("file_path", "unknown")
 
                 # Validate: only accept findings for files we actually provided
@@ -303,12 +309,17 @@ class AnalysisExecutor:
 
             execution_time = int((time.monotonic() - start_time) * 1000)
 
+            # Extract summary (handle list case)
+            summary = ""
+            if isinstance(result_data, dict):
+                summary = result_data.get("summary", "")
+
             return AnalysisResult(
                 query=query,
                 framework_used=framework,
                 total_files_analyzed=len(file_contents) if file_contents else 0,
                 findings=findings,
-                summary=result_data.get("summary", ""),
+                summary=summary,
                 execution_time_ms=execution_time,
             )
 
