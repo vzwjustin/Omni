@@ -66,10 +66,10 @@ class CollectionManager:
                 return self._embedding_function
 
             # Import shared embedding function to avoid duplication
-            from .langchain_integration import _get_embeddings
+            from .retrieval import get_embeddings
 
             try:
-                self._embedding_function = _get_embeddings()
+                self._embedding_function = get_embeddings()
                 logger.info("embedding_init_success", provider=get_settings().llm_provider)
             except EmbeddingError:
                 raise  # Re-raise custom errors as-is
