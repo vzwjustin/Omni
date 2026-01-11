@@ -205,22 +205,111 @@ class CollectionManager:
                 )
                 errors.append(f"{coll_name}: validation error")
             except Exception as e:
-                # Final catch for unexpected errors (network, Chroma internals)
-                # Graceful degradation: don't fail entire search if one collection errors
-                logger.error(
-                    "search_unexpected_error",
-                    collection=coll_name,
-                    error=str(e),
-                    error_type=type(e).__name__,
-                    correlation_id=get_correlation_id(),
-                )
-                errors.append(f"{coll_name}: {e}")
+                error_str = str(e)
+                # Handle embedding dimension mismatch - auto-rebuild collection
+                if "embedding with dimension" in error_str:
+                    logger.warning(
+                        "embedding_dimension_mismatch",
+                        collection=coll_name,
+                        error=error_str,
+                        action="rebuilding_collection",
+                        correlation_id=get_correlation_id(),
+                    )
+                    # Try to rebuild the collection with correct dimensions
+                    rebuilt = self._rebuild_collection_for_dimension_mismatch(coll_name)
+                    if rebuilt:
+                        errors.append(f"{coll_name}: rebuilt (was dimension mismatch)")
+                    else:
+                        errors.append(f"{coll_name}: dimension mismatch, rebuild failed")
+                else:
+                    # Final catch for unexpected errors (network, Chroma internals)
+                    # Graceful degradation: don't fail entire search if one collection errors
+                    logger.error(
+                        "search_unexpected_error",
+                        collection=coll_name,
+                        error=error_str,
+                        error_type=type(e).__name__,
+                        correlation_id=get_correlation_id(),
+                    )
+                    errors.append(f"{coll_name}: {e}")
 
         if raise_on_error and searched_collections == 0 and errors:
             raise RAGError(f"No collections available for search: {', '.join(errors)}")
 
         # Sort by relevance (if scores available) and deduplicate
         return self._deduplicate_results(all_results)
+
+    def _rebuild_collection_for_dimension_mismatch(self, collection_name: str) -> bool:
+        """
+        Rebuild a collection when embedding dimensions don't match.
+
+        This happens when the embedding provider changes (e.g., OpenAI 3072-dim
+        to Gemini 768-dim). The old collection data is incompatible.
+
+        Args:
+            collection_name: Name of the collection to rebuild
+
+        Returns:
+            True if rebuild succeeded, False otherwise
+        """
+        import shutil
+
+        try:
+            full_name = f"omni-cortex-{collection_name}"
+            collection_path = os.path.join(self.persist_dir, full_name)
+
+            # Remove from cache
+            with self._collections_lock:
+                if collection_name in self._collections:
+                    del self._collections[collection_name]
+
+            # Delete the collection directory if it exists
+            if os.path.exists(collection_path):
+                shutil.rmtree(collection_path)
+                logger.info(
+                    "collection_deleted_for_rebuild",
+                    collection=collection_name,
+                    path=collection_path,
+                    correlation_id=get_correlation_id(),
+                )
+
+            # Also try to delete via ChromaDB client (handles sqlite-based storage)
+            try:
+                import chromadb
+
+                client = chromadb.PersistentClient(path=self.persist_dir)
+                existing = [c.name for c in client.list_collections()]
+                if full_name in existing:
+                    client.delete_collection(full_name)
+                    logger.info(
+                        "collection_deleted_via_client",
+                        collection=collection_name,
+                        correlation_id=get_correlation_id(),
+                    )
+            except Exception as e:
+                logger.debug("chromadb_client_delete_failed", error=str(e))
+
+            # Re-create with new embedding function
+            collection = self.get_collection(collection_name)
+            if collection:
+                logger.info(
+                    "collection_rebuilt_successfully",
+                    collection=collection_name,
+                    note="Collection is now empty - will be re-indexed on next startup",
+                    correlation_id=get_correlation_id(),
+                )
+                return True
+            return False
+
+        except Exception as e:
+            logger.error(
+                "collection_rebuild_failed",
+                collection=collection_name,
+                error=str(e),
+                error_type=type(e).__name__,
+                correlation_id=get_correlation_id(),
+            )
+            return False
 
     def search_frameworks(
         self,
