@@ -1,3 +1,48 @@
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+*.egg-info/
+dist/
+build/
+*.egg
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Linting/Formatting
+.ruff_cache/
+.mypy_cache/
+
+# Data (runtime persistence)
+data/
+
 # Local-only files
 .claude/
 .codex/
@@ -17,3 +62,6 @@ BUG_HUNT_REPORT.md
 .worktrees/
 .security-key
 logs/security/
+
+# Hypothesis test cache
+.hypothesis/

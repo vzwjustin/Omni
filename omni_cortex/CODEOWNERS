@@ -1,0 +1,28 @@
+# CODEOWNERS - Define code ownership for review requirements
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owners for everything
+* @vzwjustin
+
+# Core framework code
+/app/frameworks/ @vzwjustin
+/app/core/ @vzwjustin
+/app/graph.py @vzwjustin
+
+# MCP Server
+/server/ @vzwjustin
+
+# Framework nodes - individual frameworks
+/app/nodes/ @vzwjustin
+
+# Configuration and infrastructure
+/docker-compose*.yml @vzwjustin
+/Dockerfile @vzwjustin
+/.github/ @vzwjustin
+
+# Documentation
+/*.md @vzwjustin
+/docs/ @vzwjustin
+
+# Tests
+/tests/ @vzwjustin

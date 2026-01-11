@@ -1,0 +1,127 @@
+name: CI
+
+on:
+  push:
+    branches: [main, initial-release]
+  pull_request:
+    branches: [main, initial-release]
+
+env:
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  lint:
+    name: Lint & Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff mypy
+
+      - name: Run Ruff linter
+        run: ruff check app/ server/ --output-format=github
+
+      - name: Run Ruff formatter check
+        run: ruff format --check app/ server/
+
+      - name: Run MyPy
+        run: mypy app/ server/ --config-file=pyproject.toml || true
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Run tests with coverage
+        run: |
+          pytest tests/unit/ \
+            --cov=app --cov=server \
+            --cov-report=xml \
+            --cov-report=term-missing \
+            --cov-fail-under=50 \
+            --durations=10 \
+            -v
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.xml
+          fail_ci_if_error: false
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          severity: 'CRITICAL,HIGH'
+
+  docker:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: omni-cortex:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  validate-agents-md:
+    name: Validate AGENTS.md
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check AGENTS.md exists and has content
+        run: |
+          if [ ! -f AGENTS.md ]; then
+            echo "AGENTS.md not found!"
+            exit 1
+          fi
+          if [ $(wc -c < AGENTS.md) -lt 100 ]; then
+            echo "AGENTS.md is too short (< 100 chars)"
+            exit 1
+          fi
+          echo "AGENTS.md validation passed"
+
+      - name: Validate documented commands work
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          # Verify imports work
+          python -c "from app.graph import graph; print('Graph import OK')"
+          python -c "from server.main import create_server; print('Server import OK')"
