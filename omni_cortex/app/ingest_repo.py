@@ -10,9 +10,8 @@ Environment:
 - CHROMA_PERSIST_DIR: optional, defaults to /app/data/chroma
 """
 
-import os
 from pathlib import Path
-from typing import List
+
 import structlog
 
 from .langchain_integration import add_documents, get_vectorstore
@@ -37,8 +36,8 @@ def should_skip(path: Path) -> bool:
     return bool(parts & SKIP_DIRS)
 
 
-def read_files(root: Path, patterns: List[str]) -> List[tuple[str, str]]:
-    docs: List[tuple[str, str]] = []
+def read_files(root: Path, patterns: list[str]) -> list[tuple[str, str]]:
+    docs: list[tuple[str, str]] = []
     for pattern in patterns:
         for file in root.glob(pattern):
             if file.is_dir() or should_skip(file):

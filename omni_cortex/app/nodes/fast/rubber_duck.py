@@ -9,17 +9,15 @@ Explain problem step-by-step to find solution:
 5. Identify the issue through explanation
 """
 
-import asyncio
 import structlog
 
 from ...state import GraphState
 from ..common import (
-    quiet_star,
+    add_reasoning_step,
     call_deep_reasoner,
     call_fast_synthesizer,
-    add_reasoning_step,
-    format_code_context,
     prepare_context_with_gemini,
+    quiet_star,
 )
 
 logger = structlog.get_logger("rubber_duck")
@@ -34,7 +32,7 @@ CONTEXT: {code_context}
 
 State the problem in simple terms:
 """
-    
+
     response, _ = await call_fast_synthesizer(prompt, state, max_tokens=384)
     return response.strip()
 
@@ -47,7 +45,7 @@ PROBLEM: {query}
 
 What is the expected behavior?
 """
-    
+
     response, _ = await call_fast_synthesizer(prompt, state, max_tokens=256)
     return response.strip()
 
@@ -61,7 +59,7 @@ CONTEXT: {code_context}
 
 What is the actual behavior?
 """
-    
+
     response, _ = await call_fast_synthesizer(prompt, state, max_tokens=256)
     return response.strip()
 
@@ -75,12 +73,14 @@ CODE/CONTEXT:
 
 Step-by-step walkthrough:
 """
-    
+
     response, _ = await call_deep_reasoner(prompt, state, max_tokens=768)
     return response.strip()
 
 
-async def _identify_issue(explanation: str, expected: str, actual: str, walkthrough: str, query: str, state: GraphState) -> str:
+async def _identify_issue(
+    explanation: str, expected: str, actual: str, walkthrough: str, query: str, state: GraphState
+) -> str:
     """Identify the issue through rubber duck process."""
     prompt = f"""After explaining this to a rubber duck, what is the issue?
 
@@ -98,7 +98,7 @@ What did you realize by explaining it?
 
 INSIGHT:
 """
-    
+
     response, _ = await call_deep_reasoner(prompt, state, max_tokens=1024)
     return response.strip()
 
@@ -109,29 +109,39 @@ async def rubber_duck_node(state: GraphState) -> GraphState:
     query = state.get("query", "")
     # Use Gemini to preprocess context via ContextGateway
 
-    code_context = await prepare_context_with_gemini(
+    code_context = await prepare_context_with_gemini(query=query, state=state)
 
-        query=query,
-
-        state=state
-
-    )
-    
     explanation = await _explain_problem(query, code_context, state)
-    add_reasoning_step(state=state, framework="rubber_duck", thought="Explained problem clearly", action="explain")
-    
+    add_reasoning_step(
+        state=state, framework="rubber_duck", thought="Explained problem clearly", action="explain"
+    )
+
     expected = await _explain_expected(query, state)
-    add_reasoning_step(state=state, framework="rubber_duck", thought="Described expected behavior", action="expected")
-    
+    add_reasoning_step(
+        state=state,
+        framework="rubber_duck",
+        thought="Described expected behavior",
+        action="expected",
+    )
+
     actual = await _explain_actual(query, code_context, state)
-    add_reasoning_step(state=state, framework="rubber_duck", thought="Described actual behavior", action="actual")
-    
+    add_reasoning_step(
+        state=state, framework="rubber_duck", thought="Described actual behavior", action="actual"
+    )
+
     walkthrough = await _walk_through_logic(code_context, state)
-    add_reasoning_step(state=state, framework="rubber_duck", thought="Walked through logic", action="walkthrough")
-    
+    add_reasoning_step(
+        state=state, framework="rubber_duck", thought="Walked through logic", action="walkthrough"
+    )
+
     insight = await _identify_issue(explanation, expected, actual, walkthrough, query, state)
-    add_reasoning_step(state=state, framework="rubber_duck", thought="Identified issue through explanation", action="realize")
-    
+    add_reasoning_step(
+        state=state,
+        framework="rubber_duck",
+        thought="Identified issue through explanation",
+        action="realize",
+    )
+
     state["final_answer"] = f"""# Rubber Duck Debugging Session
 
 ## Problem Explanation

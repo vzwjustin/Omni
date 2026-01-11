@@ -8,28 +8,31 @@ This module re-exports common validation functions from app.core.validation
 and adds handler-specific validation utilities.
 """
 
-import re
-from typing import Any, Optional, List
+from typing import Any
 
-from app.core.errors import OmniCortexError, ValidationError
+from app.core.errors import ValidationError
+from app.core.validation import (
+    MAX_CODE_SNIPPET_LENGTH,
+    MAX_CONTEXT_LENGTH,
+    MAX_QUERY_LENGTH,
+    sanitize_code_snippet,
+    sanitize_context,
+    sanitize_file_path,
+    sanitize_query,
+    # Re-export sanitization utilities from core
+    sanitize_user_input,
+)
+from app.core.validation import (
+    validate_framework_name as _core_validate_framework_name,
+)
 
 # Import core validation functions for re-export and internal use
 from app.core.validation import (
     validate_thread_id as _core_validate_thread_id,
-    validate_framework_name as _core_validate_framework_name,
-    # Re-export sanitization utilities from core
-    sanitize_user_input,
-    sanitize_query,
-    sanitize_code_snippet,
-    sanitize_context,
-    sanitize_file_path,
-    MAX_QUERY_LENGTH,
-    MAX_CODE_SNIPPET_LENGTH,
-    MAX_CONTEXT_LENGTH,
 )
 
 
-def validate_thread_id(thread_id: Any, required: bool = False) -> Optional[str]:
+def validate_thread_id(thread_id: Any, required: bool = False) -> str | None:
     """
     Validate thread_id parameter.
 
@@ -136,7 +139,9 @@ def validate_code(code: Any, max_length: int = 100000) -> str:
     return code
 
 
-def validate_text(text: Any, param_name: str = "text", max_length: int = 500000, required: bool = True) -> str:
+def validate_text(
+    text: Any, param_name: str = "text", max_length: int = 500000, required: bool = True
+) -> str:
     """
     Validate generic text parameter.
 
@@ -200,7 +205,7 @@ def validate_positive_int(value: Any, param_name: str, default: int, max_value: 
     return value
 
 
-def validate_framework_name(name: Any, required: bool = True) -> Optional[str]:
+def validate_framework_name(name: Any, required: bool = True) -> str | None:
     """
     Validate framework name parameter.
 
@@ -232,7 +237,9 @@ def validate_framework_name(name: Any, required: bool = True) -> Optional[str]:
     return _core_validate_framework_name(normalized)
 
 
-def validate_category(category: Any, valid_categories: List[str], param_name: str = "category") -> str:
+def validate_category(
+    category: Any, valid_categories: list[str], param_name: str = "category"
+) -> str:
     """
     Validate category parameter against allowed values.
 
@@ -259,7 +266,7 @@ def validate_category(category: Any, valid_categories: List[str], param_name: st
     return category
 
 
-def validate_path(path: Any, param_name: str = "path", required: bool = False) -> Optional[str]:
+def validate_path(path: Any, param_name: str = "path", required: bool = False) -> str | None:
     """
     Validate file/directory path parameter.
 
@@ -298,7 +305,7 @@ def validate_path(path: Any, param_name: str = "path", required: bool = False) -
     return path
 
 
-def validate_action(action: Any, valid_actions: List[str]) -> str:
+def validate_action(action: Any, valid_actions: list[str]) -> str:
     """
     Validate action parameter against allowed values.
 
@@ -324,7 +331,7 @@ def validate_action(action: Any, valid_actions: List[str]) -> str:
     return action
 
 
-def validate_file_list(file_list: Any, max_files: int = 100) -> Optional[List[str]]:
+def validate_file_list(file_list: Any, max_files: int = 100) -> list[str] | None:
     """
     Validate file list parameter.
 
@@ -357,7 +364,9 @@ def validate_file_list(file_list: Any, max_files: int = 100) -> Optional[List[st
     return validated
 
 
-def validate_string_list(items: Any, param_name: str, max_items: int = 100, max_item_length: int = 1000) -> Optional[List[str]]:
+def validate_string_list(
+    items: Any, param_name: str, max_items: int = 100, max_item_length: int = 1000
+) -> list[str] | None:
     """
     Validate list of strings parameter.
 
@@ -423,7 +432,9 @@ def validate_boolean(value: Any, param_name: str, default: bool) -> bool:
     return value
 
 
-def validate_float(value: Any, param_name: str, default: float, min_value: float = 0.0, max_value: float = 1.0) -> float:
+def validate_float(
+    value: Any, param_name: str, default: float, min_value: float = 0.0, max_value: float = 1.0
+) -> float:
     """
     Validate float parameter within range.
 
@@ -454,7 +465,13 @@ def validate_float(value: Any, param_name: str, default: float, min_value: float
     return float_value
 
 
-def validate_int(value: Any, param_name: str, default: Optional[int] = None, min_value: Optional[int] = None, max_value: Optional[int] = None) -> Optional[int]:
+def validate_int(
+    value: Any,
+    param_name: str,
+    default: int | None = None,
+    min_value: int | None = None,
+    max_value: int | None = None,
+) -> int | None:
     """
     Validate optional integer parameter within range.
 
@@ -493,28 +510,28 @@ def validate_int(value: Any, param_name: str, default: Optional[int] = None, min
 # These can be imported directly from this module
 __all__ = [
     # Handler-specific validation functions
-    'validate_thread_id',
-    'validate_query',
-    'validate_context',
-    'validate_code',
-    'validate_text',
-    'validate_positive_int',
-    'validate_framework_name',
-    'validate_category',
-    'validate_path',
-    'validate_action',
-    'validate_file_list',
-    'validate_string_list',
-    'validate_boolean',
-    'validate_float',
-    'validate_int',
+    "validate_thread_id",
+    "validate_query",
+    "validate_context",
+    "validate_code",
+    "validate_text",
+    "validate_positive_int",
+    "validate_framework_name",
+    "validate_category",
+    "validate_path",
+    "validate_action",
+    "validate_file_list",
+    "validate_string_list",
+    "validate_boolean",
+    "validate_float",
+    "validate_int",
     # Re-exported from app.core.validation
-    'sanitize_user_input',
-    'sanitize_query',
-    'sanitize_code_snippet',
-    'sanitize_context',
-    'sanitize_file_path',
-    'MAX_QUERY_LENGTH',
-    'MAX_CODE_SNIPPET_LENGTH',
-    'MAX_CONTEXT_LENGTH',
+    "sanitize_user_input",
+    "sanitize_query",
+    "sanitize_code_snippet",
+    "sanitize_context",
+    "sanitize_file_path",
+    "MAX_QUERY_LENGTH",
+    "MAX_CODE_SNIPPET_LENGTH",
+    "MAX_CONTEXT_LENGTH",
 ]

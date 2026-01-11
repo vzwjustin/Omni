@@ -8,17 +8,14 @@ Self-reflective retrieval-augmented generation:
 4. Repeat until satisfied
 """
 
-import asyncio
 import structlog
 
 from ...state import GraphState
 from ..common import (
-    quiet_star,
-    call_deep_reasoner,
-    call_fast_synthesizer,
     add_reasoning_step,
-    format_code_context,
+    call_deep_reasoner,
     prepare_context_with_gemini,
+    quiet_star,
 )
 
 logger = structlog.get_logger("self_rag")
@@ -30,14 +27,8 @@ async def self_rag_node(state: GraphState) -> GraphState:
     query = state.get("query", "")
     # Use Gemini to preprocess context via ContextGateway
 
-    context = await prepare_context_with_gemini(
+    context = await prepare_context_with_gemini(query=query, state=state)
 
-        query=query,
-
-        state=state
-
-    )
-    
     # Initial generation
     prompt = f"""Answer this query. If you need more information, say NEED_MORE.
 
@@ -46,18 +37,18 @@ CONTEXT: {context}
 
 ANSWER:
 """
-    
+
     answer, _ = await call_deep_reasoner(prompt, state, max_tokens=1024)
-    
+
     # Self-reflection
     if "NEED_MORE" in answer or len(answer) < 100:
         add_reasoning_step(
             state=state,
             framework="self_rag",
             thought="Detected need for more information",
-            action="reflect"
+            action="reflect",
         )
-        
+
         # Refine with explicit request for detail
         refine_prompt = f"""Provide more detailed answer.
 
@@ -68,7 +59,7 @@ PREVIOUS ATTEMPT: {answer}
 DETAILED ANSWER:
 """
         answer, _ = await call_deep_reasoner(refine_prompt, state, max_tokens=1536)
-    
+
     state["final_answer"] = answer
     state["confidence_score"] = 0.8
     return state

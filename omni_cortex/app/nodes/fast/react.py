@@ -8,18 +8,17 @@ Genuine Reason + Act loop with observations:
 4. Repeat until solution found
 """
 
-import asyncio
-import structlog
 from dataclasses import dataclass
+
+import structlog
 
 from ...state import GraphState
 from ..common import (
-    quiet_star,
+    add_reasoning_step,
     call_deep_reasoner,
     call_fast_synthesizer,
-    add_reasoning_step,
-    format_code_context,
     prepare_context_with_gemini,
+    quiet_star,
 )
 
 logger = structlog.get_logger("react")
@@ -30,6 +29,7 @@ MAX_STEPS = 5
 @dataclass
 class ReActStep:
     """A single ReAct iteration."""
+
     step_num: int
     thought: str
     action: str
@@ -38,13 +38,10 @@ class ReActStep:
 
 
 async def _generate_thought(
-    query: str,
-    code_context: str,
-    history: list[ReActStep],
-    state: GraphState
+    query: str, code_context: str, history: list[ReActStep], state: GraphState
 ) -> str:
     """Generate reasoning about what to do next."""
-    
+
     history_text = ""
     if history:
         history_text = "\n\nPREVIOUS STEPS:\n"
@@ -52,7 +49,7 @@ async def _generate_thought(
             history_text += f"\nThought {step.step_num}: {step.thought}"
             history_text += f"\nAction {step.step_num}: {step.action}"
             history_text += f"\nObservation {step.step_num}: {step.observation}"
-    
+
     prompt = f"""You are using ReAct (Reason + Act). Think about what to do next.
 
 PROBLEM: {query}
@@ -71,13 +68,10 @@ THOUGHT:
 
 
 async def _generate_action(
-    thought: str,
-    query: str,
-    code_context: str,
-    state: GraphState
+    thought: str, query: str, code_context: str, state: GraphState
 ) -> tuple[str, bool]:
     """Generate action based on thought."""
-    
+
     prompt = f"""Based on your thought, what action should you take?
 
 THOUGHT: {thought}
@@ -103,13 +97,10 @@ ACTION:
 
 
 async def _generate_observation(
-    action: str,
-    query: str,
-    code_context: str,
-    state: GraphState
+    action: str, query: str, code_context: str, state: GraphState
 ) -> str:
     """Simulate observation from action."""
-    
+
     prompt = f"""Simulate the result of this action.
 
 ACTION: {action}
@@ -127,21 +118,20 @@ OBSERVATION:
 
 
 async def _generate_final_answer(
-    history: list[ReActStep],
-    query: str,
-    code_context: str,
-    state: GraphState
+    history: list[ReActStep], query: str, code_context: str, state: GraphState
 ) -> str:
     """Generate final answer based on ReAct history."""
-    
-    reasoning_trace = "\n\n".join([
-        f"**Step {step.step_num}**\n"
-        f"Thought: {step.thought}\n"
-        f"Action: {step.action}\n"
-        f"Observation: {step.observation}"
-        for step in history
-    ])
-    
+
+    reasoning_trace = "\n\n".join(
+        [
+            f"**Step {step.step_num}**\n"
+            f"Thought: {step.thought}\n"
+            f"Action: {step.action}\n"
+            f"Observation: {step.observation}"
+            for step in history
+        ]
+    )
+
     prompt = f"""Based on this ReAct reasoning trace, provide the final answer.
 
 PROBLEM: {query}
@@ -163,7 +153,7 @@ FINAL ANSWER:
 async def react_node(state: GraphState) -> GraphState:
     """
     ReAct Framework - REAL IMPLEMENTATION
-    
+
     Genuine Reason + Act loop:
     - Iterative thought → action → observation
     - Continues until FINISH action
@@ -172,76 +162,64 @@ async def react_node(state: GraphState) -> GraphState:
     query = state.get("query", "")
     # Use Gemini to preprocess context via ContextGateway
 
-    code_context = await prepare_context_with_gemini(
+    code_context = await prepare_context_with_gemini(query=query, state=state)
 
-        query=query,
-
-        state=state
-
-    )
-    
     logger.info("react_start", query_preview=query[:50])
-    
+
     history: list[ReActStep] = []
-    
+
     for step_num in range(1, MAX_STEPS + 1):
         logger.info("react_step", step=step_num)
-        
+
         # Thought
         thought = await _generate_thought(query, code_context, history, state)
-        
-        add_reasoning_step(
-            state=state,
-            framework="react",
-            thought=thought,
-            action="think"
-        )
-        
+
+        add_reasoning_step(state=state, framework="react", thought=thought, action="think")
+
         # Action
         action, is_final = await _generate_action(thought, query, code_context, state)
-        
+
         add_reasoning_step(
-            state=state,
-            framework="react",
-            thought=f"Action: {action}",
-            action="act"
+            state=state, framework="react", thought=f"Action: {action}", action="act"
         )
-        
+
         # Observation
         observation = await _generate_observation(action, query, code_context, state)
-        
+
         react_step = ReActStep(
             step_num=step_num,
             thought=thought,
             action=action,
             observation=observation,
-            is_final=is_final
+            is_final=is_final,
         )
         history.append(react_step)
-        
+
         add_reasoning_step(
             state=state,
             framework="react",
             thought=f"Observation: {observation[:100]}...",
-            action="observe"
+            action="observe",
         )
-        
+
         if is_final:
             logger.info("react_finished", steps=step_num)
             break
-    
+
     # Generate final answer
     final_answer = await _generate_final_answer(history, query, code_context, state)
-    
+
     # Format trace
-    trace = "\n\n".join([
-        f"### Step {step.step_num}\n"
-        f"**Thought**: {step.thought}\n"
-        f"**Action**: {step.action}\n"
-        f"**Observation**: {step.observation}"
-        for step in history
-    ])
-    
+    trace = "\n\n".join(
+        [
+            f"### Step {step.step_num}\n"
+            f"**Thought**: {step.thought}\n"
+            f"**Action**: {step.action}\n"
+            f"**Observation**: {step.observation}"
+            for step in history
+        ]
+    )
+
     output = f"""# ReAct Reasoning Trace
 
 ## Iterative Reason + Act Steps
@@ -256,7 +234,7 @@ async def react_node(state: GraphState) -> GraphState:
 
     state["final_answer"] = output
     state["confidence_score"] = 0.8
-    
+
     logger.info("react_complete", steps=len(history))
-    
+
     return state

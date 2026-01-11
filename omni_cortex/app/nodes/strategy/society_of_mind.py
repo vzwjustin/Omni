@@ -10,19 +10,17 @@ Implements Minsky's Society of Mind with collaborative agents:
 This is a framework with actual multi-agent collaboration.
 """
 
-import asyncio
-import structlog
 from dataclasses import dataclass, field
-from typing import Optional
+
+import structlog
 
 from ...state import GraphState
 from ..common import (
-    quiet_star,
+    add_reasoning_step,
     call_deep_reasoner,
     call_fast_synthesizer,
-    add_reasoning_step,
-    format_code_context,
     prepare_context_with_gemini,
+    quiet_star,
 )
 
 logger = structlog.get_logger("society_of_mind")
@@ -34,6 +32,7 @@ INTERACTION_ROUNDS = 3
 @dataclass
 class MindAgent:
     """A cognitive agent in the society."""
+
     id: int
     role: str
     personality: str
@@ -42,12 +41,9 @@ class MindAgent:
     collaboration_score: float = 0.0
 
 
-async def _spawn_society(
-    query: str,
-    state: GraphState
-) -> list[MindAgent]:
+async def _spawn_society(query: str, state: GraphState) -> list[MindAgent]:
     """Create a diverse society of cognitive agents."""
-    
+
     prompt = f"""Create {NUM_AGENTS} cognitive agents for collaborative problem solving.
 
 PROBLEM: {query}
@@ -72,32 +68,30 @@ AGENT_2_PERSONALITY: [Different personality]
 """
 
     response, _ = await call_fast_synthesizer(prompt, state, max_tokens=512)
-    
+
     agents = []
     current_role = None
     current_personality = None
-    
+
     for line in response.split("\n"):
         line = line.strip()
         if "_ROLE:" in line:
             if current_role and current_personality:
-                agents.append(MindAgent(
-                    id=len(agents) + 1,
-                    role=current_role,
-                    personality=current_personality
-                ))
+                agents.append(
+                    MindAgent(
+                        id=len(agents) + 1, role=current_role, personality=current_personality
+                    )
+                )
             current_role = line.split(":")[-1].strip()
             current_personality = None
         elif "_PERSONALITY:" in line:
             current_personality = line.split(":", 1)[-1].strip()
-    
+
     if current_role and current_personality:
-        agents.append(MindAgent(
-            id=len(agents) + 1,
-            role=current_role,
-            personality=current_personality
-        ))
-    
+        agents.append(
+            MindAgent(id=len(agents) + 1, role=current_role, personality=current_personality)
+        )
+
     # Ensure we have enough agents
     default_agents = [
         ("Critic", "Skeptical, finds flaws"),
@@ -105,13 +99,13 @@ AGENT_2_PERSONALITY: [Different personality]
         ("Planner", "Strategic, organizes steps"),
         ("Tester", "Thorough, validates ideas"),
         ("Optimizer", "Efficient, improves solutions"),
-        ("Integrator", "Holistic, combines perspectives")
+        ("Integrator", "Holistic, combines perspectives"),
     ]
-    
+
     while len(agents) < NUM_AGENTS:
         role, personality = default_agents[len(agents)]
         agents.append(MindAgent(id=len(agents) + 1, role=role, personality=personality))
-    
+
     return agents[:NUM_AGENTS]
 
 
@@ -120,15 +114,15 @@ async def _agent_contribute(
     query: str,
     code_context: str,
     previous_contributions: list[str],
-    state: GraphState
+    state: GraphState,
 ) -> str:
     """Agent makes a contribution based on their role."""
-    
+
     context = ""
     if previous_contributions:
         context = "\n\nPREVIOUS CONTRIBUTIONS FROM OTHER AGENTS:\n"
         context += "\n".join([f"- {c[:100]}..." for c in previous_contributions[-5:]])
-    
+
     prompt = f"""You are a {agent.role} with this personality: {agent.personality}
 
 PROBLEM: {query}
@@ -153,16 +147,13 @@ CONTRIBUTION:
 
 
 async def _agent_critique(
-    agent: MindAgent,
-    target_agent: MindAgent,
-    query: str,
-    state: GraphState
+    agent: MindAgent, target_agent: MindAgent, query: str, state: GraphState
 ) -> str:
     """Agent critiques another agent's contribution."""
-    
+
     if not target_agent.contributions:
         return ""
-    
+
     prompt = f"""You are a {agent.role}. Critique this contribution from the {target_agent.role}.
 
 PROBLEM: {query}
@@ -181,23 +172,19 @@ CRITIQUE:
 
 
 async def _synthesize_society_output(
-    agents: list[MindAgent],
-    query: str,
-    code_context: str,
-    state: GraphState
+    agents: list[MindAgent], query: str, code_context: str, state: GraphState
 ) -> str:
     """Synthesize the collective output of the society."""
-    
+
     contributions_by_role = {}
     for agent in agents:
         role_contribs = "\n".join([f"  - {c}" for c in agent.contributions])
         contributions_by_role[agent.role] = role_contribs
-    
-    society_output = "\n\n".join([
-        f"**{role}**:\n{contribs}"
-        for role, contribs in contributions_by_role.items()
-    ])
-    
+
+    society_output = "\n\n".join(
+        [f"**{role}**:\n{contribs}" for role, contribs in contributions_by_role.items()]
+    )
+
     prompt = f"""Synthesize the collective intelligence of this society of mind.
 
 PROBLEM: {query}
@@ -220,7 +207,7 @@ Show how different agents' insights combine to create a better solution.
 async def system1_node(state: GraphState) -> GraphState:
     """
     Society of Mind Framework - REAL IMPLEMENTATION
-    
+
     Multi-agent collaborative reasoning:
     - Spawns diverse cognitive agents
     - Agents contribute based on roles
@@ -230,33 +217,27 @@ async def system1_node(state: GraphState) -> GraphState:
     query = state.get("query", "")
     # Use Gemini to preprocess context via ContextGateway
 
-    code_context = await prepare_context_with_gemini(
+    code_context = await prepare_context_with_gemini(query=query, state=state)
 
-        query=query,
-
-        state=state
-
-    )
-    
     logger.info("society_of_mind_start", query_preview=query[:50], agents=NUM_AGENTS)
-    
+
     # Step 1: Spawn society
     agents = await _spawn_society(query, state)
-    
+
     add_reasoning_step(
         state=state,
         framework="society_of_mind",
         thought=f"Spawned society with {len(agents)} agents",
         action="spawn",
-        observation=", ".join([f"{a.role}" for a in agents])
+        observation=", ".join([f"{a.role}" for a in agents]),
     )
-    
+
     # Step 2: Interaction rounds
     all_contributions = []
-    
+
     for round_num in range(INTERACTION_ROUNDS):
         logger.info("society_round", round=round_num + 1)
-        
+
         # Each agent contributes
         for agent in agents:
             contribution = await _agent_contribute(
@@ -264,36 +245,36 @@ async def system1_node(state: GraphState) -> GraphState:
             )
             agent.contributions.append(contribution)
             all_contributions.append(f"{agent.role}: {contribution}")
-        
+
         add_reasoning_step(
             state=state,
             framework="society_of_mind",
             thought=f"Round {round_num + 1}: All {len(agents)} agents contributed",
-            action="contribute"
+            action="contribute",
         )
-        
+
         # Agents critique each other (selective pairings)
         critique_pairs = [
             (agents[0], agents[1]),  # Critic critiques Builder
             (agents[2], agents[3]),  # Planner critiques Tester
             (agents[4], agents[5]),  # Optimizer critiques Integrator
         ]
-        
-        for agent, target in critique_pairs[:len(agents)//2]:
+
+        for agent, target in critique_pairs[: len(agents) // 2]:
             critique = await _agent_critique(agent, target, query, state)
             if critique:
                 agent.critiques.append(f"To {target.role}: {critique}")
-        
+
         add_reasoning_step(
             state=state,
             framework="society_of_mind",
             thought=f"Round {round_num + 1}: Inter-agent critiques completed",
-            action="critique"
+            action="critique",
         )
-    
+
     # Step 3: Synthesize
     solution = await _synthesize_society_output(agents, query, code_context, state)
-    
+
     # Format society transcript
     transcript = ""
     for agent in agents:
@@ -303,11 +284,11 @@ async def system1_node(state: GraphState) -> GraphState:
             transcript += f"{i}. {contrib[:150]}...\n"
         if agent.critiques:
             transcript += f"**Critiques given**: {len(agent.critiques)}\n"
-    
+
     final_answer = f"""# Society of Mind Analysis
 
 ## The Society
-{', '.join([f'{a.role}' for a in agents])}
+{", ".join([f"{a.role}" for a in agents])}
 
 ## Interaction Transcript ({INTERACTION_ROUNDS} rounds)
 {transcript}
@@ -324,11 +305,11 @@ async def system1_node(state: GraphState) -> GraphState:
 
     state["final_answer"] = final_answer
     state["confidence_score"] = 0.85
-    
+
     logger.info(
         "society_of_mind_complete",
         agents=len(agents),
-        contributions=sum(len(a.contributions) for a in agents)
+        contributions=sum(len(a.contributions) for a in agents),
     )
-    
+
     return state

@@ -5,10 +5,9 @@ Provides sync and async search functionality.
 """
 
 import asyncio
-from typing import List
 
-from langchain_core.documents import Document
 import structlog
+from langchain_core.documents import Document
 
 logger = structlog.get_logger("search")
 
@@ -17,24 +16,25 @@ class VectorstoreSearchError(RuntimeError):
     """Raised when a vectorstore search fails (not a no-results case)."""
 
 
-def _search_vectorstore_sync(query: str, k: int = 5) -> List[Document]:
+def _search_vectorstore_sync(query: str, k: int = 5) -> list[Document]:
     """Synchronous vectorstore search (internal use)."""
     from ..collection_manager import get_collection_manager
+
     manager = get_collection_manager()
     return manager.search(
         query,
         collection_names=["frameworks", "documentation", "utilities"],
         k=k,
-        raise_on_error=True
+        raise_on_error=True,
     )
 
 
-async def search_vectorstore_async(query: str, k: int = 5) -> List[Document]:
+async def search_vectorstore_async(query: str, k: int = 5) -> list[Document]:
     """Search the vector store for relevant documents (async, non-blocking)."""
     return await asyncio.to_thread(_search_vectorstore_sync, query, k)
 
 
-def search_vectorstore(query: str, k: int = 5) -> List[Document]:
+def search_vectorstore(query: str, k: int = 5) -> list[Document]:
     """Search the vector store for relevant documents.
 
     Note: This is synchronous for backwards compatibility.

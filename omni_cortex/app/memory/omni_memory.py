@@ -5,9 +5,10 @@ Provides short-term conversation memory using LangChain 1.0+ message types.
 """
 
 import threading
-from typing import Any, List, Dict
-from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
+from typing import Any
+
 import structlog
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 
 logger = structlog.get_logger("memory")
 
@@ -24,8 +25,8 @@ class OmniCortexMemory:
 
     def __init__(self, thread_id: str, max_messages: int = 20) -> None:
         self.thread_id = thread_id
-        self.messages: List[BaseMessage] = []
-        self.framework_history: List[str] = []
+        self.messages: list[BaseMessage] = []
+        self.framework_history: list[str] = []
         self.max_messages = max_messages
         self._lock = threading.Lock()  # Protect concurrent modifications
 
@@ -37,20 +38,17 @@ class OmniCortexMemory:
 
             # Trim to max size
             if len(self.messages) > self.max_messages:
-                self.messages = self.messages[-self.max_messages:]
+                self.messages = self.messages[-self.max_messages :]
 
             self.framework_history.append(framework)
             # Trim framework history to match message limit (prevent unbounded growth)
             if len(self.framework_history) > self.max_messages:
-                self.framework_history = self.framework_history[-self.max_messages:]
+                self.framework_history = self.framework_history[-self.max_messages :]
             logger.info("memory_updated", thread_id=self.thread_id, framework=framework)
 
-    def get_context(self) -> Dict[str, Any]:
+    def get_context(self) -> dict[str, Any]:
         """Get full memory context for prompting."""
-        return {
-            "chat_history": self.messages,
-            "framework_history": self.framework_history
-        }
+        return {"chat_history": self.messages, "framework_history": self.framework_history}
 
     def clear(self) -> None:
         """Clear all memory."""

@@ -8,11 +8,11 @@ by handling token-level optimizations.
 
 import re
 from pathlib import Path
-from typing import Optional
 
 # Try tiktoken, fallback to simple estimation
 try:
     import tiktoken
+
     _ENCODING = tiktoken.get_encoding("cl100k_base")
     _HAS_TIKTOKEN = True
 except ImportError:
@@ -58,32 +58,32 @@ def compress_content(content: str, target_reduction: float = 0.3) -> dict:
             "original_tokens": 0,
             "compressed_tokens": 0,
             "compressed_content": "",
-            "reduction_percentage": 0.0
+            "reduction_percentage": 0.0,
         }
 
     original_tokens = count_tokens(content)
-    lines = content.split('\n')
+    lines = content.split("\n")
     compressed_lines = []
 
     # Patterns for important lines to always keep
     important_patterns = [
-        r'^\s*(import|from)\s+',           # imports
-        r'^\s*(def|async def)\s+\w+',      # function definitions
-        r'^\s*class\s+\w+',                # class definitions
-        r'^\s*@\w+',                        # decorators
-        r'^\s*(if|elif|else|for|while|try|except|finally|with|match|case)\s*', # control flow
-        r'^\s*(return|yield|raise|await)\s+', # returns and raises
-        r'^\s*(self\.\w+\s*=)',            # instance attribute assignments
-        r'^\s*[A-Z_]+\s*=',                # constants
-        r'^\s*__\w+__\s*=',                # dunder attributes
+        r"^\s*(import|from)\s+",  # imports
+        r"^\s*(def|async def)\s+\w+",  # function definitions
+        r"^\s*class\s+\w+",  # class definitions
+        r"^\s*@\w+",  # decorators
+        r"^\s*(if|elif|else|for|while|try|except|finally|with|match|case)\s*",  # control flow
+        r"^\s*(return|yield|raise|await)\s+",  # returns and raises
+        r"^\s*(self\.\w+\s*=)",  # instance attribute assignments
+        r"^\s*[A-Z_]+\s*=",  # constants
+        r"^\s*__\w+__\s*=",  # dunder attributes
     ]
 
     # Patterns for lines to remove
     skip_patterns = [
-        r'^\s*#(?!\s*type:)',              # comments (but not type hints)
-        r'^\s*"""[\s\S]*?"""',             # docstrings (handled separately)
-        r"^\s*'''[\s\S]*?'''",             # docstrings
-        r'^\s*$',                           # empty lines
+        r"^\s*#(?!\s*type:)",  # comments (but not type hints)
+        r'^\s*"""[\s\S]*?"""',  # docstrings (handled separately)
+        r"^\s*'''[\s\S]*?'''",  # docstrings
+        r"^\s*$",  # empty lines
     ]
 
     in_docstring = False
@@ -100,7 +100,9 @@ def compress_content(content: str, target_reduction: float = 0.3) -> dict:
                 if stripped.count(docstring_char) >= 2 and len(stripped) > 6:
                     # Single-line docstring - keep first line only for context
                     if len(compressed_lines) > 0:
-                        compressed_lines.append(f'{line.split(docstring_char)[0]}{docstring_char}...{docstring_char}')
+                        compressed_lines.append(
+                            f"{line.split(docstring_char)[0]}{docstring_char}...{docstring_char}"
+                        )
                     continue
                 in_docstring = True
                 continue
@@ -111,14 +113,14 @@ def compress_content(content: str, target_reduction: float = 0.3) -> dict:
             continue
 
         # Skip pure comments (not type hints)
-        if stripped.startswith('#') and 'type:' not in stripped:
+        if stripped.startswith("#") and "type:" not in stripped:
             continue
 
         # Handle empty lines - keep max 1 consecutive
         if not stripped:
             consecutive_empty += 1
             if consecutive_empty <= 1:
-                compressed_lines.append('')
+                compressed_lines.append("")
             continue
         else:
             consecutive_empty = 0
@@ -130,14 +132,14 @@ def compress_content(content: str, target_reduction: float = 0.3) -> dict:
             compressed_lines.append(line)
         else:
             # Keep line but compress whitespace
-            compressed_line = re.sub(r'\s+', ' ', line.strip())
+            compressed_line = re.sub(r"\s+", " ", line.strip())
             if compressed_line:
                 # Preserve indentation level roughly
                 indent = len(line) - len(line.lstrip())
-                indent_str = ' ' * (indent // 2)  # Reduce indent
+                indent_str = " " * (indent // 2)  # Reduce indent
                 compressed_lines.append(f"{indent_str}{compressed_line}")
 
-    compressed_content = '\n'.join(compressed_lines)
+    compressed_content = "\n".join(compressed_lines)
     compressed_tokens = count_tokens(compressed_content)
 
     reduction = 1.0 - (compressed_tokens / original_tokens) if original_tokens > 0 else 0.0
@@ -146,7 +148,7 @@ def compress_content(content: str, target_reduction: float = 0.3) -> dict:
         "original_tokens": original_tokens,
         "compressed_tokens": compressed_tokens,
         "compressed_content": compressed_content,
-        "reduction_percentage": round(reduction * 100, 2)
+        "reduction_percentage": round(reduction * 100, 2),
     }
 
 
@@ -163,55 +165,51 @@ def detect_truncation(text: str) -> dict:
         Dict with possibly_truncated, indicators list, confidence (0.0-1.0).
     """
     if not text:
-        return {
-            "possibly_truncated": False,
-            "indicators": [],
-            "confidence": 0.0
-        }
+        return {"possibly_truncated": False, "indicators": [], "confidence": 0.0}
 
     indicators = []
 
     # Check for unclosed code blocks
-    code_block_opens = text.count('```')
+    code_block_opens = text.count("```")
     if code_block_opens % 2 != 0:
         indicators.append("unclosed_code_block")
 
     # Check for unclosed braces/brackets
-    open_braces = text.count('{') - text.count('}')
+    open_braces = text.count("{") - text.count("}")
     if open_braces > 0:
         indicators.append(f"unclosed_braces:{open_braces}")
 
-    open_brackets = text.count('[') - text.count(']')
+    open_brackets = text.count("[") - text.count("]")
     if open_brackets > 0:
         indicators.append(f"unclosed_brackets:{open_brackets}")
 
-    open_parens = text.count('(') - text.count(')')
+    open_parens = text.count("(") - text.count(")")
     if open_parens > 0:
         indicators.append(f"unclosed_parentheses:{open_parens}")
 
     # Check for unclosed strings (simple check)
-    lines = text.split('\n')
+    lines = text.split("\n")
     last_lines = lines[-5:] if len(lines) >= 5 else lines
     for i, line in enumerate(last_lines):
         single_quotes = line.count("'") - line.count("\\'")
         double_quotes = line.count('"') - line.count('\\"')
         if single_quotes % 2 != 0:
-            indicators.append(f"unclosed_single_quote_line_{len(lines)-len(last_lines)+i}")
+            indicators.append(f"unclosed_single_quote_line_{len(lines) - len(last_lines) + i}")
         if double_quotes % 2 != 0:
-            indicators.append(f"unclosed_double_quote_line_{len(lines)-len(last_lines)+i}")
+            indicators.append(f"unclosed_double_quote_line_{len(lines) - len(last_lines) + i}")
 
     # Check for incomplete sentences at end
-    last_line = text.rstrip().split('\n')[-1] if text.strip() else ""
+    last_line = text.rstrip().split("\n")[-1] if text.strip() else ""
     if last_line:
         # Ends mid-word or with continuation characters
-        if last_line.endswith(('...', '..', ',', ':', '\\', '+', '-', '*', '/', '=')):
+        if last_line.endswith(("...", "..", ",", ":", "\\", "+", "-", "*", "/", "=")):
             indicators.append("incomplete_ending")
         # Ends mid-sentence without punctuation
         elif last_line and last_line[-1].isalnum() and len(last_line) > 50:
             indicators.append("possible_mid_sentence")
 
     # Check for truncation markers
-    truncation_markers = ['[truncated]', '[...]', '...more...', '<truncated>']
+    truncation_markers = ["[truncated]", "[...]", "...more...", "<truncated>"]
     for marker in truncation_markers:
         if marker.lower() in text.lower():
             indicators.append(f"truncation_marker:{marker}")
@@ -222,7 +220,7 @@ def detect_truncation(text: str) -> dict:
     return {
         "possibly_truncated": len(indicators) > 0,
         "indicators": indicators,
-        "confidence": round(confidence, 2)
+        "confidence": round(confidence, 2),
     }
 
 
@@ -281,9 +279,7 @@ RULE_PRESETS: dict[str, list[str]] = {
 
 
 def generate_claude_md_template(
-    project_type: str = "general",
-    rules: Optional[list[str]] = None,
-    presets: Optional[list[str]] = None
+    project_type: str = "general", rules: list[str] | None = None, presets: list[str] | None = None
 ) -> str:
     """
     Generate a CLAUDE.md template for a project.
@@ -337,7 +333,7 @@ def inject_rules(
     existing_content: str,
     rules: list[str],
     section: str = "Rules",
-    presets: Optional[list[str]] = None
+    presets: list[str] | None = None,
 ) -> str:
     """
     Inject rules into existing CLAUDE.md content.
@@ -376,13 +372,13 @@ def inject_rules(
     new_rules_content = "\n".join(new_rules_lines)
 
     # Find the section in existing content
-    section_pattern = rf'^(##\s+{re.escape(section)})\s*\n'
+    section_pattern = rf"^(##\s+{re.escape(section)})\s*\n"
     section_match = re.search(section_pattern, existing_content, re.MULTILINE)
 
     if section_match:
         # Find the next section (## heading)
         section_start = section_match.end()
-        next_section = re.search(r'^##\s+', existing_content[section_start:], re.MULTILINE)
+        next_section = re.search(r"^##\s+", existing_content[section_start:], re.MULTILINE)
 
         if next_section:
             section_end = section_start + next_section.start()
@@ -391,9 +387,10 @@ def inject_rules(
 
         # Replace section content
         updated = (
-            existing_content[:section_start] +
-            "\n" + new_rules_content +
-            existing_content[section_end:]
+            existing_content[:section_start]
+            + "\n"
+            + new_rules_content
+            + existing_content[section_end:]
         )
     else:
         # Add new section at the end
@@ -446,7 +443,7 @@ def analyze_claude_md(directory: str) -> dict:
                     continue
                 seen_paths.add(real_path)
 
-                content = location.read_text(encoding='utf-8')
+                content = location.read_text(encoding="utf-8")
                 tokens = count_tokens(content)
 
                 # Determine scope
@@ -459,12 +456,14 @@ def analyze_claude_md(directory: str) -> dict:
                 else:
                     scope = "parent"
 
-                files_found.append({
-                    "path": str(real_path),
-                    "tokens": tokens,
-                    "scope": scope,
-                    "size_bytes": location.stat().st_size
-                })
+                files_found.append(
+                    {
+                        "path": str(real_path),
+                        "tokens": tokens,
+                        "scope": scope,
+                        "size_bytes": location.stat().st_size,
+                    }
+                )
         except (PermissionError, OSError):
             continue
 
@@ -474,8 +473,4 @@ def analyze_claude_md(directory: str) -> dict:
 
     total_tokens = sum(f["tokens"] for f in files_found)
 
-    return {
-        "files_found": len(files_found),
-        "total_tokens": total_tokens,
-        "files": files_found
-    }
+    return {"files_found": len(files_found), "total_tokens": total_tokens, "files": files_found}

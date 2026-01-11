@@ -10,8 +10,9 @@ Usage:
     result = await execute_framework(config, sampler, query, context)
 """
 
-from typing import Dict, Any, List, Optional, Callable, Union
 from dataclasses import dataclass, field
+from typing import Any
+
 from ..core.sampling import ClientSampler
 
 
@@ -26,11 +27,12 @@ class FrameworkStep:
         uses_previous: Whether to include previous step output as {previous}
         max_tokens: Optional max tokens for this step's response
     """
+
     name: str
     prompt_template: str
     temperature: float = 0.5
     uses_previous: bool = True
-    max_tokens: Optional[int] = None
+    max_tokens: int | None = None
 
 
 @dataclass
@@ -45,19 +47,17 @@ class FrameworkConfig:
         description: Human-readable description of what this framework does
         metadata_extras: Additional metadata to include in response
     """
+
     name: str
-    steps: List[FrameworkStep]
+    steps: list[FrameworkStep]
     final_template: str = "{last_step}"
     description: str = ""
-    metadata_extras: Dict[str, Any] = field(default_factory=dict)
+    metadata_extras: dict[str, Any] = field(default_factory=dict)
 
 
 async def execute_framework(
-    config: FrameworkConfig,
-    sampler: ClientSampler,
-    query: str,
-    context: str
-) -> Dict[str, Any]:
+    config: FrameworkConfig, sampler: ClientSampler, query: str, context: str
+) -> dict[str, Any]:
     """Execute a framework based on its configuration.
 
     Args:
@@ -69,7 +69,7 @@ async def execute_framework(
     Returns:
         Dict with 'final_answer' and 'metadata' keys
     """
-    step_outputs: Dict[str, str] = {}
+    step_outputs: dict[str, str] = {}
     last_output = ""
 
     for step in config.steps:
@@ -79,7 +79,7 @@ async def execute_framework(
             "query": query,
             "context": context,
             "previous": last_output if step.uses_previous else "",
-            **step_outputs
+            **step_outputs,
         }
 
         try:
@@ -105,16 +105,9 @@ async def execute_framework(
     final = config.final_template.format(**final_format_args)
 
     # Build metadata
-    metadata = {
-        "framework": config.name,
-        "steps": len(config.steps),
-        **config.metadata_extras
-    }
+    metadata = {"framework": config.name, "steps": len(config.steps), **config.metadata_extras}
 
-    return {
-        "final_answer": final,
-        "metadata": metadata
-    }
+    return {"final_answer": final, "metadata": metadata}
 
 
 # =============================================================================
@@ -134,7 +127,7 @@ PROGRAM_OF_THOUGHTS = FrameworkConfig(
 Context: {context}
 
 What's the input? What's the output? What transformations are needed?""",
-            temperature=0.5
+            temperature=0.5,
         ),
         FrameworkStep(
             name="decompose",
@@ -143,7 +136,7 @@ What's the input? What's the output? What transformations are needed?""",
 {previous}
 
 Break this into step-by-step operations. What needs to happen in sequence?""",
-            temperature=0.6
+            temperature=0.6,
         ),
         FrameworkStep(
             name="code",
@@ -152,7 +145,7 @@ Break this into step-by-step operations. What needs to happen in sequence?""",
 {previous}
 
 Provide clean, commented code for each step. Original problem: {query}""",
-            temperature=0.5
+            temperature=0.5,
         ),
         FrameworkStep(
             name="trace",
@@ -161,10 +154,10 @@ Provide clean, commented code for each step. Original problem: {query}""",
 {previous}
 
 Walk through execution step-by-step. Verify correctness.""",
-            temperature=0.4
+            temperature=0.4,
         ),
     ],
-    final_template="{code}\n\n---\n## Trace\n{trace}"
+    final_template="{code}\n\n---\n## Trace\n{trace}",
 )
 
 
@@ -180,7 +173,7 @@ CHAIN_OF_VERIFICATION = FrameworkConfig(
 
 Context: {context}""",
             temperature=0.6,
-            uses_previous=False
+            uses_previous=False,
         ),
         FrameworkStep(
             name="verify",
@@ -195,7 +188,7 @@ Check for:
 - Best practice violations
 
 List all issues found.""",
-            temperature=0.4
+            temperature=0.4,
         ),
         FrameworkStep(
             name="patch",
@@ -206,7 +199,7 @@ Issues: {verify}
 Original code: {draft}
 
 Provide corrected version.""",
-            temperature=0.5
+            temperature=0.5,
         ),
         FrameworkStep(
             name="validate",
@@ -215,10 +208,10 @@ Provide corrected version.""",
 {previous}
 
 Confirm: All issues fixed? No regressions? Production-ready?""",
-            temperature=0.3
+            temperature=0.3,
         ),
     ],
-    final_template="{patch}\n\n---\n## Validation\n{validate}"
+    final_template="{patch}\n\n---\n## Validation\n{validate}",
 )
 
 
@@ -234,7 +227,7 @@ CRITIC = FrameworkConfig(
 
 Context: {context}""",
             temperature=0.6,
-            uses_previous=False
+            uses_previous=False,
         ),
         FrameworkStep(
             name="critique",
@@ -243,7 +236,7 @@ Context: {context}""",
 {previous}
 
 What works? What's missing? What could break? Be thorough.""",
-            temperature=0.5
+            temperature=0.5,
         ),
         FrameworkStep(
             name="revised",
@@ -254,17 +247,17 @@ Critiques: {critique}
 Original: {solution}
 
 Provide improved version.""",
-            temperature=0.5
+            temperature=0.5,
         ),
         FrameworkStep(
             name="final_check",
             prompt_template="""Final review: {previous}
 
 Any remaining issues?""",
-            temperature=0.3
+            temperature=0.3,
         ),
     ],
-    final_template="{revised}\n\n---\n## Review\n{final_check}"
+    final_template="{revised}\n\n---\n## Review\n{final_check}",
 )
 
 
@@ -282,7 +275,7 @@ Context: {context}
 
 List discrete code units needed.""",
             temperature=0.6,
-            uses_previous=False
+            uses_previous=False,
         ),
         FrameworkStep(
             name="trace",
@@ -291,7 +284,7 @@ List discrete code units needed.""",
 {previous}
 
 Walk through what happens.""",
-            temperature=0.5
+            temperature=0.5,
         ),
         FrameworkStep(
             name="identify",
@@ -300,7 +293,7 @@ Walk through what happens.""",
 {previous}
 
 Pinpoint the issue.""",
-            temperature=0.5
+            temperature=0.5,
         ),
         FrameworkStep(
             name="fix",
@@ -309,7 +302,7 @@ Pinpoint the issue.""",
 {previous}
 
 Provide corrected code with explanation.""",
-            temperature=0.5
+            temperature=0.5,
         ),
         FrameworkStep(
             name="verify",
@@ -318,10 +311,10 @@ Provide corrected code with explanation.""",
 {previous}
 
 Confirm fix works.""",
-            temperature=0.4
+            temperature=0.4,
         ),
     ],
-    final_template="{fix}\n\n---\n## Verification\n{verify}"
+    final_template="{fix}\n\n---\n## Verification\n{verify}",
 )
 
 
@@ -337,7 +330,7 @@ SELF_DEBUGGING = FrameworkConfig(
 
 Context: {context}""",
             temperature=0.6,
-            uses_previous=False
+            uses_previous=False,
         ),
         FrameworkStep(
             name="trace",
@@ -346,7 +339,7 @@ Context: {context}""",
 {previous}
 
 Trace through execution.""",
-            temperature=0.5
+            temperature=0.5,
         ),
         FrameworkStep(
             name="edges",
@@ -355,7 +348,7 @@ Trace through execution.""",
 {draft}
 
 Test: 0, 1, empty, null, max values. What breaks?""",
-            temperature=0.5
+            temperature=0.5,
         ),
         FrameworkStep(
             name="catch",
@@ -365,7 +358,7 @@ Trace: {trace}
 Edges: {edges}
 
 What bugs exist?""",
-            temperature=0.5
+            temperature=0.5,
         ),
         FrameworkStep(
             name="fixed",
@@ -376,10 +369,10 @@ Bugs found: {catch}
 Original: {draft}
 
 Provide debugged version.""",
-            temperature=0.5
+            temperature=0.5,
         ),
     ],
-    final_template="{fixed}"
+    final_template="{fixed}",
 )
 
 
@@ -402,7 +395,7 @@ Cover:
 
 Provide comprehensive test suite.""",
             temperature=0.6,
-            uses_previous=False
+            uses_previous=False,
         ),
         FrameworkStep(
             name="implementation",
@@ -411,7 +404,7 @@ Provide comprehensive test suite.""",
 {previous}
 
 Original requirement: {query}""",
-            temperature=0.5
+            temperature=0.5,
         ),
         FrameworkStep(
             name="refactored",
@@ -420,7 +413,7 @@ Original requirement: {query}""",
 {previous}
 
 Clean up, improve readability.""",
-            temperature=0.5
+            temperature=0.5,
         ),
         FrameworkStep(
             name="verify",
@@ -431,10 +424,10 @@ Tests: {tests}
 Code: {refactored}
 
 Do all tests pass?""",
-            temperature=0.3
+            temperature=0.3,
         ),
     ],
-    final_template="{refactored}\n\n---\n## Tests\n{tests}"
+    final_template="{refactored}\n\n---\n## Tests\n{tests}",
 )
 
 
@@ -452,7 +445,7 @@ Context: {context}
 
 Describe expected behavior.""",
             temperature=0.5,
-            uses_previous=False
+            uses_previous=False,
         ),
         FrameworkStep(
             name="actual",
@@ -462,7 +455,7 @@ Describe expected behavior.""",
 
 Describe current behavior.""",
             temperature=0.5,
-            uses_previous=False
+            uses_previous=False,
         ),
         FrameworkStep(
             name="delta",
@@ -472,7 +465,7 @@ Expected: {expected}
 Actual: {actual}
 
 Precisely describe the delta.""",
-            temperature=0.5
+            temperature=0.5,
         ),
         FrameworkStep(
             name="backtrack",
@@ -481,7 +474,7 @@ Precisely describe the delta.""",
 {previous}
 
 What code change would cause this difference?""",
-            temperature=0.6
+            temperature=0.6,
         ),
         FrameworkStep(
             name="fix",
@@ -490,10 +483,10 @@ What code change would cause this difference?""",
 {previous}
 
 Provide fixed code and verify expected output.""",
-            temperature=0.5
+            temperature=0.5,
         ),
     ],
-    final_template="{fix}"
+    final_template="{fix}",
 )
 
 
@@ -511,7 +504,7 @@ Context: {context}
 
 List modules with clear interfaces.""",
             temperature=0.6,
-            uses_previous=False
+            uses_previous=False,
         ),
         FrameworkStep(
             name="module_code",
@@ -520,7 +513,7 @@ List modules with clear interfaces.""",
 {previous}
 
 Provide code for each with clear interfaces.""",
-            temperature=0.6
+            temperature=0.6,
         ),
         FrameworkStep(
             name="integrated",
@@ -529,7 +522,7 @@ Provide code for each with clear interfaces.""",
 {previous}
 
 Connect them together.""",
-            temperature=0.5
+            temperature=0.5,
         ),
         FrameworkStep(
             name="improved",
@@ -538,7 +531,7 @@ Connect them together.""",
 {previous}
 
 What can be better?""",
-            temperature=0.5
+            temperature=0.5,
         ),
         FrameworkStep(
             name="validated",
@@ -547,10 +540,10 @@ What can be better?""",
 {previous}
 
 Does it work end-to-end?""",
-            temperature=0.4
+            temperature=0.4,
         ),
     ],
-    final_template="{improved}\n\n---\n## Validation\n{validated}"
+    final_template="{improved}\n\n---\n## Validation\n{validated}",
 )
 
 
@@ -566,7 +559,7 @@ EVOL_INSTRUCT = FrameworkConfig(
 
 Context: {context}""",
             temperature=0.6,
-            uses_previous=False
+            uses_previous=False,
         ),
         FrameworkStep(
             name="evolved1",
@@ -577,7 +570,7 @@ Base: {previous}
 Add: Performance constraint (O(n log n) or better)
 
 Provide enhanced solution.""",
-            temperature=0.6
+            temperature=0.6,
         ),
         FrameworkStep(
             name="evolved2",
@@ -588,7 +581,7 @@ Current: {previous}
 Add: Handle empty input, null, very large values
 
 Provide robust solution.""",
-            temperature=0.6
+            temperature=0.6,
         ),
         FrameworkStep(
             name="evolved3",
@@ -599,11 +592,11 @@ Current: {previous}
 Add: Thread-safety, error handling, logging
 
 Provide production-ready solution.""",
-            temperature=0.6
+            temperature=0.6,
         ),
     ],
     final_template="{evolved3}",
-    metadata_extras={"evolutions": 3}
+    metadata_extras={"evolutions": 3},
 )
 
 
@@ -619,7 +612,7 @@ PROCODER = FrameworkConfig(
 
 What types, APIs, patterns exist?""",
             temperature=0.5,
-            uses_previous=False
+            uses_previous=False,
         ),
         FrameworkStep(
             name="code",
@@ -630,7 +623,7 @@ Project context: {previous}
 Task: {query}
 
 Use project patterns and types.""",
-            temperature=0.6
+            temperature=0.6,
         ),
         FrameworkStep(
             name="check",
@@ -639,7 +632,7 @@ Use project patterns and types.""",
 {previous}
 
 Type errors? Import issues? Linter warnings?""",
-            temperature=0.4
+            temperature=0.4,
         ),
         FrameworkStep(
             name="fixed",
@@ -650,7 +643,7 @@ Issues: {check}
 Code: {code}
 
 Provide corrected version.""",
-            temperature=0.5
+            temperature=0.5,
         ),
         FrameworkStep(
             name="integrated",
@@ -659,10 +652,10 @@ Provide corrected version.""",
 {previous}
 
 Does it fit cleanly with existing code?""",
-            temperature=0.4
+            temperature=0.4,
         ),
     ],
-    final_template="{fixed}\n\n---\n## Integration Check\n{integrated}"
+    final_template="{fixed}\n\n---\n## Integration Check\n{integrated}",
 )
 
 
@@ -680,7 +673,7 @@ Context: {context}
 
 What code would solve this?""",
             temperature=0.6,
-            uses_previous=False
+            uses_previous=False,
         ),
         FrameworkStep(
             name="pseudo",
@@ -689,7 +682,7 @@ What code would solve this?""",
 {previous}
 
 Write clear pseudocode steps.""",
-            temperature=0.5
+            temperature=0.5,
         ),
         FrameworkStep(
             name="implementation",
@@ -698,7 +691,7 @@ Write clear pseudocode steps.""",
 {previous}
 
 Convert to working code.""",
-            temperature=0.5
+            temperature=0.5,
         ),
         FrameworkStep(
             name="validated",
@@ -707,10 +700,10 @@ Convert to working code.""",
 {previous}
 
 Test normal + edge cases.""",
-            temperature=0.4
+            temperature=0.4,
         ),
     ],
-    final_template="{implementation}\n\n---\n## Validation\n{validated}"
+    final_template="{implementation}\n\n---\n## Validation\n{validated}",
 )
 
 
@@ -735,7 +728,7 @@ For each function:
 
 List all functions needed.""",
             temperature=0.6,
-            uses_previous=False
+            uses_previous=False,
         ),
         FrameworkStep(
             name="graph",
@@ -744,7 +737,7 @@ List all functions needed.""",
 {previous}
 
 Order by dependencies (no cycles). Leaf functions first.""",
-            temperature=0.5
+            temperature=0.5,
         ),
         FrameworkStep(
             name="base_funcs",
@@ -753,7 +746,7 @@ Order by dependencies (no cycles). Leaf functions first.""",
 {previous}
 
 Implement functions with no dependencies.""",
-            temperature=0.6
+            temperature=0.6,
         ),
         FrameworkStep(
             name="composed",
@@ -764,7 +757,7 @@ Base: {base_funcs}
 Graph: {graph}
 
 Implement remaining functions.""",
-            temperature=0.6
+            temperature=0.6,
         ),
         FrameworkStep(
             name="integrated",
@@ -773,10 +766,10 @@ Implement remaining functions.""",
 {previous}
 
 Provide entry point and full integration.""",
-            temperature=0.5
+            temperature=0.5,
         ),
     ],
-    final_template="{integrated}"
+    final_template="{integrated}",
 )
 
 
@@ -794,7 +787,7 @@ Context: {context}
 
 What APIs needed?""",
             temperature=0.5,
-            uses_previous=False
+            uses_previous=False,
         ),
         FrameworkStep(
             name="docs",
@@ -803,7 +796,7 @@ What APIs needed?""",
 {previous}
 
 Describe relevant docs, examples, patterns.""",
-            temperature=0.5
+            temperature=0.5,
         ),
         FrameworkStep(
             name="signatures",
@@ -812,7 +805,7 @@ Describe relevant docs, examples, patterns.""",
 {previous}
 
 Function signatures, usage patterns, idioms.""",
-            temperature=0.5
+            temperature=0.5,
         ),
         FrameworkStep(
             name="code",
@@ -823,7 +816,7 @@ Signatures: {signatures}
 Problem: {query}
 
 Use doc patterns correctly.""",
-            temperature=0.6
+            temperature=0.6,
         ),
         FrameworkStep(
             name="verified",
@@ -834,10 +827,10 @@ Use doc patterns correctly.""",
 Docs: {signatures}
 
 Correct params, types, error handling?""",
-            temperature=0.4
+            temperature=0.4,
         ),
     ],
-    final_template="{code}\n\n---\n## Doc Verification\n{verified}"
+    final_template="{code}\n\n---\n## Doc Verification\n{verified}",
 )
 
 
@@ -845,7 +838,7 @@ Correct params, types, error handling?""",
 # Registry of all framework configurations
 # =============================================================================
 
-FRAMEWORK_CONFIGS: Dict[str, FrameworkConfig] = {
+FRAMEWORK_CONFIGS: dict[str, FrameworkConfig] = {
     "program_of_thoughts": PROGRAM_OF_THOUGHTS,
     "chain_of_verification": CHAIN_OF_VERIFICATION,
     "critic": CRITIC,
@@ -863,11 +856,8 @@ FRAMEWORK_CONFIGS: Dict[str, FrameworkConfig] = {
 
 
 async def run_framework(
-    framework_name: str,
-    sampler: ClientSampler,
-    query: str,
-    context: str
-) -> Dict[str, Any]:
+    framework_name: str, sampler: ClientSampler, query: str, context: str
+) -> dict[str, Any]:
     """Convenience function to run a framework by name.
 
     Args:
@@ -884,16 +874,13 @@ async def run_framework(
     """
     if framework_name not in FRAMEWORK_CONFIGS:
         available = ", ".join(FRAMEWORK_CONFIGS.keys())
-        raise KeyError(
-            f"Framework '{framework_name}' not found. "
-            f"Available: {available}"
-        )
+        raise KeyError(f"Framework '{framework_name}' not found. Available: {available}")
 
     config = FRAMEWORK_CONFIGS[framework_name]
     return await execute_framework(config, sampler, query, context)
 
 
-def get_available_frameworks() -> List[str]:
+def get_available_frameworks() -> list[str]:
     """Return list of all available framework names."""
     return list(FRAMEWORK_CONFIGS.keys())
 

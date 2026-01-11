@@ -11,20 +11,17 @@ import hashlib
 import heapq
 import json
 import time
-import structlog
 from functools import lru_cache
-from typing import Optional, List, Tuple
+
+import structlog
 
 from ..state import GraphState
 from .constants import CONTENT
 from .errors import (
-    RoutingError,
-    FrameworkNotFoundError,
     LLMError,
     ProviderNotConfiguredError,
     RateLimitError,
 )
-from .vibe_dictionary import VIBE_DICTIONARY
 from .routing import (
     CATEGORIES,
     FRAMEWORKS,
@@ -34,6 +31,7 @@ from .routing import (
 from .routing.complexity import ComplexityEstimator
 from .routing.vibes import VibeMatcher
 from .settings import get_settings
+from .vibe_dictionary import VIBE_DICTIONARY
 
 # Precomputed frozenset for O(1) framework membership testing
 # Used in _parse_specialist_response and _extract_framework for fast validation
@@ -112,7 +110,7 @@ class HyperRouter:
         self._cache_ttl_seconds = settings.routing_cache_ttl_seconds
         # Lazy initialization: asyncio.Lock() requires an event loop
         # which may not exist at module load time when global router is created
-        self.__cache_lock: Optional[asyncio.Lock] = None
+        self.__cache_lock: asyncio.Lock | None = None
 
     @property
     def _cache_lock(self) -> asyncio.Lock:
@@ -125,8 +123,7 @@ class HyperRouter:
     # ROUTING CACHE
     # ==========================================================================
 
-
-    def _get_cache_key(self, query: str, code_snippet: Optional[str] = None) -> str:
+    def _get_cache_key(self, query: str, code_snippet: str | None = None) -> str:
         """Generate cache key from query (normalized)."""
         # Normalize: lowercase, strip, first 500 chars
         normalized = query.lower().strip()[:500]
@@ -134,7 +131,7 @@ class HyperRouter:
             normalized += "|" + code_snippet[:200]
         return hashlib.sha256(normalized.encode()).hexdigest()
 
-    async def _get_cached_routing(self, cache_key: str) -> Optional[Tuple[List[str], str, str]]:
+    async def _get_cached_routing(self, cache_key: str) -> tuple[list[str], str, str] | None:
         """Get cached routing decision if valid (thread-safe)."""
         async with self._cache_lock:
             if cache_key not in self._routing_cache:
@@ -148,11 +145,7 @@ class HyperRouter:
             return chain, reasoning, category
 
     async def _set_cached_routing(
-        self,
-        cache_key: str,
-        chain: List[str],
-        reasoning: str,
-        category: str
+        self, cache_key: str, chain: list[str], reasoning: str, category: str
     ) -> None:
         """Cache a routing decision (thread-safe)."""
         async with self._cache_lock:
@@ -213,9 +206,13 @@ class HyperRouter:
         for pattern_name, chain in chain_patterns.items():
             chain_descriptions.append(f"  - {pattern_name}: {' -> '.join(chain)}")
 
-        chain_desc_text = "\n".join(chain_descriptions) if chain_descriptions else "  (none - single framework recommended)"
+        chain_desc_text = (
+            "\n".join(chain_descriptions)
+            if chain_descriptions
+            else "  (none - single framework recommended)"
+        )
         fw_desc_text = "\n".join(fw_descriptions)
-        
+
         return (specialist, fw_desc_text, chain_desc_text)
 
     def _get_specialist_prompt(self, category: str, query: str, context: str = "") -> str:
@@ -242,9 +239,9 @@ class HyperRouter:
         self,
         category: str,
         query: str,
-        code_snippet: Optional[str] = None,
-        ide_context: Optional[str] = None
-    ) -> Tuple[List[str], str]:
+        code_snippet: str | None = None,
+        ide_context: str | None = None,
+    ) -> tuple[list[str], str]:
         """
         Use category specialist agent to select framework(s).
         Returns (list_of_frameworks, reasoning).
@@ -256,7 +253,7 @@ class HyperRouter:
         # Build context
         context = ""
         if code_snippet:
-            context += f"Code:\n{code_snippet[:CONTENT.SNIPPET_SHORT]}..."
+            context += f"Code:\n{code_snippet[: CONTENT.SNIPPET_SHORT]}..."
         if ide_context:
             context += f"\nIDE Context: {ide_context}"
 
@@ -275,10 +272,8 @@ class HyperRouter:
         return [frameworks[0]], fallback_reason
 
     def _check_chain_patterns(
-        self,
-        query: str,
-        chain_patterns: dict
-    ) -> Optional[Tuple[List[str], str]]:
+        self, query: str, chain_patterns: dict
+    ) -> tuple[list[str], str] | None:
         """Check if query matches any predefined chain pattern."""
         query_lower = query.lower()
         for pattern_name, chain in chain_patterns.items():
@@ -288,11 +283,8 @@ class HyperRouter:
         return None
 
     async def _invoke_specialist_agent(
-        self,
-        category: str,
-        query: str,
-        context: str
-    ) -> Optional[Tuple[List[str], str]]:
+        self, category: str, query: str, context: str
+    ) -> tuple[list[str], str] | None:
         """
         Invoke the specialist LLM agent for framework selection.
         Returns None on failure to allow graceful fallback.
@@ -307,10 +299,7 @@ class HyperRouter:
             llm = get_chat_model("fast")
 
             # Wrap LLM call with timeout to prevent indefinite blocking
-            response = await asyncio.wait_for(
-                llm.ainvoke(prompt),
-                timeout=LLM_TIMEOUT_SECONDS
-            )
+            response = await asyncio.wait_for(llm.ainvoke(prompt), timeout=LLM_TIMEOUT_SECONDS)
 
             response_text = self._extract_response_text(response)
             return self._parse_specialist_response(response_text)
@@ -320,19 +309,19 @@ class HyperRouter:
                 "specialist_agent_timeout",
                 category=category,
                 timeout_seconds=LLM_TIMEOUT_SECONDS,
-                hint="LLM call timed out, falling back to local pattern matching"
+                hint="LLM call timed out, falling back to local pattern matching",
             )
         except RateLimitError as e:
             logger.warning(
                 "gemini_billing_issue",
                 error=repr(e),
-                hint="Using local pattern matching. Add GOOGLE_API_KEY with credits for AI routing."
+                hint="Using local pattern matching. Add GOOGLE_API_KEY with credits for AI routing.",
             )
         except ProviderNotConfiguredError as e:
             logger.warning(
                 "gemini_auth_issue",
                 error=repr(e),
-                hint="Set GOOGLE_API_KEY for Gemini-powered routing."
+                hint="Set GOOGLE_API_KEY for Gemini-powered routing.",
             )
         except LLMError as e:
             logger.warning("specialist_selection_failed", error=repr(e))
@@ -340,13 +329,13 @@ class HyperRouter:
             logger.warning(
                 "specialist_response_parse_error",
                 error=str(e)[:100],
-                hint="LLM returned malformed response"
+                hint="LLM returned malformed response",
             )
         except (AttributeError, TypeError, KeyError) as e:
             # Response format errors from unexpected LLM output structure
             wrapped_error = LLMError(
                 f"Unexpected response format: {str(e)[:100]}",
-                details={"category": category, "original_error": type(e).__name__}
+                details={"category": category, "original_error": type(e).__name__},
             )
             logger.warning("specialist_response_format_error", error=repr(wrapped_error))
 
@@ -359,10 +348,7 @@ class HyperRouter:
             return content[0].get("text", str(content)) if content else ""
         return content
 
-    def _parse_specialist_response(
-        self,
-        response_text: str
-    ) -> Optional[Tuple[List[str], str]]:
+    def _parse_specialist_response(self, response_text: str) -> tuple[list[str], str] | None:
         """Parse the specialist agent response to extract frameworks and reasoning."""
         frameworks_line = ""
         reasoning = ""
@@ -378,8 +364,7 @@ class HyperRouter:
 
         # Parse chain: "fw1 -> fw2 -> fw3" or "fw1"
         selected = [
-            fw.strip()
-            for fw in frameworks_line.replace("->", ",").replace("→", ",").split(",")
+            fw.strip() for fw in frameworks_line.replace("->", ",").replace("→", ",").split(",")
         ]
         # O(1) set membership check for each framework in the chain
         selected = [fw for fw in selected if fw in FRAMEWORK_SET]
@@ -390,11 +375,8 @@ class HyperRouter:
         return selected, reasoning or f"Specialist selected: {frameworks_line}"
 
     async def select_framework_chain(
-        self,
-        query: str,
-        code_snippet: Optional[str] = None,
-        ide_context: Optional[str] = None
-    ) -> Tuple[List[str], str, str]:
+        self, query: str, code_snippet: str | None = None, ide_context: str | None = None
+    ) -> tuple[list[str], str, str]:
         """
         Hierarchical routing with chain support.
 
@@ -448,10 +430,7 @@ class HyperRouter:
         return chain, reasoning, category
 
     async def auto_select_framework(
-        self,
-        query: str,
-        code_snippet: Optional[str] = None,
-        ide_context: Optional[str] = None
+        self, query: str, code_snippet: str | None = None, ide_context: str | None = None
     ) -> tuple[str, str]:
         """
         AI-powered framework selection using hierarchical routing.
@@ -473,18 +452,18 @@ class HyperRouter:
             # even when hierarchical routing encounters unexpected errors.
             logger.warning(
                 "framework_chain_selection_failed",
-                error=str(e)[:CONTENT.QUERY_LOG],
-                error_type=type(e).__name__
+                error=str(e)[: CONTENT.QUERY_LOG],
+                error_type=type(e).__name__,
             )
 
         # Legacy fallback: direct vibe matching
         vibe_match = self._vibe_matcher.check_vibe_dictionary(query)
         if vibe_match:
-            return vibe_match, f"Matched vibe: {query[:CONTENT.QUERY_PREVIEW]}..."
+            return vibe_match, f"Matched vibe: {query[: CONTENT.QUERY_PREVIEW]}..."
 
         return "self_discover", "Fallback: routing failed, using self_discover."
 
-    def _extract_framework(self, response: str) -> Optional[str]:
+    def _extract_framework(self, response: str) -> str | None:
         """Extract framework name from LLM response.
 
         Note: This method iterates over all 62 frameworks to find substring matches.
@@ -502,15 +481,12 @@ class HyperRouter:
                 return framework
         return None
 
-    def _heuristic_select(self, query: str, code_snippet: Optional[str] = None) -> str:
+    def _heuristic_select(self, query: str, code_snippet: str | None = None) -> str:
         """Fast heuristic selection (fallback)."""
         return self._vibe_matcher.heuristic_select(query, code_snippet)
 
     def estimate_complexity(
-        self,
-        query: str,
-        code_snippet: Optional[str] = None,
-        file_list: Optional[list[str]] = None
+        self, query: str, code_snippet: str | None = None, file_list: list[str] | None = None
     ) -> float:
         """Estimate task complexity on 0-1 scale."""
         return self._complexity_estimator.estimate(query, code_snippet, file_list)
@@ -548,9 +524,9 @@ class HyperRouter:
                 # This ensures observability while maintaining system availability.
                 logger.warning(
                     "framework_chain_in_route_failed",
-                    error=str(e)[:CONTENT.QUERY_LOG],
+                    error=str(e)[: CONTENT.QUERY_LOG],
                     error_type=type(e).__name__,
-                    query=query[:CONTENT.QUERY_LOG] if query else ""
+                    query=query[: CONTENT.QUERY_LOG] if query else "",
                 )
                 # Fallback to single framework
                 framework, reason = await self.auto_select_framework(
@@ -569,7 +545,9 @@ class HyperRouter:
         state["selected_framework"] = framework_chain[0] if framework_chain else "self_discover"
         state["framework_chain"] = framework_chain
         state["complexity_estimate"] = complexity
-        state["task_type"] = infer_task_type(framework_chain[0] if framework_chain else "self_discover")
+        state["task_type"] = infer_task_type(
+            framework_chain[0] if framework_chain else "self_discover"
+        )
         state["routing_category"] = category
 
         # Inject Past Learnings (Episodic Memory)
@@ -577,6 +555,7 @@ class HyperRouter:
         state["episodic_memory"] = []
         try:
             from ..collection_manager import get_collection_manager
+
             cm = get_collection_manager()
             learnings = cm.search_learnings(query, k=3)
             if learnings:
@@ -588,9 +567,9 @@ class HyperRouter:
             # state["episodic_memory"] already set to [] above for graceful degradation
             logger.warning(
                 "episodic_memory_search_failed",
-                error=str(e)[:CONTENT.QUERY_LOG],
+                error=str(e)[: CONTENT.QUERY_LOG],
                 error_type=type(e).__name__,
-                query=query[:CONTENT.QUERY_LOG] if query else ""
+                query=query[: CONTENT.QUERY_LOG] if query else "",
             )
 
         # Add reasoning step with size limit to prevent unbounded growth
@@ -601,15 +580,17 @@ class HyperRouter:
         # Ensure it's a list (defensive check for malformed state)
         if not isinstance(reasoning_steps, list):
             reasoning_steps = []
-        reasoning_steps.append({
-            "step": "routing",
-            "framework": framework_chain[0] if framework_chain else "self_discover",
-            "framework_chain": framework_chain,
-            "category": category,
-            "reason": reason,
-            "complexity": complexity,
-            "method": "hierarchical_ai" if use_ai else "heuristic"
-        })
+        reasoning_steps.append(
+            {
+                "step": "routing",
+                "framework": framework_chain[0] if framework_chain else "self_discover",
+                "framework_chain": framework_chain,
+                "category": category,
+                "reason": reason,
+                "complexity": complexity,
+                "method": "hierarchical_ai" if use_ai else "heuristic",
+            }
+        )
         # Trim to max size, keeping most recent entries
         if len(reasoning_steps) > MAX_REASONING_STEPS:
             reasoning_steps = reasoning_steps[-MAX_REASONING_STEPS:]
@@ -640,10 +621,10 @@ class HyperRouter:
     async def generate_structured_brief(
         self,
         query: str,
-        context: Optional[str] = None,
-        code_snippet: Optional[str] = None,
-        ide_context: Optional[str] = None,
-        file_list: Optional[List[str]] = None
+        context: str | None = None,
+        code_snippet: str | None = None,
+        ide_context: str | None = None,
+        file_list: list[str] | None = None,
     ) -> "GeminiRouterOutput":
         """
         Generate a structured GeminiRouterOutput with ClaudeCodeBrief.
@@ -661,7 +642,7 @@ class HyperRouter:
             context=context,
             code_snippet=code_snippet,
             ide_context=ide_context,
-            file_list=file_list
+            file_list=file_list,
         )
 
 

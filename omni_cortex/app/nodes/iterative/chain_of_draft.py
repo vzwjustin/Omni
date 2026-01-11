@@ -10,18 +10,17 @@ Implements fast iterative drafting:
 Optimized for speed over depth - useful for time-sensitive tasks.
 """
 
-import asyncio
 import re
-import structlog
 from dataclasses import dataclass
+
+import structlog
 
 from ...state import GraphState
 from ..common import (
-    quiet_star,
-    call_fast_synthesizer,
     add_reasoning_step,
-    format_code_context,
+    call_fast_synthesizer,
     prepare_context_with_gemini,
+    quiet_star,
 )
 
 logger = structlog.get_logger("chain_of_draft")
@@ -33,6 +32,7 @@ TARGET_QUALITY = 0.8
 @dataclass
 class Draft:
     """A draft iteration."""
+
     version: int
     content: str
     word_count: int
@@ -41,20 +41,17 @@ class Draft:
 
 
 async def _generate_draft(
-    query: str,
-    code_context: str,
-    previous_drafts: list[Draft],
-    state: GraphState
+    query: str, code_context: str, previous_drafts: list[Draft], state: GraphState
 ) -> str:
     """Generate a draft, incorporating feedback from previous drafts."""
-    
+
     feedback = ""
     if previous_drafts:
         last = previous_drafts[-1]
-        feedback = f"\n\nPREVIOUS DRAFT WEAKNESSES TO FIX:\n"
+        feedback = "\n\nPREVIOUS DRAFT WEAKNESSES TO FIX:\n"
         feedback += "\n".join(f"- {w}" for w in last.weaknesses)
         feedback += f"\n\nImprove upon the previous draft (quality was {last.quality:.2f})."
-    
+
     prompt = f"""Generate a solution draft. Be concise but complete.
 
 TASK: {query}
@@ -70,13 +67,9 @@ Provide a clear, actionable draft:
     return response
 
 
-async def _evaluate_draft(
-    draft: str,
-    query: str,
-    state: GraphState
-) -> tuple[float, list[str]]:
+async def _evaluate_draft(draft: str, query: str, state: GraphState) -> tuple[float, list[str]]:
     """Quickly evaluate draft and identify weaknesses."""
-    
+
     prompt = f"""Quickly evaluate this draft and identify top 3 weaknesses.
 
 TASK: {query}
@@ -92,15 +85,15 @@ WEAKNESS_3: [Third weakness]
 """
 
     response, _ = await call_fast_synthesizer(prompt, state, max_tokens=256)
-    
+
     quality = 0.5
     weaknesses = []
-    
+
     for line in response.split("\n"):
         line = line.strip()
         if line.startswith("QUALITY:"):
             try:
-                match = re.search(r'(\d+\.?\d*)', line)
+                match = re.search(r"(\d+\.?\d*)", line)
                 if match:
                     quality = max(0.0, min(1.0, float(match.group(1))))
             except ValueError as e:
@@ -109,7 +102,7 @@ WEAKNESS_3: [Third weakness]
             w = line.split(":", 1)[-1].strip()
             if w:
                 weaknesses.append(w)
-    
+
     return quality, weaknesses[:3]
 
 
@@ -117,7 +110,7 @@ WEAKNESS_3: [Third weakness]
 async def chain_of_draft_node(state: GraphState) -> GraphState:
     """
     Chain of Draft Framework - REAL IMPLEMENTATION
-    
+
     Fast iterative drafting:
     - Quick draft generation
     - Rapid weakness identification
@@ -126,58 +119,54 @@ async def chain_of_draft_node(state: GraphState) -> GraphState:
     query = state.get("query", "")
     # Use Gemini to preprocess context via ContextGateway
 
-    code_context = await prepare_context_with_gemini(
+    code_context = await prepare_context_with_gemini(query=query, state=state)
 
-        query=query,
-
-        state=state
-
-    )
-    
     logger.info("chain_of_draft_start", query_preview=query[:50])
-    
+
     drafts: list[Draft] = []
-    
+
     for version in range(1, MAX_DRAFTS + 1):
         # Generate draft
         content = await _generate_draft(query, code_context, drafts, state)
-        
+
         # Evaluate draft
         quality, weaknesses = await _evaluate_draft(content, query, state)
-        
+
         draft = Draft(
             version=version,
             content=content,
             word_count=len(content.split()),
             weaknesses=weaknesses,
-            quality=quality
+            quality=quality,
         )
         drafts.append(draft)
-        
+
         add_reasoning_step(
             state=state,
             framework="chain_of_draft",
             thought=f"Draft {version}: {len(content.split())} words, quality {quality:.2f}",
             action="draft",
-            score=quality
+            score=quality,
         )
-        
+
         logger.info("chain_of_draft_iteration", version=version, quality=quality)
-        
+
         if quality >= TARGET_QUALITY:
             break
-    
+
     # Select best draft
     best_draft = max(drafts, key=lambda d: d.quality)
-    
+
     # Format draft history
-    history = "\n\n".join([
-        f"### Draft {d.version}\n"
-        f"**Quality**: {d.quality:.2f} | **Words**: {d.word_count}\n"
-        f"**Weaknesses**: {', '.join(d.weaknesses) if d.weaknesses else 'None identified'}"
-        for d in drafts
-    ])
-    
+    history = "\n\n".join(
+        [
+            f"### Draft {d.version}\n"
+            f"**Quality**: {d.quality:.2f} | **Words**: {d.word_count}\n"
+            f"**Weaknesses**: {', '.join(d.weaknesses) if d.weaknesses else 'None identified'}"
+            for d in drafts
+        ]
+    )
+
     final_answer = f"""# Chain of Draft Analysis
 
 ## Draft Evolution
@@ -194,7 +183,7 @@ async def chain_of_draft_node(state: GraphState) -> GraphState:
 
     state["final_answer"] = final_answer
     state["confidence_score"] = best_draft.quality
-    
+
     logger.info("chain_of_draft_complete", drafts=len(drafts), quality=best_draft.quality)
-    
+
     return state

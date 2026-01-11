@@ -24,7 +24,9 @@ def get_chat_model(model_type: str = "deep", enable_thinking: bool = False) -> A
     Supports: google, anthropic, openai, openrouter
     """
     settings = get_settings()
-    model_name = settings.deep_reasoning_model if model_type == "deep" else settings.fast_synthesis_model
+    model_name = (
+        settings.deep_reasoning_model if model_type == "deep" else settings.fast_synthesis_model
+    )
     temperature = 0.7 if model_type == "deep" else 0.5
 
     # Remove provider prefix if present (e.g., "google/gemini-3" -> "gemini-3")
@@ -42,30 +44,28 @@ def get_chat_model(model_type: str = "deep", enable_thinking: bool = False) -> A
             model=model_name,
             google_api_key=settings.google_api_key,
             temperature=temp,
-            max_output_tokens=max_tokens
+            max_output_tokens=max_tokens,
         )
 
     elif settings.llm_provider == "anthropic":
         return ChatAnthropic(
-            model=model_name,
-            api_key=settings.anthropic_api_key,
-            temperature=temperature
+            model=model_name, api_key=settings.anthropic_api_key, temperature=temperature
         )
 
     elif settings.llm_provider == "openrouter":
         # OpenRouter needs full model path
-        full_model = settings.deep_reasoning_model if model_type == "deep" else settings.fast_synthesis_model
+        full_model = (
+            settings.deep_reasoning_model if model_type == "deep" else settings.fast_synthesis_model
+        )
         return ChatOpenAI(
             model=full_model,
             api_key=settings.openrouter_api_key,
             base_url=settings.openrouter_base_url,
-            temperature=temperature
+            temperature=temperature,
         )
 
     else:
         # OpenAI
         return ChatOpenAI(
-            model=model_name,
-            api_key=settings.openai_api_key,
-            temperature=temperature
+            model=model_name, api_key=settings.openai_api_key, temperature=temperature
         )

@@ -18,7 +18,8 @@ References:
 """
 
 import os
-from typing import Dict, List, Optional, Union, Any
+from typing import Any
+
 import structlog
 
 logger = structlog.get_logger(__name__)
@@ -31,7 +32,7 @@ class LLMLinguaCompressor:
         self,
         model_name: str = "microsoft/llmlingua-2-bert-base-multilingual-cased-meetingbank",
         device: str = "cpu",
-        cache_dir: Optional[str] = None
+        cache_dir: str | None = None,
     ):
         """
         Initialize LLMLingua-2 compressor.
@@ -56,26 +57,21 @@ class LLMLinguaCompressor:
             from llmlingua import PromptCompressor
 
             logger.info(
-                "Initializing LLMLingua-2 compressor",
-                model=self.model_name,
-                device=self.device
+                "Initializing LLMLingua-2 compressor", model=self.model_name, device=self.device
             )
 
             self._compressor = PromptCompressor(
                 model_name=self.model_name,
                 device_map=self.device,
                 model_config={"revision": "main"},
-                open_api_config={}
+                open_api_config={},
             )
 
             self._initialized = True
             logger.info("LLMLingua-2 compressor initialized successfully")
 
         except ImportError as e:
-            logger.warning(
-                "LLMLingua not installed, compression unavailable",
-                error=str(e)
-            )
+            logger.warning("LLMLingua not installed, compression unavailable", error=str(e))
             raise ImportError(
                 "llmlingua package not installed. Install with: pip install llmlingua"
             ) from e
@@ -87,13 +83,13 @@ class LLMLinguaCompressor:
         self,
         prompt: str,
         rate: float = 0.5,
-        target_token: Optional[int] = None,
-        force_tokens: Optional[List[str]] = None,
+        target_token: int | None = None,
+        force_tokens: list[str] | None = None,
         force_reserve_digit: bool = False,
         drop_consecutive: bool = True,
-        chunk_end_tokens: Optional[List[str]] = None,
-        return_word_label: bool = False
-    ) -> Dict[str, Any]:
+        chunk_end_tokens: list[str] | None = None,
+        return_word_label: bool = False,
+    ) -> dict[str, Any]:
         """
         Compress prompt using LLMLingua-2.
 
@@ -121,23 +117,23 @@ class LLMLinguaCompressor:
                 "compressed_tokens": -1,
                 "ratio": 1.0,
                 "compressed": False,
-                "error": "Compressor not initialized"
+                "error": "Compressor not initialized",
             }
 
         try:
             # Set default force tokens if not provided
             if force_tokens is None:
-                force_tokens = ['\n', '.', '!', '?', ',']
+                force_tokens = ["\n", ".", "!", "?", ","]
 
             # Set default chunk end tokens
             if chunk_end_tokens is None:
-                chunk_end_tokens = ['.', '\n']
+                chunk_end_tokens = [".", "\n"]
 
             logger.debug(
                 "Compressing prompt",
                 original_length=len(prompt),
                 target_rate=rate,
-                target_tokens=target_token
+                target_tokens=target_token,
             )
 
             # Use LLMLingua-2 compression
@@ -149,7 +145,7 @@ class LLMLinguaCompressor:
                 force_reserve_digit=force_reserve_digit,
                 drop_consecutive=drop_consecutive,
                 chunk_end_tokens=chunk_end_tokens,
-                return_word_label=return_word_label
+                return_word_label=return_word_label,
             )
 
             # Add metadata
@@ -160,7 +156,7 @@ class LLMLinguaCompressor:
                 "Prompt compressed successfully",
                 original_tokens=result.get("origin_tokens", -1),
                 compressed_tokens=result.get("compressed_tokens", -1),
-                ratio=result["ratio"]
+                ratio=result["ratio"],
             )
 
             return result
@@ -173,16 +169,12 @@ class LLMLinguaCompressor:
                 "compressed_tokens": -1,
                 "ratio": 1.0,
                 "compressed": False,
-                "error": str(e)
+                "error": str(e),
             }
 
     def compress_with_instruction(
-        self,
-        instruction: str,
-        context: str,
-        rate: float = 0.5,
-        **kwargs
-    ) -> Dict[str, Any]:
+        self, instruction: str, context: str, rate: float = 0.5, **kwargs
+    ) -> dict[str, Any]:
         """
         Compress context while preserving instruction.
 
@@ -214,7 +206,7 @@ class LLMLinguaCompressor:
                 "origin_tokens": context_result.get("origin_tokens", -1),
                 "compressed_tokens": context_result.get("compressed_tokens", -1),
                 "ratio": context_result.get("ratio", rate),
-                "compressed": True
+                "compressed": True,
             }
 
         except Exception as e:
@@ -222,15 +214,12 @@ class LLMLinguaCompressor:
             return {
                 "compressed_prompt": f"{instruction}\n\n{context}",
                 "compressed": False,
-                "error": str(e)
+                "error": str(e),
             }
 
     def compress_multiple(
-        self,
-        prompts: List[str],
-        rate: float = 0.5,
-        **kwargs
-    ) -> List[Dict[str, Any]]:
+        self, prompts: list[str], rate: float = 0.5, **kwargs
+    ) -> list[dict[str, Any]]:
         """
         Compress multiple prompts in batch.
 
@@ -246,17 +235,15 @@ class LLMLinguaCompressor:
 
         results = []
         for i, prompt in enumerate(prompts):
-            logger.debug(f"Compressing prompt {i+1}/{len(prompts)}")
+            logger.debug(f"Compressing prompt {i + 1}/{len(prompts)}")
             result = self.compress(prompt, rate=rate, **kwargs)
             results.append(result)
 
         return results
 
     def get_compression_stats(
-        self,
-        original_prompt: str,
-        compressed_result: Dict[str, Any]
-    ) -> Dict[str, Union[int, float]]:
+        self, original_prompt: str, compressed_result: dict[str, Any]
+    ) -> dict[str, int | float]:
         """
         Calculate detailed compression statistics.
 
@@ -278,23 +265,25 @@ class LLMLinguaCompressor:
             "compressed_chars": compressed_chars,
             "char_reduction": original_chars - compressed_chars,
             "char_reduction_percent": ((original_chars - compressed_chars) / original_chars * 100)
-            if original_chars > 0 else 0,
+            if original_chars > 0
+            else 0,
             "origin_tokens": origin_tokens,
             "compressed_tokens": compressed_tokens,
             "token_reduction": origin_tokens - compressed_tokens if origin_tokens > 0 else -1,
             "token_reduction_percent": ((origin_tokens - compressed_tokens) / origin_tokens * 100)
-            if origin_tokens > 0 else 0,
-            "compression_ratio": compressed_result.get("ratio", 1.0)
+            if origin_tokens > 0
+            else 0,
+            "compression_ratio": compressed_result.get("ratio", 1.0),
         }
 
 
 # Global singleton instance (lazy-loaded)
-_compressor_instance: Optional[LLMLinguaCompressor] = None
+_compressor_instance: LLMLinguaCompressor | None = None
 
 
 def get_compressor(
     model_name: str = "microsoft/llmlingua-2-bert-base-multilingual-cased-meetingbank",
-    device: str = "cpu"
+    device: str = "cpu",
 ) -> LLMLinguaCompressor:
     """
     Get or create global LLMLingua compressor instance.
@@ -309,19 +298,12 @@ def get_compressor(
     global _compressor_instance
 
     if _compressor_instance is None:
-        _compressor_instance = LLMLinguaCompressor(
-            model_name=model_name,
-            device=device
-        )
+        _compressor_instance = LLMLinguaCompressor(model_name=model_name, device=device)
 
     return _compressor_instance
 
 
-def compress_prompt(
-    prompt: str,
-    rate: float = 0.5,
-    **kwargs
-) -> str:
+def compress_prompt(prompt: str, rate: float = 0.5, **kwargs) -> str:
     """
     Convenience function to compress a prompt and return only the compressed text.
 
@@ -347,6 +329,7 @@ def is_available() -> bool:
     """
     try:
         import llmlingua  # noqa: F401
+
         return True
     except ImportError:
         return False

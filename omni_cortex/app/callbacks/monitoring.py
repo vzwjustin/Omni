@@ -4,10 +4,10 @@ Monitoring Callback for Omni-Cortex
 Tracks LLM usage, timing, tokens, and errors.
 """
 
-from typing import Any, List, Dict
+from typing import Any
 
-from langchain_core.callbacks import BaseCallbackHandler
 import structlog
+from langchain_core.callbacks import BaseCallbackHandler
 
 from ..core.constants import CONTENT
 
@@ -24,14 +24,14 @@ class OmniCortexCallback(BaseCallbackHandler):
         self.total_tokens = 0
         self.llm_calls = 0
 
-    def on_llm_start(self, serialized: Dict[str, Any], prompts: List[str], **kwargs) -> None:
+    def on_llm_start(self, serialized: dict[str, Any], prompts: list[str], **kwargs) -> None:
         """Track LLM call start."""
         self.llm_calls += 1
         logger.info(
             "llm_call_start",
             thread_id=self.thread_id,
             call_number=self.llm_calls,
-            prompt_count=len(prompts)
+            prompt_count=len(prompts),
         )
 
     def on_llm_end(self, response, **kwargs) -> None:
@@ -43,36 +43,32 @@ class OmniCortexCallback(BaseCallbackHandler):
         # Handle both object and dict response types (LangChain 1.0+ compatibility)
         llm_output = None
         if isinstance(response, dict):
-            llm_output = response.get('llm_output')
-        elif hasattr(response, 'llm_output'):
+            llm_output = response.get("llm_output")
+        elif hasattr(response, "llm_output"):
             llm_output = response.llm_output
 
         if llm_output:
-            tokens = llm_output.get('token_usage', {}) if isinstance(llm_output, dict) else {}
-            total = tokens.get('total_tokens', 0)
+            tokens = llm_output.get("token_usage", {}) if isinstance(llm_output, dict) else {}
+            total = tokens.get("total_tokens", 0)
             self.total_tokens += total
             logger.info(
                 "llm_call_end",
                 thread_id=self.thread_id,
                 tokens=total,
-                cumulative_tokens=self.total_tokens
+                cumulative_tokens=self.total_tokens,
             )
 
     def on_llm_error(self, error: Exception, **kwargs) -> None:
         """Track LLM errors."""
-        logger.error(
-            "llm_call_error",
-            thread_id=self.thread_id,
-            error=str(error)
-        )
+        logger.error("llm_call_error", thread_id=self.thread_id, error=str(error))
 
-    def on_tool_start(self, serialized: Dict[str, Any], input_str: str, **kwargs) -> None:
+    def on_tool_start(self, serialized: dict[str, Any], input_str: str, **kwargs) -> None:
         """Track tool usage."""
         logger.info(
             "tool_start",
             thread_id=self.thread_id,
             tool=serialized.get("name", "unknown"),
-            input=input_str[:CONTENT.QUERY_LOG]
+            input=input_str[: CONTENT.QUERY_LOG],
         )
 
     def on_tool_end(self, output: str, **kwargs) -> None:

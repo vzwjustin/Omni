@@ -19,14 +19,12 @@ When both are false, template mode is used (server returns prompts, client execu
 import asyncio
 import re
 import time
-from typing import Optional
+
 import structlog
 
-from .settings import get_settings
-from .errors import LLMError, SamplerTimeout, SamplerCircuitOpen
-
 # Import from canonical location to avoid duplication
-from ..nodes.common import extract_code_blocks
+from .errors import LLMError, SamplerCircuitOpen, SamplerTimeout
+from .settings import get_settings
 
 logger = structlog.get_logger("sampling")
 
@@ -45,6 +43,7 @@ LANGCHAIN_LLM_ENABLED = _settings.use_langchain_llm
 
 class SamplingNotSupportedError(Exception):
     """Raised when the MCP client doesn't support sampling."""
+
     pass
 
 
@@ -70,7 +69,7 @@ class ClientSampler:
         prompt: str,
         temperature: float = 0.7,
         max_tokens: int = 4000,
-        system_prompt: Optional[str] = None
+        system_prompt: str | None = None,
     ) -> str:
         """
         Request a completion from the MCP client.
@@ -101,19 +100,14 @@ class ClientSampler:
         # Build message with proper TextContent object (not dict)
         # NOTE: NO automatic compression here - Claude should always receive full, uncompressed
         # context from Gemini. Token reduction is available as opt-in tools only.
-        messages = [
-            SamplingMessage(
-                role="user",
-                content=TextContent(type="text", text=prompt)
-            )
-        ]
+        messages = [SamplingMessage(role="user", content=TextContent(type="text", text=prompt))]
 
         # Get session from context or server
         session = None
         try:
-            if self.context and hasattr(self.context, 'session'):
+            if self.context and hasattr(self.context, "session"):
                 session = self.context.session
-            elif hasattr(self.server, 'request_context') and self.server.request_context:
+            elif hasattr(self.server, "request_context") and self.server.request_context:
                 session = self.server.request_context.session
         except Exception as e:
             logger.warning("failed_to_get_session", error=str(e))
@@ -124,7 +118,7 @@ class ClientSampler:
             )
 
         # Check if session has create_message capability
-        if not hasattr(session, 'create_message'):
+        if not hasattr(session, "create_message"):
             raise SamplingNotSupportedError(
                 "Session doesn't have create_message method. Client may not support sampling."
             )
@@ -137,20 +131,16 @@ class ClientSampler:
                     messages=messages,
                     max_tokens=max_tokens,
                 ),
-                timeout=30.0  # 30 second timeout
+                timeout=30.0,  # 30 second timeout
             )
         except asyncio.TimeoutError:
             raise SamplingNotSupportedError(
                 "Sampling request timed out. Client may not support sampling."
             )
         except AttributeError as e:
-            raise SamplingNotSupportedError(
-                f"Session doesn't support create_message: {e}"
-            )
+            raise SamplingNotSupportedError(f"Session doesn't support create_message: {e}")
         except NotImplementedError as e:
-            raise SamplingNotSupportedError(
-                f"Client doesn't implement sampling: {e}"
-            )
+            raise SamplingNotSupportedError(f"Client doesn't implement sampling: {e}")
         except Exception as e:
             error_str = str(e)
             if "sampling" in error_str.lower() or "not supported" in error_str.lower():
@@ -162,12 +152,12 @@ class ClientSampler:
             raise
 
         # Extract text from response
-        if hasattr(result, 'content'):
+        if hasattr(result, "content"):
             if isinstance(result.content, str):
                 return result.content
-            elif isinstance(result.content, dict) and 'text' in result.content:
-                return result.content['text']
-            elif hasattr(result.content, 'text'):
+            elif isinstance(result.content, dict) and "text" in result.content:
+                return result.content["text"]
+            elif hasattr(result.content, "text"):
                 return result.content.text
 
         # Fallback: convert to string
@@ -183,7 +173,7 @@ class ResilientSampler:
         timeout: float = 30.0,
         max_retries: int = 3,
         circuit_threshold: int = 5,
-        circuit_reset_time: float = 60.0
+        circuit_reset_time: float = 60.0,
     ):
         """
         Initialize a resilient sampler wrapper.
@@ -199,7 +189,7 @@ class ResilientSampler:
         self._timeout = timeout
         self._max_retries = max_retries
         self._failure_count = 0
-        self._circuit_open_until: Optional[float] = None
+        self._circuit_open_until: float | None = None
         self._circuit_threshold = circuit_threshold
         self._circuit_reset_time = circuit_reset_time
 
@@ -208,8 +198,8 @@ class ResilientSampler:
         prompt: str,
         temperature: float = 0.7,
         max_tokens: int = 4000,
-        system_prompt: Optional[str] = None,
-        timeout: Optional[float] = None
+        system_prompt: str | None = None,
+        timeout: float | None = None,
     ) -> str:
         """
         Request a sample with timeout, retry, and circuit breaker protection.
@@ -235,14 +225,12 @@ class ResilientSampler:
             logger.warning(
                 "circuit_breaker_open",
                 remaining_seconds=remaining,
-                failure_count=self._failure_count
+                failure_count=self._failure_count,
             )
-            raise SamplerCircuitOpen(
-                f"Circuit breaker open, retry after {remaining:.0f}s"
-            )
+            raise SamplerCircuitOpen(f"Circuit breaker open, retry after {remaining:.0f}s")
 
         effective_timeout = timeout or self._timeout
-        last_error: Optional[Exception] = None
+        last_error: Exception | None = None
 
         for attempt in range(self._max_retries):
             try:
@@ -250,7 +238,7 @@ class ResilientSampler:
                     "sampler_request_attempt",
                     attempt=attempt + 1,
                     max_retries=self._max_retries,
-                    timeout=effective_timeout
+                    timeout=effective_timeout,
                 )
 
                 result = await asyncio.wait_for(
@@ -258,9 +246,9 @@ class ResilientSampler:
                         prompt=prompt,
                         temperature=temperature,
                         max_tokens=max_tokens,
-                        system_prompt=system_prompt
+                        system_prompt=system_prompt,
                     ),
-                    timeout=effective_timeout
+                    timeout=effective_timeout,
                 )
 
                 # Success - reset failure count
@@ -273,11 +261,7 @@ class ResilientSampler:
                 last_error = SamplerTimeout(
                     f"Request timed out after {effective_timeout}s (attempt {attempt + 1}/{self._max_retries})"
                 )
-                logger.warning(
-                    "sampler_timeout",
-                    attempt=attempt + 1,
-                    timeout=effective_timeout
-                )
+                logger.warning("sampler_timeout", attempt=attempt + 1, timeout=effective_timeout)
 
             except SamplingNotSupportedError:
                 # Don't retry for unsupported sampling - propagate immediately
@@ -289,7 +273,7 @@ class ResilientSampler:
                     "sampler_request_error",
                     attempt=attempt + 1,
                     error=str(e),
-                    error_type=type(e).__name__
+                    error_type=type(e).__name__,
                 )
 
             # Record failure
@@ -301,12 +285,12 @@ class ResilientSampler:
                 logger.error(
                     "circuit_breaker_opened",
                     failure_count=self._failure_count,
-                    reset_after_seconds=self._circuit_reset_time
+                    reset_after_seconds=self._circuit_reset_time,
                 )
 
             # Exponential backoff before next retry
             if attempt < self._max_retries - 1:
-                backoff_time = 2 ** attempt  # 1s, 2s, 4s...
+                backoff_time = 2**attempt  # 1s, 2s, 4s...
                 logger.debug("sampler_backoff", seconds=backoff_time)
                 await asyncio.sleep(backoff_time)
 
@@ -351,11 +335,11 @@ def extract_score(text: str, default: float = 0.5) -> float:
     """
     # Try to find score/rating patterns
     patterns = [
-        r'(?:score|rating):\s*(-?\d+(?:\.\d+)?)\s*/\s*(\d+)',  # "Score: 8/10" or "-5/10"
-        r'(?:score|rating):\s*(-?\d+(?:\.\d+)?)',  # "Score: 8.5" or "-5"
-        r'(-?\d+(?:\.\d+)?)\s*/\s*(\d+)',  # "8/10"
-        r'(-?\d+(?:\.\d+)?)\s+out of\s+(\d+)',  # "8 out of 10"
-        r'^(-?\d+(?:\.\d+)?)$',  # Just "8.5"
+        r"(?:score|rating):\s*(-?\d+(?:\.\d+)?)\s*/\s*(\d+)",  # "Score: 8/10" or "-5/10"
+        r"(?:score|rating):\s*(-?\d+(?:\.\d+)?)",  # "Score: 8.5" or "-5"
+        r"(-?\d+(?:\.\d+)?)\s*/\s*(\d+)",  # "8/10"
+        r"(-?\d+(?:\.\d+)?)\s+out of\s+(\d+)",  # "8 out of 10"
+        r"^(-?\d+(?:\.\d+)?)$",  # Just "8.5"
     ]
 
     text_lower = text.lower().strip()
@@ -381,7 +365,7 @@ def extract_score(text: str, default: float = 0.5) -> float:
     return default
 
 
-def extract_json_object(text: str) -> Optional[dict]:
+def extract_json_object(text: str) -> dict | None:
     """Attempt to extract a JSON object from text."""
     import json
 
@@ -405,7 +389,7 @@ def extract_json_object(text: str) -> Optional[dict]:
         logger.debug("json_full_text_parse_failed", error=str(e), text_preview=text[:100])
 
     # Try to find JSON object anywhere in text
-    json_obj_pattern = r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}'
+    json_obj_pattern = r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}"
     matches = re.findall(json_obj_pattern, text)
     for match in matches:
         try:
@@ -423,11 +407,12 @@ def extract_json_object(text: str) -> Optional[dict]:
 # LangChain LLM Fallback
 # =============================================================================
 
+
 async def call_llm_with_fallback(
     prompt: str,
-    sampler: Optional[ClientSampler] = None,
+    sampler: ClientSampler | None = None,
     max_tokens: int = 4000,
-    temperature: float = 0.7
+    temperature: float = 0.7,
 ) -> str:
     """
     Try MCP sampling first, fall back to LangChain direct API if enabled.
@@ -453,9 +438,7 @@ async def call_llm_with_fallback(
     if SAMPLING_ENABLED and sampler:
         try:
             return await sampler.request_sample(
-                prompt=prompt,
-                max_tokens=max_tokens,
-                temperature=temperature
+                prompt=prompt, max_tokens=max_tokens, temperature=temperature
             )
         except SamplingNotSupportedError:
             logger.info("mcp_sampling_failed_trying_fallback")
@@ -468,17 +451,10 @@ async def call_llm_with_fallback(
             from ..nodes.common import call_deep_reasoner
 
             # Create minimal state for the LLM call
-            state = {
-                "tokens_used": 0,
-                "working_memory": {},
-                "quiet_thoughts": []
-            }
+            state = {"tokens_used": 0, "working_memory": {}, "quiet_thoughts": []}
 
             response, tokens = await call_deep_reasoner(
-                prompt=prompt,
-                state=state,
-                max_tokens=max_tokens,
-                temperature=temperature
+                prompt=prompt, state=state, max_tokens=max_tokens, temperature=temperature
             )
 
             logger.info("langchain_llm_response", tokens=tokens)

@@ -19,13 +19,15 @@ Usage:
 """
 
 import json
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
+
 import structlog
 
-from .toon import TOONEncoder, TOONDecoder, get_token_savings
-from .llmlingua_compressor import get_compressor, is_available as llmlingua_available
-from .settings import get_settings
 from .context_utils import count_tokens
+from .llmlingua_compressor import get_compressor
+from .llmlingua_compressor import is_available as llmlingua_available
+from .settings import get_settings
+from .toon import TOONDecoder, TOONEncoder, get_token_savings
 
 logger = structlog.get_logger(__name__)
 
@@ -36,8 +38,8 @@ class TokenReductionManager:
     def __init__(self):
         """Initialize token reduction manager."""
         self.settings = get_settings()
-        self._toon_encoder: Optional[TOONEncoder] = None
-        self._toon_decoder: Optional[TOONDecoder] = None
+        self._toon_encoder: TOONEncoder | None = None
+        self._toon_decoder: TOONDecoder | None = None
         self._llmlingua_available = llmlingua_available()
 
     @property
@@ -45,8 +47,7 @@ class TokenReductionManager:
         """Get or create TOON encoder."""
         if self._toon_encoder is None:
             self._toon_encoder = TOONEncoder(
-                delimiter=self.settings.toon_delimiter,
-                threshold=self.settings.toon_array_threshold
+                delimiter=self.settings.toon_delimiter, threshold=self.settings.toon_array_threshold
             )
         return self._toon_encoder
 
@@ -54,9 +55,7 @@ class TokenReductionManager:
     def toon_decoder(self) -> TOONDecoder:
         """Get or create TOON decoder."""
         if self._toon_decoder is None:
-            self._toon_decoder = TOONDecoder(
-                delimiter=self.settings.toon_delimiter
-            )
+            self._toon_decoder = TOONDecoder(delimiter=self.settings.toon_delimiter)
         return self._toon_decoder
 
     def serialize_to_toon(self, data: Any) -> str:
@@ -98,11 +97,8 @@ class TokenReductionManager:
             return json.loads(toon_str)
 
     def compress_prompt(
-        self,
-        prompt: str,
-        rate: Optional[float] = None,
-        min_tokens: Optional[int] = None
-    ) -> Dict[str, Any]:
+        self, prompt: str, rate: float | None = None, min_tokens: int | None = None
+    ) -> dict[str, Any]:
         """
         Compress prompt using LLMLingua-2.
 
@@ -118,14 +114,14 @@ class TokenReductionManager:
             return {
                 "compressed_prompt": prompt,
                 "compressed": False,
-                "reason": "LLMLingua compression disabled"
+                "reason": "LLMLingua compression disabled",
             }
 
         if not self._llmlingua_available:
             return {
                 "compressed_prompt": prompt,
                 "compressed": False,
-                "reason": "LLMLingua not available"
+                "reason": "LLMLingua not available",
             }
 
         # Check minimum token threshold
@@ -136,13 +132,12 @@ class TokenReductionManager:
             return {
                 "compressed_prompt": prompt,
                 "compressed": False,
-                "reason": f"Below minimum threshold ({token_count} < {min_tokens})"
+                "reason": f"Below minimum threshold ({token_count} < {min_tokens})",
             }
 
         try:
             compressor = get_compressor(
-                model_name=self.settings.llmlingua_model_name,
-                device=self.settings.llmlingua_device
+                model_name=self.settings.llmlingua_model_name, device=self.settings.llmlingua_device
             )
 
             rate = rate or self.settings.llmlingua_compression_rate
@@ -153,25 +148,18 @@ class TokenReductionManager:
                 "Prompt compressed with LLMLingua",
                 original_tokens=result.get("origin_tokens", -1),
                 compressed_tokens=result.get("compressed_tokens", -1),
-                ratio=result.get("ratio", rate)
+                ratio=result.get("ratio", rate),
             )
 
             return result
 
         except Exception as e:
             logger.error("LLMLingua compression failed", error=str(e))
-            return {
-                "compressed_prompt": prompt,
-                "compressed": False,
-                "error": str(e)
-            }
+            return {"compressed_prompt": prompt, "compressed": False, "error": str(e)}
 
     def compress_context(
-        self,
-        instruction: str,
-        context: str,
-        rate: Optional[float] = None
-    ) -> Dict[str, Any]:
+        self, instruction: str, context: str, rate: float | None = None
+    ) -> dict[str, Any]:
         """
         Compress context while preserving instruction (useful for RAG).
 
@@ -184,23 +172,17 @@ class TokenReductionManager:
             Dict with compressed result
         """
         if not self.settings.enable_llmlingua_compression or not self._llmlingua_available:
-            return {
-                "compressed_prompt": f"{instruction}\n\n{context}",
-                "compressed": False
-            }
+            return {"compressed_prompt": f"{instruction}\n\n{context}", "compressed": False}
 
         try:
             compressor = get_compressor(
-                model_name=self.settings.llmlingua_model_name,
-                device=self.settings.llmlingua_device
+                model_name=self.settings.llmlingua_model_name, device=self.settings.llmlingua_device
             )
 
             rate = rate or self.settings.llmlingua_compression_rate
 
             result = compressor.compress_with_instruction(
-                instruction=instruction,
-                context=context,
-                rate=rate
+                instruction=instruction, context=context, rate=rate
             )
 
             return result
@@ -210,10 +192,10 @@ class TokenReductionManager:
             return {
                 "compressed_prompt": f"{instruction}\n\n{context}",
                 "compressed": False,
-                "error": str(e)
+                "error": str(e),
             }
 
-    def optimize_structured_data(self, data: Union[Dict, List]) -> str:
+    def optimize_structured_data(self, data: dict | list) -> str:
         """
         Optimize structured data using TOON serialization.
 
@@ -225,10 +207,7 @@ class TokenReductionManager:
         """
         return self.serialize_to_toon(data)
 
-    def get_format_comparison(
-        self,
-        data: Union[Dict, List]
-    ) -> Dict[str, Any]:
+    def get_format_comparison(self, data: dict | list) -> dict[str, Any]:
         """
         Compare JSON vs TOON format efficiency.
 
@@ -247,23 +226,15 @@ class TokenReductionManager:
         savings = get_token_savings(json_str, toon_str)
 
         return {
-            "json": {
-                "chars": len(json_str),
-                "tokens": json_tokens,
-                "format": "json"
-            },
-            "toon": {
-                "chars": len(toon_str),
-                "tokens": toon_tokens,
-                "format": "toon"
-            },
+            "json": {"chars": len(json_str), "tokens": json_tokens, "format": "json"},
+            "toon": {"chars": len(toon_str), "tokens": toon_tokens, "format": "toon"},
             "savings": savings,
-            "recommendation": "toon" if toon_tokens < json_tokens else "json"
+            "recommendation": "toon" if toon_tokens < json_tokens else "json",
         }
 
 
 # Global singleton
-_manager: Optional[TokenReductionManager] = None
+_manager: TokenReductionManager | None = None
 
 
 def get_manager() -> TokenReductionManager:
@@ -284,17 +255,15 @@ def deserialize_from_toon(toon_str: str) -> Any:
     return get_manager().deserialize_from_toon(toon_str)
 
 
-def compress_prompt(prompt: str, rate: Optional[float] = None) -> str:
+def compress_prompt(prompt: str, rate: float | None = None) -> str:
     """Convenience function to compress prompt with LLMLingua-2."""
     result = get_manager().compress_prompt(prompt, rate=rate)
     return result.get("compressed_prompt", prompt)
 
 
 def reduce_tokens(
-    content: str,
-    content_type: str = "text",
-    auto_detect: bool = True
-) -> Dict[str, Any]:
+    content: str, content_type: str = "text", auto_detect: bool = True
+) -> dict[str, Any]:
     """
     Automatically reduce tokens based on content type and settings.
 
@@ -320,7 +289,9 @@ def reduce_tokens(
                     "method": "toon",
                     "original_tokens": count_tokens(content),
                     "reduced_tokens": count_tokens(toon_str),
-                    "reduction_percent": (1 - count_tokens(toon_str) / count_tokens(content)) * 100 if count_tokens(content) > 0 else 0.0
+                    "reduction_percent": (1 - count_tokens(toon_str) / count_tokens(content)) * 100
+                    if count_tokens(content) > 0
+                    else 0.0,
                 }
         except json.JSONDecodeError:
             pass
@@ -334,7 +305,7 @@ def reduce_tokens(
                 "method": "llmlingua",
                 "original_tokens": result.get("origin_tokens", -1),
                 "reduced_tokens": result.get("compressed_tokens", -1),
-                "reduction_percent": (1 - result.get("ratio", 1.0)) * 100
+                "reduction_percent": (1 - result.get("ratio", 1.0)) * 100,
             }
 
     # No reduction applied
@@ -343,15 +314,11 @@ def reduce_tokens(
         "method": "none",
         "original_tokens": count_tokens(content),
         "reduced_tokens": count_tokens(content),
-        "reduction_percent": 0
+        "reduction_percent": 0,
     }
 
 
-def get_reduction_stats(
-    original: str,
-    reduced: str,
-    method: str
-) -> Dict[str, Any]:
+def get_reduction_stats(original: str, reduced: str, method: str) -> dict[str, Any]:
     """
     Calculate token reduction statistics.
 
@@ -374,6 +341,7 @@ def get_reduction_stats(
         "reduced_tokens": reduced_tokens,
         "tokens_saved": original_tokens - reduced_tokens,
         "reduction_percent": ((original_tokens - reduced_tokens) / original_tokens * 100)
-        if original_tokens > 0 else 0,
-        "compression_ratio": reduced_tokens / original_tokens if original_tokens > 0 else 1.0
+        if original_tokens > 0
+        else 0,
+        "compression_ratio": reduced_tokens / original_tokens if original_tokens > 0 else 1.0,
     }

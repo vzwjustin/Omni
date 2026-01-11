@@ -7,14 +7,15 @@ enabling precise retrieval based on context.
 
 import os
 import threading
-from typing import Any, Dict, List, Optional
+from typing import Any
+
+import structlog
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
-import structlog
 
-from .core.settings import get_settings
-from .core.errors import RAGError, CollectionNotFoundError, EmbeddingError
 from .core.correlation import get_correlation_id
+from .core.errors import CollectionNotFoundError, EmbeddingError, RAGError
+from .core.settings import get_settings
 
 logger = structlog.get_logger("collection-manager")
 
@@ -35,16 +36,15 @@ class CollectionManager:
         "learnings": "Successful solutions and past problem resolutions",
         "debugging_knowledge": "Bug-fix pairs and debugging patterns from curated datasets",
         "reasoning_knowledge": "Chain-of-thought and step-by-step reasoning examples",
-        "instruction_knowledge": "Instruction-following and task completion examples"
+        "instruction_knowledge": "Instruction-following and task completion examples",
     }
 
-    def __init__(self, persist_dir: Optional[str] = None) -> None:
-        import os
+    def __init__(self, persist_dir: str | None = None) -> None:
         self.persist_dir = persist_dir or str(get_settings().chroma_persist_dir)
         os.makedirs(self.persist_dir, exist_ok=True)
 
         self._embedding_function: Any = None
-        self._collections: Dict[str, Chroma] = {}
+        self._collections: dict[str, Chroma] = {}
         self._collections_lock = threading.Lock()
         self._embedding_lock = threading.Lock()
 
@@ -67,6 +67,7 @@ class CollectionManager:
 
             # Import shared embedding function to avoid duplication
             from .langchain_integration import _get_embeddings
+
             try:
                 self._embedding_function = _get_embeddings()
                 logger.info("embedding_init_success", provider=get_settings().llm_provider)
@@ -79,16 +80,12 @@ class CollectionManager:
                     "embedding_init_failed",
                     error=str(e),
                     error_type=type(e).__name__,
-                    correlation_id=get_correlation_id()
+                    correlation_id=get_correlation_id(),
                 )
                 raise EmbeddingError(f"Failed to initialize embeddings: {e}") from e
         return self._embedding_function
 
-    def get_collection(
-        self,
-        collection_name: str,
-        raise_on_error: bool = False
-    ) -> Optional[Chroma]:
+    def get_collection(self, collection_name: str, raise_on_error: bool = False) -> Chroma | None:
         """Get or create a collection (thread-safe).
 
         Args:
@@ -115,7 +112,7 @@ class CollectionManager:
                 collection = Chroma(
                     collection_name=f"omni-cortex-{collection_name}",
                     persist_directory=self.persist_dir,
-                    embedding_function=self.get_embedding_function()
+                    embedding_function=self.get_embedding_function(),
                 )
                 self._collections[collection_name] = collection
                 logger.info("collection_loaded", name=collection_name)
@@ -130,7 +127,7 @@ class CollectionManager:
                     name=collection_name,
                     error=str(e),
                     error_type=type(e).__name__,
-                    correlation_id=get_correlation_id()
+                    correlation_id=get_correlation_id(),
                 )
                 if raise_on_error:
                     raise RAGError(f"Failed to load collection {collection_name}: {e}") from e
@@ -139,11 +136,11 @@ class CollectionManager:
     def search(
         self,
         query: str,
-        collection_names: Optional[List[str]] = None,
+        collection_names: list[str] | None = None,
         k: int = 5,
-        filter_dict: Optional[Dict[str, Any]] = None,
-        raise_on_error: bool = False
-    ) -> List[Document]:
+        filter_dict: dict[str, Any] | None = None,
+        raise_on_error: bool = False,
+    ) -> list[Document]:
         """
         Search across one or more collections.
 
@@ -153,10 +150,10 @@ class CollectionManager:
             k: Number of results per collection
             filter_dict: Metadata filters (e.g., {"category": "framework"})
             raise_on_error: If True, raise on total search failure
-            
+
         Returns:
             List of matching documents
-            
+
         Raises:
             ValueError: If inputs are invalid
             RAGError: If raise_on_error=True and all searches fail
@@ -166,7 +163,7 @@ class CollectionManager:
             raise ValueError("query cannot be empty")
         if k <= 0:
             raise ValueError(f"k must be positive, got {k}")
-            
+
         if collection_names is None:
             collection_names = list(self.COLLECTIONS.keys())
 
@@ -182,11 +179,7 @@ class CollectionManager:
 
             try:
                 if filter_dict:
-                    results = collection.similarity_search(
-                        query,
-                        k=k,
-                        filter=filter_dict
-                    )
+                    results = collection.similarity_search(query, k=k, filter=filter_dict)
                 else:
                     results = collection.similarity_search(query, k=k)
                 searched_collections += 1
@@ -199,7 +192,7 @@ class CollectionManager:
                     collection=coll_name,
                     error=str(e),
                     error_type=type(e).__name__,
-                    correlation_id=get_correlation_id()
+                    correlation_id=get_correlation_id(),
                 )
                 errors.append(f"{coll_name}: {e}")
             except (ValueError, TypeError, KeyError) as e:
@@ -208,7 +201,7 @@ class CollectionManager:
                     "search_validation_failed",
                     collection=coll_name,
                     error=str(e),
-                    correlation_id=get_correlation_id()
+                    correlation_id=get_correlation_id(),
                 )
                 errors.append(f"{coll_name}: validation error")
             except Exception as e:
@@ -219,7 +212,7 @@ class CollectionManager:
                     collection=coll_name,
                     error=str(e),
                     error_type=type(e).__name__,
-                    correlation_id=get_correlation_id()
+                    correlation_id=get_correlation_id(),
                 )
                 errors.append(f"{coll_name}: {e}")
 
@@ -232,10 +225,10 @@ class CollectionManager:
     def search_frameworks(
         self,
         query: str,
-        framework_name: Optional[str] = None,
-        framework_category: Optional[str] = None,
-        k: int = 5
-    ) -> List[Document]:
+        framework_name: str | None = None,
+        framework_category: str | None = None,
+        k: int = 5,
+    ) -> list[Document]:
         """Search specifically in framework code."""
         filter_dict = {}
         if framework_name:
@@ -247,47 +240,44 @@ class CollectionManager:
             query,
             collection_names=["frameworks"],
             k=k,
-            filter_dict=filter_dict if filter_dict else None
+            filter_dict=filter_dict if filter_dict else None,
         )
 
-    def search_documentation(self, query: str, k: int = 5) -> List[Document]:
+    def search_documentation(self, query: str, k: int = 5) -> list[Document]:
         """Search specifically in documentation."""
         return self.search(query, collection_names=["documentation"], k=k)
 
-    def search_by_function(self, function_name: str, k: int = 3) -> List[Document]:
+    def search_by_function(self, function_name: str, k: int = 3) -> list[Document]:
         """Find specific function implementations."""
         return self.search(
             function_name,
             collection_names=["frameworks", "utilities"],
             k=k,
-            filter_dict={"chunk_type": "function"}
+            filter_dict={"chunk_type": "function"},
         )
 
-    def search_by_class(self, class_name: str, k: int = 3) -> List[Document]:
+    def search_by_class(self, class_name: str, k: int = 3) -> list[Document]:
         """Find specific class implementations."""
         return self.search(
             class_name,
             collection_names=["frameworks", "utilities"],
             k=k,
-            filter_dict={"chunk_type": "class"}
+            filter_dict={"chunk_type": "class"},
         )
 
     def add_documents(
-        self,
-        texts: List[str],
-        metadatas: List[Dict[str, Any]],
-        collection_name: str = "frameworks"
+        self, texts: list[str], metadatas: list[dict[str, Any]], collection_name: str = "frameworks"
     ) -> int:
         """Add documents to a specific collection.
-        
+
         Args:
             texts: List of document texts to add
             metadatas: List of metadata dicts (must match texts length)
             collection_name: Target collection name
-            
+
         Returns:
             Number of documents added
-            
+
         Raises:
             ValueError: If inputs are invalid
             RAGError: If document addition fails
@@ -298,10 +288,12 @@ class CollectionManager:
         if not isinstance(texts, list):
             raise ValueError("texts must be a list")
         if metadatas and len(metadatas) != len(texts):
-            raise ValueError(f"metadatas length ({len(metadatas)}) must match texts length ({len(texts)})")
+            raise ValueError(
+                f"metadatas length ({len(metadatas)}) must match texts length ({len(texts)})"
+            )
         if not collection_name or not collection_name.strip():
             raise ValueError("collection_name cannot be empty")
-            
+
         collection = self.get_collection(collection_name)
         if not collection:
             return 0
@@ -319,7 +311,7 @@ class CollectionManager:
                 "add_documents_validation_failed",
                 collection=collection_name,
                 error=str(e),
-                correlation_id=get_correlation_id()
+                correlation_id=get_correlation_id(),
             )
             raise RAGError(f"Invalid document data for {collection_name}: {e}") from e
         except Exception as e:
@@ -329,11 +321,11 @@ class CollectionManager:
                 collection=collection_name,
                 error=str(e),
                 error_type=type(e).__name__,
-                correlation_id=get_correlation_id()
+                correlation_id=get_correlation_id(),
             )
             raise RAGError(f"Failed to add documents to {collection_name}: {e}") from e
 
-    def route_to_collection(self, metadata: Dict[str, Any]) -> str:
+    def route_to_collection(self, metadata: dict[str, Any]) -> str:
         """Determine which collection a document belongs to based on metadata."""
         category = metadata.get("category", "")
         file_type = metadata.get("file_type", "")
@@ -363,7 +355,7 @@ class CollectionManager:
         answer: str,
         framework_used: str,
         success_rating: float = 1.0,
-        problem_type: str = "general"
+        problem_type: str = "general",
     ) -> bool:
         """
         Store a successful solution in the learnings collection.
@@ -390,19 +382,16 @@ class CollectionManager:
                 "framework_used": framework_used,
                 "success_rating": success_rating,
                 "problem_type": problem_type,
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.utcnow().isoformat(),
             }
 
-            collection.add_texts(
-                texts=[combined_text],
-                metadatas=[metadata]
-            )
+            collection.add_texts(texts=[combined_text], metadatas=[metadata])
 
             logger.info(
                 "learning_saved",
                 framework=framework_used,
                 problem_type=problem_type,
-                rating=success_rating
+                rating=success_rating,
             )
             return True
         except EmbeddingError:
@@ -416,16 +405,13 @@ class CollectionManager:
                 "learning_save_failed",
                 error=str(e),
                 error_type=type(e).__name__,
-                correlation_id=get_correlation_id()
+                correlation_id=get_correlation_id(),
             )
             raise RAGError(f"Failed to save learning: {e}") from e
 
     def search_learnings(
-        self,
-        query: str,
-        k: int = 3,
-        min_rating: float = 0.5
-    ) -> List[Dict[str, Any]]:
+        self, query: str, k: int = 3, min_rating: float = 0.5
+    ) -> list[dict[str, Any]]:
         """
         Search for similar past solutions.
 
@@ -445,7 +431,7 @@ class CollectionManager:
             # Search for similar problems
             results = collection.similarity_search(
                 query,
-                k=k * 2  # Get more, then filter by rating
+                k=k * 2,  # Get more, then filter by rating
             )
 
             learnings = []
@@ -455,13 +441,17 @@ class CollectionManager:
 
                 if rating >= min_rating:
                     # Extract query and answer from metadata
-                    learnings.append({
-                        "problem": metadata.get("query", ""),
-                        "solution": doc.page_content.split("Solution")[-1].strip() if "Solution" in doc.page_content else "",
-                        "framework": metadata.get("framework_used", ""),
-                        "rating": rating,
-                        "problem_type": metadata.get("problem_type", "general")
-                    })
+                    learnings.append(
+                        {
+                            "problem": metadata.get("query", ""),
+                            "solution": doc.page_content.split("Solution")[-1].strip()
+                            if "Solution" in doc.page_content
+                            else "",
+                            "framework": metadata.get("framework_used", ""),
+                            "rating": rating,
+                            "problem_type": metadata.get("problem_type", "general"),
+                        }
+                    )
 
                 if len(learnings) >= k:
                     break
@@ -477,17 +467,13 @@ class CollectionManager:
                 "learning_search_failed",
                 error=str(e),
                 error_type=type(e).__name__,
-                correlation_id=get_correlation_id()
+                correlation_id=get_correlation_id(),
             )
             raise RAGError(f"Failed to search learnings: {e}") from e
 
     def search_debugging_knowledge(
-        self,
-        query: str,
-        k: int = 5,
-        bug_type: Optional[str] = None,
-        language: str = "python"
-    ) -> List[Document]:
+        self, query: str, k: int = 5, bug_type: str | None = None, language: str = "python"
+    ) -> list[Document]:
         """
         Search for similar bug-fix patterns from curated datasets.
 
@@ -510,9 +496,7 @@ class CollectionManager:
                 filter_dict["bug_type"] = bug_type
 
             results = collection.similarity_search(
-                query,
-                k=k,
-                filter=filter_dict if filter_dict else None
+                query, k=k, filter=filter_dict if filter_dict else None
             )
 
             logger.debug("debugging_knowledge_retrieved", count=len(results), bug_type=bug_type)
@@ -526,16 +510,13 @@ class CollectionManager:
                 "debugging_knowledge_search_failed",
                 error=str(e),
                 error_type=type(e).__name__,
-                correlation_id=get_correlation_id()
+                correlation_id=get_correlation_id(),
             )
             raise RAGError(f"Failed to search debugging knowledge: {e}") from e
 
     def search_reasoning_knowledge(
-        self,
-        query: str,
-        k: int = 5,
-        reasoning_type: Optional[str] = None
-    ) -> List[Document]:
+        self, query: str, k: int = 5, reasoning_type: str | None = None
+    ) -> list[Document]:
         """
         Search for similar reasoning patterns (chain-of-thought examples).
 
@@ -557,9 +538,7 @@ class CollectionManager:
                 filter_dict["reasoning_type"] = reasoning_type
 
             results = collection.similarity_search(
-                query,
-                k=k,
-                filter=filter_dict if filter_dict else None
+                query, k=k, filter=filter_dict if filter_dict else None
             )
 
             logger.debug("reasoning_knowledge_retrieved", count=len(results))
@@ -573,17 +552,13 @@ class CollectionManager:
                 "reasoning_knowledge_search_failed",
                 error=str(e),
                 error_type=type(e).__name__,
-                correlation_id=get_correlation_id()
+                correlation_id=get_correlation_id(),
             )
             raise RAGError(f"Failed to search reasoning knowledge: {e}") from e
 
     def search_instruction_knowledge(
-        self,
-        query: str,
-        k: int = 5,
-        task_type: Optional[str] = None,
-        language: str = "python"
-    ) -> List[Document]:
+        self, query: str, k: int = 5, task_type: str | None = None, language: str = "python"
+    ) -> list[Document]:
         """
         Search for similar instruction-following examples.
 
@@ -606,9 +581,7 @@ class CollectionManager:
                 filter_dict["task_type"] = task_type
 
             results = collection.similarity_search(
-                query,
-                k=k,
-                filter=filter_dict if filter_dict else None
+                query, k=k, filter=filter_dict if filter_dict else None
             )
 
             logger.debug("instruction_knowledge_retrieved", count=len(results))
@@ -622,12 +595,12 @@ class CollectionManager:
                 "instruction_knowledge_search_failed",
                 error=str(e),
                 error_type=type(e).__name__,
-                correlation_id=get_correlation_id()
+                correlation_id=get_correlation_id(),
             )
             raise RAGError(f"Failed to search instruction knowledge: {e}") from e
 
     @staticmethod
-    def _deduplicate_results(results: List[Document]) -> List[Document]:
+    def _deduplicate_results(results: list[Document]) -> list[Document]:
         """Remove duplicate results based on content."""
         seen = set()
         unique = []
@@ -645,7 +618,7 @@ class CollectionManager:
 
 
 # Global collection manager instance
-_collection_manager: Optional[CollectionManager] = None
+_collection_manager: CollectionManager | None = None
 
 
 def get_collection_manager() -> CollectionManager:

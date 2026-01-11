@@ -50,32 +50,28 @@ Usage:
 """
 
 from .registry import (
-    # Core types
-    FrameworkDefinition,
-    FrameworkCategory,
-    FrameworkNotFoundError,
-
     # Registry
     FRAMEWORKS,
-    register,
-
-    # Framework access
-    get_framework,
-    get_framework_safe,
-    get_frameworks_by_category,
-    get_framework_names,
-    get_frameworks_dict,
-
     # Vibe-based routing (backward compatibility)
     VIBE_DICTIONARY,
-    match_vibes,
-    get_all_vibes,
+    FrameworkCategory,
+    # Core types
+    FrameworkDefinition,
+    FrameworkNotFoundError,
+    count,
     find_by_vibe,
-
+    get_all_vibes,
+    # Framework access
+    get_framework,
+    get_framework_names,
+    get_framework_safe,
+    get_frameworks_by_category,
+    get_frameworks_dict,
     # Utilities
     infer_task_type,
     list_by_category,
-    count,
+    match_vibes,
+    register,
 )
 
 __all__ = [
@@ -83,24 +79,20 @@ __all__ = [
     "FrameworkDefinition",
     "FrameworkCategory",
     "FrameworkNotFoundError",
-
     # Registry
     "FRAMEWORKS",
     "register",
-
     # Framework access
     "get_framework",
     "get_framework_safe",
     "get_frameworks_by_category",
     "get_framework_names",
     "get_frameworks_dict",
-
     # Vibe-based routing
     "VIBE_DICTIONARY",
     "match_vibes",
     "get_all_vibes",
     "find_by_vibe",
-
     # Utilities
     "infer_task_type",
     "list_by_category",

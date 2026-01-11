@@ -7,21 +7,20 @@ for enhanced capabilities like code execution, documentation search, etc.
 Refactored to include security checks for dangerous tools.
 """
 
-from typing import Optional, List, Any
+import os
+from typing import Any
+
+import structlog
+
+from ..core.settings import get_settings
 from ..langchain_integration import AVAILABLE_TOOLS
 from ..state import GraphState
-from ..core.settings import get_settings
-from ..core.errors import SecurityError
-import structlog
-import os
 
 logger = structlog.get_logger("langchain-tools")
 
 
 async def call_langchain_tool(
-    tool_name: str,
-    tool_input: Any,
-    state: Optional[GraphState] = None
+    tool_name: str, tool_input: Any, state: GraphState | None = None
 ) -> Any:
     """
     Call a LangChain tool by name.
@@ -45,18 +44,18 @@ async def call_langchain_tool(
     if tool_name == "execute_code":
         # Check environment setting
         settings = get_settings()
-        
+
         # STRICT ENFORCEMENT: Unless explicitly overridden by env var, BLOCK unsafe execution.
         # This prevents accidental RCE in production environments.
         allow_unsafe = os.environ.get("ALLOW_UNSAFE_CODE_EXECUTION", "false").lower() == "true"
-        
+
         # In a real production system, we would check for a sandbox provider here.
         # For now, we block by default.
         if not allow_unsafe:
             logger.error(
                 "security_violation_blocked",
                 tool="execute_code",
-                reason="Unsafe code execution blocked. Set ALLOW_UNSAFE_CODE_EXECUTION=true to override (DEV ONLY)."
+                reason="Unsafe code execution blocked. Set ALLOW_UNSAFE_CODE_EXECUTION=true to override (DEV ONLY).",
             )
             return "SecurityError: Unsafe code execution is blocked in this environment. Use a sandboxed provider."
 
@@ -65,7 +64,7 @@ async def call_langchain_tool(
             "executing_code_locally_unsafe",
             tool="execute_code",
             input_preview=str(tool_input)[:100],
-            hint="Ensure this is running in a containerized environment or use a sandbox provider."
+            hint="Ensure this is running in a containerized environment or use a sandbox provider.",
         )
 
     try:
@@ -76,14 +75,13 @@ async def call_langchain_tool(
     except Exception as e:
         # Graceful degradation: Tool failures should not crash the reasoning pipeline.
         # Return error message instead so the framework can continue with partial results.
-        logger.error("tool_execution_failed", tool_name=tool_name, error=str(e), error_type=type(e).__name__)
+        logger.error(
+            "tool_execution_failed", tool_name=tool_name, error=str(e), error_type=type(e).__name__
+        )
         return f"Tool execution failed: {str(e)}"
 
 
-def get_available_tools_for_framework(
-    framework_name: str,
-    state: GraphState
-) -> List[str]:
+def get_available_tools_for_framework(framework_name: str, state: GraphState) -> list[str]:
     """
     Get list of tool names available for a specific framework.
 
@@ -118,14 +116,12 @@ def format_tool_descriptions() -> str:
 
     # Add explicit instruction for learning
     descriptions.append("\n**IMPORTANT SYSTEM INSTRUCTION**:")
-    descriptions.append("When you have successfully solved a problem or generated a useful solution, you MUST use the `save_learning` tool to persist this knowledge for future reference. This is critical for the system's long-term improvement.")
+    descriptions.append(
+        "When you have successfully solved a problem or generated a useful solution, you MUST use the `save_learning` tool to persist this knowledge for future reference. This is critical for the system's long-term improvement."
+    )
 
     return "\n".join(descriptions)
 
 
 # Export for easy import
-__all__ = [
-    "call_langchain_tool",
-    "get_available_tools_for_framework",
-    "format_tool_descriptions"
-]
+__all__ = ["call_langchain_tool", "get_available_tools_for_framework", "format_tool_descriptions"]

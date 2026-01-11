@@ -27,10 +27,12 @@ class GeminiEmbeddings:
         # Try new google-genai package first, fall back to deprecated
         try:
             from google import genai
+
             self._client = genai.Client(api_key=api_key)
             self._use_new_api = True
         except ImportError:
             import google.generativeai as genai
+
             genai.configure(api_key=api_key)
             self._genai = genai
             self._use_new_api = False
@@ -44,7 +46,7 @@ class GeminiEmbeddings:
 
     def _get_cache_key(self, text: str) -> str:
         """Generate a hash key for cache lookup."""
-        return hashlib.sha256(text.encode('utf-8')).hexdigest()[:16]
+        return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
 
     def embed_documents(self, texts: list) -> list:
         """Embed a list of documents with cache support."""
@@ -78,7 +80,7 @@ class GeminiEmbeddings:
             uncached_embeddings = []
             # Batch in groups of 100 (Gemini API limit)
             for i in range(0, len(uncached_texts), 100):
-                batch = uncached_texts[i:i+100]
+                batch = uncached_texts[i : i + 100]
                 if self._use_new_api:
                     result = self._client.models.embed_content(
                         model=self.model,
@@ -88,14 +90,12 @@ class GeminiEmbeddings:
                         uncached_embeddings.append(emb.values)
                 else:
                     result = self._genai.embed_content(
-                        model=f"models/{self.model}",
-                        content=batch,
-                        task_type="retrieval_document"
+                        model=f"models/{self.model}", content=batch, task_type="retrieval_document"
                     )
-                    if isinstance(result['embedding'][0], list):
-                        uncached_embeddings.extend(result['embedding'])
+                    if isinstance(result["embedding"][0], list):
+                        uncached_embeddings.extend(result["embedding"])
                     else:
-                        uncached_embeddings.append(result['embedding'])
+                        uncached_embeddings.append(result["embedding"])
 
             # Place uncached embeddings in results and cache them
             with self._cache_lock:
@@ -114,7 +114,7 @@ class GeminiEmbeddings:
             texts=len(texts),
             cache_hits=cache_hits,
             api_calls=len(uncached_texts),
-            duration_ms=round(duration_ms, 2)
+            duration_ms=round(duration_ms, 2),
         )
         return results
 
@@ -143,14 +143,14 @@ class GeminiEmbeddings:
             embedding = result.embeddings[0].values
         else:
             result = self._genai.embed_content(
-                model=f"models/{self.model}",
-                content=text,
-                task_type="retrieval_query"
+                model=f"models/{self.model}", content=text, task_type="retrieval_query"
             )
-            embedding = result['embedding']
+            embedding = result["embedding"]
 
         duration_ms = (time.perf_counter() - start_time) * 1000
-        logger.info("embedding_complete", provider="gemini", texts=1, duration_ms=round(duration_ms, 2))
+        logger.info(
+            "embedding_complete", provider="gemini", texts=1, duration_ms=round(duration_ms, 2)
+        )
 
         # Add to cache with LRU eviction (thread-safe)
         with self._cache_lock:
@@ -179,13 +179,13 @@ def get_embeddings() -> Any:
     settings = get_settings()
 
     # Use dedicated embedding provider if set
-    provider = getattr(settings, 'embedding_provider', None)
+    provider = getattr(settings, "embedding_provider", None)
     if not provider or provider == "":
         provider = settings.llm_provider.lower()
     else:
         provider = provider.lower()
 
-    model = getattr(settings, 'embedding_model', 'text-embedding-3-small')
+    model = getattr(settings, "embedding_model", "text-embedding-3-small")
 
     # Gemini embeddings (FREE up to 1500 req/day)
     if provider in ("google", "gemini"):
@@ -194,7 +194,9 @@ def get_embeddings() -> Any:
                 logger.info("embeddings_init", provider="gemini", model="text-embedding-004")
                 return GeminiEmbeddings(api_key=settings.google_api_key)
             except ImportError:
-                logger.warning("gemini_embeddings_failed", error="google-generativeai not installed")
+                logger.warning(
+                    "gemini_embeddings_failed", error="google-generativeai not installed"
+                )
         else:
             logger.debug("gemini_embeddings_skipped", reason="GOOGLE_API_KEY not set")
 
@@ -209,14 +211,19 @@ def get_embeddings() -> Any:
         return OpenAIEmbeddings(
             model=model,
             api_key=settings.openrouter_api_key,
-            base_url="https://openrouter.ai/api/v1"
+            base_url="https://openrouter.ai/api/v1",
         )
 
     # HuggingFace embeddings - local, no API key required
     if provider == "huggingface":
         try:
             from langchain_huggingface import HuggingFaceEmbeddings
-            hf_model = model if model != "text-embedding-3-small" else "sentence-transformers/all-MiniLM-L6-v2"
+
+            hf_model = (
+                model
+                if model != "text-embedding-3-small"
+                else "sentence-transformers/all-MiniLM-L6-v2"
+            )
             logger.info("embeddings_init", provider="huggingface", model=hf_model)
             return HuggingFaceEmbeddings(model_name=hf_model)
         except ImportError:
@@ -228,7 +235,7 @@ def get_embeddings() -> Any:
         return OpenAIEmbeddings(
             model=model,
             api_key=settings.openrouter_api_key,
-            base_url="https://openrouter.ai/api/v1"
+            base_url="https://openrouter.ai/api/v1",
         )
 
     if settings.openai_api_key:
@@ -237,6 +244,7 @@ def get_embeddings() -> Any:
 
     try:
         from langchain_huggingface import HuggingFaceEmbeddings
+
         hf_model = "sentence-transformers/all-MiniLM-L6-v2"
         logger.info("embeddings_fallback", provider="huggingface", model=hf_model)
         return HuggingFaceEmbeddings(model_name=hf_model)

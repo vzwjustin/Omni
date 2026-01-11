@@ -17,7 +17,6 @@ Usage:
 """
 
 import structlog
-from typing import Optional, List, Callable, Any
 
 from ..collection_manager import get_collection_manager
 from ..core.constants import CONTENT, SEARCH
@@ -30,7 +29,7 @@ def search_knowledge_examples(
     search_method: str,
     label_prefix: str = "Example",
     k: int = SEARCH.K_STANDARD,
-    **kwargs
+    **kwargs,
 ) -> str:
     """
     Generic knowledge base search with consistent formatting.
@@ -61,14 +60,14 @@ def search_knowledge_examples(
 
         examples = []
         for i, doc in enumerate(results, 1):
-            content = doc.page_content[:CONTENT.SNIPPET_SHORT]
+            content = doc.page_content[: CONTENT.SNIPPET_SHORT]
             examples.append(f"{label_prefix} {i}:\n{content}")
 
         logger.debug(
             "knowledge_examples_found",
             method=search_method,
             count=len(results),
-            query_preview=query[:CONTENT.QUERY_PREVIEW]
+            query_preview=query[: CONTENT.QUERY_PREVIEW],
         )
         return "\n\n".join(examples)
 
@@ -79,7 +78,7 @@ def search_knowledge_examples(
             "knowledge_search_skipped",
             method=search_method,
             error=str(e),
-            error_type=type(e).__name__
+            error_type=type(e).__name__,
         )
         return ""
 
@@ -88,10 +87,9 @@ def search_knowledge_examples(
 # Specialized Search Functions (convenience wrappers)
 # ============================================================================
 
+
 def search_reasoning_examples(
-    query: str,
-    reasoning_type: str = "chain-of-thought",
-    k: int = SEARCH.K_STANDARD
+    query: str, reasoning_type: str = "chain-of-thought", k: int = SEARCH.K_STANDARD
 ) -> str:
     """
     Search for chain-of-thought reasoning patterns.
@@ -103,7 +101,7 @@ def search_reasoning_examples(
         search_method="search_reasoning_knowledge",
         label_prefix="Reasoning Example",
         k=k,
-        reasoning_type=reasoning_type
+        reasoning_type=reasoning_type,
     )
 
 
@@ -111,7 +109,7 @@ def search_code_examples(
     query: str,
     task_type: str = "code_generation",
     language: str = "python",
-    k: int = SEARCH.K_STANDARD
+    k: int = SEARCH.K_STANDARD,
 ) -> str:
     """
     Search for code generation examples.
@@ -124,14 +122,12 @@ def search_code_examples(
         label_prefix="Code Example",
         k=k,
         task_type=task_type,
-        language=language
+        language=language,
     )
 
 
 def search_debugging_examples(
-    query: str,
-    bug_type: Optional[str] = None,
-    k: int = SEARCH.K_STANDARD
+    query: str, bug_type: str | None = None, k: int = SEARCH.K_STANDARD
 ) -> str:
     """
     Search for debugging/bug-fix examples.
@@ -144,7 +140,7 @@ def search_debugging_examples(
         search_method="search_debugging_knowledge",
         label_prefix="Example",
         k=k,
-        **kwargs
+        **kwargs,
     )
 
 
@@ -152,10 +148,8 @@ def search_debugging_examples(
 # Prompt Enhancement Helpers
 # ============================================================================
 
-def format_examples_section(
-    examples: str,
-    section_type: str = "generic"
-) -> str:
+
+def format_examples_section(examples: str, section_type: str = "generic") -> str:
     """
     Format examples as a prompt section with appropriate header.
 
@@ -173,7 +167,7 @@ def format_examples_section(
         "reasoning": "## Step-by-Step Reasoning Examples",
         "code": "## Similar Code Examples from 12K+ Knowledge Base",
         "debugging": "## Similar Debugging Examples from Production Codebases\n\nThe following examples from 10K+ real bug-fix pairs may help inform your approach:",
-        "generic": "## Relevant Examples"
+        "generic": "## Relevant Examples",
     }
 
     header = headers.get(section_type, headers["generic"])

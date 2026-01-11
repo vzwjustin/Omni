@@ -5,12 +5,13 @@ Real implementations using multi-turn client sampling.
 No external API calls - client does all reasoning locally.
 """
 
-from typing import Dict, Any
-from ..core.sampling import ClientSampler, extract_score
+from typing import Any
+
 from ..core.constants import CONTENT
+from ..core.sampling import ClientSampler, extract_score
 
 
-async def tree_of_thoughts(sampler: ClientSampler, query: str, context: str) -> Dict[str, Any]:
+async def tree_of_thoughts(sampler: ClientSampler, query: str, context: str) -> dict[str, Any]:
     """
     Tree of Thoughts: Explore multiple solution paths, pick best
 
@@ -21,7 +22,7 @@ async def tree_of_thoughts(sampler: ClientSampler, query: str, context: str) -> 
     # Step 1: Generate multiple solution branches
     branches = []
     for i in range(num_branches):
-        branch_prompt = f"""Generate solution approach #{i+1} for this problem:
+        branch_prompt = f"""Generate solution approach #{i + 1} for this problem:
 
 ## Problem
 {query}
@@ -58,11 +59,7 @@ Brief justification: ..."""
 
         evaluation = await sampler.request_sample(eval_prompt, temperature=0.2)
         score = extract_score(evaluation)
-        evaluations.append({
-            "score": score,
-            "reasoning": evaluation,
-            "branch_index": i
-        })
+        evaluations.append({"score": score, "reasoning": evaluation, "branch_index": i})
 
     # Step 3: Select best branch
     best_eval = max(evaluations, key=lambda e: e["score"])
@@ -95,12 +92,12 @@ Provide the complete, detailed implementation. Include code, explanations, and v
             "branches_generated": len(branches),
             "best_branch_index": best_idx,
             "best_score": best_eval["score"],
-            "all_scores": [e["score"] for e in evaluations]
-        }
+            "all_scores": [e["score"] for e in evaluations],
+        },
     }
 
 
-async def graph_of_thoughts(sampler: ClientSampler, query: str, context: str) -> Dict[str, Any]:
+async def graph_of_thoughts(sampler: ClientSampler, query: str, context: str) -> dict[str, Any]:
     """
     Graph of Thoughts: Non-linear reasoning with idea graphs
 
@@ -179,12 +176,12 @@ Provide the final, complete solution with implementation details."""
             "framework": "graph_of_thoughts",
             "nodes": nodes_response,
             "edges": edges_response,
-            "solution_path": path_response
-        }
+            "solution_path": path_response,
+        },
     }
 
 
-async def mcts_rstar(sampler: ClientSampler, query: str, context: str) -> Dict[str, Any]:
+async def mcts_rstar(sampler: ClientSampler, query: str, context: str) -> dict[str, Any]:
     """
     MCTS rStar: Monte Carlo Tree Search for code exploration
 
@@ -195,7 +192,7 @@ async def mcts_rstar(sampler: ClientSampler, query: str, context: str) -> Dict[s
     # Step 1: Generate candidate solutions
     candidates = []
     for i in range(num_candidates):
-        candidate_prompt = f"""Generate code solution candidate #{i+1}:
+        candidate_prompt = f"""Generate code solution candidate #{i + 1}:
 
 ## Problem
 {query}
@@ -213,7 +210,7 @@ Provide a complete code solution. Explore different approaches - be creative."""
         # Test the solution
         test_prompt = f"""Evaluate this solution for correctness, quality, and robustness:
 
-{candidate['code']}
+{candidate["code"]}
 
 Rate on a scale of 0-100:
 - Correctness (does it solve the problem?)
@@ -226,20 +223,20 @@ Score: X/100
 Detailed evaluation: ..."""
 
         evaluation = await sampler.request_sample(test_prompt, temperature=0.2)
-        candidate['score'] = extract_score(evaluation) * 100  # Scale to 0-100
-        candidate['evaluation'] = evaluation
+        candidate["score"] = extract_score(evaluation) * 100  # Scale to 0-100
+        candidate["evaluation"] = evaluation
 
     # Step 3: Select best candidate
-    best = max(candidates, key=lambda c: c['score'])
+    best = max(candidates, key=lambda c: c["score"])
 
     # Step 4: Refine the winner
     refine_prompt = f"""Refine this solution to perfection:
 
 ## Current Solution
-{best['code']}
+{best["code"]}
 
 ## Evaluation
-{best['evaluation']}
+{best["evaluation"]}
 
 ## Original Problem
 {query}
@@ -253,13 +250,13 @@ Provide the refined, production-ready version addressing any issues identified."
         "metadata": {
             "framework": "mcts_rstar",
             "candidates_explored": len(candidates),
-            "best_score": best['score'],
-            "all_scores": [c['score'] for c in candidates]
-        }
+            "best_score": best["score"],
+            "all_scores": [c["score"] for c in candidates],
+        },
     }
 
 
-async def everything_of_thought(sampler: ClientSampler, query: str, context: str) -> Dict[str, Any]:
+async def everything_of_thought(sampler: ClientSampler, query: str, context: str) -> dict[str, Any]:
     """
     Everything of Thought: Combine multiple reasoning approaches
 
@@ -269,28 +266,28 @@ async def everything_of_thought(sampler: ClientSampler, query: str, context: str
     analytical = await sampler.request_sample(
         f"""Apply ANALYTICAL thinking to: {query}\n\nContext: {context}\n\n"""
         "Break down the problem logically. Identify facts, constraints, requirements.",
-        temperature=0.5
+        temperature=0.5,
     )
 
     # Step 2: Creative thinking
     creative = await sampler.request_sample(
         f"""Apply CREATIVE thinking to: {query}\n\nContext: {context}\n\n"""
         "Think outside the box. What novel approaches could work? What analogies apply?",
-        temperature=0.9
+        temperature=0.9,
     )
 
     # Step 3: Critical thinking
     critical = await sampler.request_sample(
         f"""Apply CRITICAL thinking to: {query}\n\nContext: {context}\n\n"""
         "What could go wrong? What are the risks? What assumptions need validation?",
-        temperature=0.6
+        temperature=0.6,
     )
 
     # Step 4: Practical thinking
     practical = await sampler.request_sample(
         f"""Apply PRACTICAL thinking to: {query}\n\nContext: {context}\n\n"""
         "What's the most pragmatic approach? What trade-offs are acceptable? How to implement efficiently?",
-        temperature=0.5
+        temperature=0.5,
     )
 
     # Step 5: Synthesize all perspectives
@@ -321,10 +318,10 @@ Balance innovation with pragmatism, creativity with rigor."""
         "metadata": {
             "framework": "everything_of_thought",
             "perspectives": {
-                "analytical": analytical[:CONTENT.ERROR_PREVIEW] + "...",
-                "creative": creative[:CONTENT.ERROR_PREVIEW] + "...",
-                "critical": critical[:CONTENT.ERROR_PREVIEW] + "...",
-                "practical": practical[:CONTENT.ERROR_PREVIEW] + "..."
-            }
-        }
+                "analytical": analytical[: CONTENT.ERROR_PREVIEW] + "...",
+                "creative": creative[: CONTENT.ERROR_PREVIEW] + "...",
+                "critical": critical[: CONTENT.ERROR_PREVIEW] + "...",
+                "practical": practical[: CONTENT.ERROR_PREVIEW] + "...",
+            },
+        },
     }

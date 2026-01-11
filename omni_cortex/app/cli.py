@@ -15,10 +15,8 @@ Usage:
 
 import argparse
 import asyncio
-import json
 import sys
 import time
-from typing import Optional
 
 import structlog
 
@@ -27,7 +25,7 @@ structlog.configure(
     processors=[
         structlog.stdlib.add_log_level,
         structlog.processors.TimeStamper(fmt="iso"),
-        structlog.dev.ConsoleRenderer()
+        structlog.dev.ConsoleRenderer(),
     ],
     wrapper_class=structlog.stdlib.BoundLogger,
     context_class=dict,
@@ -39,12 +37,12 @@ logger = structlog.get_logger("cli")
 
 async def cmd_reason(args: argparse.Namespace) -> int:
     """Run the reason tool with auto-framework selection."""
-    from app.graph import router, FRAMEWORK_NODES
+    from app.graph import FRAMEWORK_NODES, router
     from app.state import GraphState
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("Omni-Cortex Reason")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     # Create initial state
     state: GraphState = {
@@ -59,7 +57,7 @@ async def cmd_reason(args: argparse.Namespace) -> int:
 
     # Route to framework
     print(f"Query: {args.query[:100]}{'...' if len(args.query) > 100 else ''}")
-    print(f"\nRouting...")
+    print("\nRouting...")
 
     start = time.perf_counter()
     state = await router.route(state, use_ai=not args.heuristic)
@@ -92,20 +90,20 @@ async def cmd_reason(args: argparse.Namespace) -> int:
         state = await FRAMEWORK_NODES[framework](state)
         exec_time = (time.perf_counter() - start) * 1000
 
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("Result")
-        print(f"{'='*60}\n")
+        print(f"{'=' * 60}\n")
         print(state.get("final_answer", "No answer generated"))
 
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print("Metrics")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
         print(f"  Tokens used: {state.get('tokens_used', 0)}")
         print(f"  Confidence: {state.get('confidence_score', 0.0):.2f}")
         print(f"  Execution time: {exec_time:.1f}ms")
 
         if state.get("final_code"):
-            print(f"\nGenerated Code:")
+            print("\nGenerated Code:")
             print("```")
             print(state["final_code"][:1000])
             print("```")
@@ -130,9 +128,9 @@ async def cmd_framework(args: argparse.Namespace) -> int:
         print(f"  ... and {len(FRAMEWORK_NODES) - 20} more")
         return 1
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Running: {args.framework}")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     state: GraphState = {
         "query": args.query,
@@ -152,10 +150,12 @@ async def cmd_framework(args: argparse.Namespace) -> int:
 
         print(state.get("final_answer", "No answer generated"))
 
-        print(f"\n{'='*60}")
-        print(f"Tokens: {state.get('tokens_used', 0)} | "
-              f"Confidence: {state.get('confidence_score', 0.0):.2f} | "
-              f"Time: {exec_time:.1f}ms")
+        print(f"\n{'=' * 60}")
+        print(
+            f"Tokens: {state.get('tokens_used', 0)} | "
+            f"Confidence: {state.get('confidence_score', 0.0):.2f} | "
+            f"Time: {exec_time:.1f}ms"
+        )
 
     except Exception as e:
         print(f"\nError: {e}")
@@ -169,9 +169,9 @@ async def cmd_route(args: argparse.Namespace) -> int:
     from app.graph import router
     from app.state import GraphState
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("Router Test")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     state: GraphState = {
         "query": args.query,
@@ -225,9 +225,9 @@ async def cmd_search(args: argparse.Namespace) -> int:
     """Search the RAG vector store."""
     from app.collection_manager import get_collection_manager
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("RAG Search")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     cm = get_collection_manager()
 
@@ -254,7 +254,7 @@ async def cmd_search(args: argparse.Namespace) -> int:
             content = doc.page_content[:500]
             print(f"Content: {content}{'...' if len(doc.page_content) > 500 else ''}")
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Found {len(results)} results in {search_time:.1f}ms")
 
     return 0
@@ -262,19 +262,19 @@ async def cmd_search(args: argparse.Namespace) -> int:
 
 async def cmd_list(args: argparse.Namespace) -> int:
     """List available frameworks."""
+    from app.frameworks.registry import get_all_frameworks
     from app.graph import FRAMEWORK_NODES
-    from app.frameworks.registry import get_all_frameworks, FrameworkCategory
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Available Frameworks ({len(FRAMEWORK_NODES)})")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     frameworks = get_all_frameworks()
 
     # Group by category
     by_category: dict[str, list] = {}
     for fw in frameworks:
-        cat = fw.category.value if hasattr(fw.category, 'value') else str(fw.category)
+        cat = fw.category.value if hasattr(fw.category, "value") else str(fw.category)
         if cat not in by_category:
             by_category[cat] = []
         by_category[cat].append(fw)
@@ -296,12 +296,12 @@ async def cmd_list(args: argparse.Namespace) -> int:
 
 async def cmd_health(args: argparse.Namespace) -> int:
     """Check system health."""
-    from app.graph import FRAMEWORK_NODES
     from app.core.settings import get_settings
+    from app.graph import FRAMEWORK_NODES
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("Omni-Cortex Health Check")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     settings = get_settings()
 
@@ -318,6 +318,7 @@ async def cmd_health(args: argparse.Namespace) -> int:
     # ChromaDB check
     try:
         from app.collection_manager import get_collection_manager
+
         cm = get_collection_manager()
         collections = cm.list_collections()
         checks.append(("ChromaDB", f"{len(collections)} collections", len(collections) > 0))
@@ -327,6 +328,7 @@ async def cmd_health(args: argparse.Namespace) -> int:
     # Memory check
     try:
         from app.memory.manager import get_memory
+
         mem = await get_memory("health-check")
         checks.append(("Memory", "OK", True))
     except Exception as e:
@@ -340,7 +342,7 @@ async def cmd_health(args: argparse.Namespace) -> int:
         if not ok:
             all_ok = False
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Status: {'HEALTHY' if all_ok else 'DEGRADED'}")
 
     return 0 if all_ok else 1
@@ -349,18 +351,21 @@ async def cmd_health(args: argparse.Namespace) -> int:
 def main() -> int:
     """Main entry point for CLI."""
     parser = argparse.ArgumentParser(
-        prog="omni-cortex",
-        description="Omni-Cortex CLI - Local testing and development tool"
+        prog="omni-cortex", description="Omni-Cortex CLI - Local testing and development tool"
     )
     subparsers = parser.add_subparsers(dest="command", help="Command to run")
 
     # reason command
-    reason_parser = subparsers.add_parser("reason", help="Run reasoning with auto-framework selection")
+    reason_parser = subparsers.add_parser(
+        "reason", help="Run reasoning with auto-framework selection"
+    )
     reason_parser.add_argument("query", help="The query or task")
     reason_parser.add_argument("--context", "-c", help="Code context")
     reason_parser.add_argument("--files", "-f", help="Comma-separated file list")
     reason_parser.add_argument("--thread-id", "-t", help="Thread ID for memory")
-    reason_parser.add_argument("--heuristic", action="store_true", help="Use heuristic routing only")
+    reason_parser.add_argument(
+        "--heuristic", action="store_true", help="Use heuristic routing only"
+    )
     reason_parser.add_argument("--dry-run", action="store_true", help="Only route, don't execute")
 
     # framework command
@@ -375,7 +380,9 @@ def main() -> int:
     route_parser.add_argument("query", help="The query to route")
     route_parser.add_argument("--context", "-c", help="Code context")
     route_parser.add_argument("--heuristic", action="store_true", help="Use heuristic routing only")
-    route_parser.add_argument("--compare", action="store_true", help="Compare heuristic vs AI routing")
+    route_parser.add_argument(
+        "--compare", action="store_true", help="Compare heuristic vs AI routing"
+    )
 
     # search command
     search_parser = subparsers.add_parser("search", help="Search RAG vector store")

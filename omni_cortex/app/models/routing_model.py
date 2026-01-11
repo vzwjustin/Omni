@@ -10,8 +10,8 @@ from typing import Any
 
 import structlog
 
-from ..core.settings import get_settings
 from ..core.constants import LIMITS
+from ..core.settings import get_settings
 
 logger = structlog.get_logger("routing_model")
 
@@ -29,16 +29,12 @@ class GeminiRoutingWrapper:
     async def ainvoke(self, prompt: str) -> Any:
         """Async invoke with search grounding."""
         response = await asyncio.wait_for(
-            asyncio.to_thread(
-                self.model.generate_content,
-                prompt
-            ),
-            timeout=LIMITS.LLM_TIMEOUT
+            asyncio.to_thread(self.model.generate_content, prompt), timeout=LIMITS.LLM_TIMEOUT
         )
         return GeminiResponse(response)
 
     def __repr__(self) -> str:
-        model_name = getattr(self.model, 'model_name', 'unknown')
+        model_name = getattr(self.model, "model_name", "unknown")
         return f"GeminiRoutingWrapper(model={model_name})"
 
 
@@ -57,9 +53,7 @@ class GeminiRoutingWrapperNew:
         from google.genai import types
 
         # Google Search grounding tool
-        google_search_tool = types.Tool(
-            google_search=types.GoogleSearch()
-        )
+        google_search_tool = types.Tool(google_search=types.GoogleSearch())
 
         response = await asyncio.wait_for(
             asyncio.to_thread(
@@ -67,12 +61,10 @@ class GeminiRoutingWrapperNew:
                 model=self._model_name,
                 contents=prompt,
                 config=types.GenerateContentConfig(
-                    temperature=0.7,
-                    max_output_tokens=4096,
-                    tools=[google_search_tool]
-                )
+                    temperature=0.7, max_output_tokens=4096, tools=[google_search_tool]
+                ),
             ),
-            timeout=LIMITS.LLM_TIMEOUT
+            timeout=LIMITS.LLM_TIMEOUT,
         )
         return GeminiResponse(response)
 
@@ -114,11 +106,11 @@ class GeminiResponse:
 
         # Try candidates fallback
         try:
-            if hasattr(self._response, 'candidates') and self._response.candidates:
+            if hasattr(self._response, "candidates") and self._response.candidates:
                 candidate = self._response.candidates[0]
-                if hasattr(candidate, 'content') and hasattr(candidate.content, 'parts'):
+                if hasattr(candidate, "content") and hasattr(candidate.content, "parts"):
                     parts = candidate.content.parts
-                    text_parts = [p.text for p in parts if hasattr(p, 'text') and p.text]
+                    text_parts = [p.text for p in parts if hasattr(p, "text") and p.text]
                     if text_parts:
                         return "".join(text_parts)
         except (IndexError, AttributeError, TypeError) as e:
@@ -197,7 +189,7 @@ def get_routing_model() -> GeminiRoutingWrapper:
                 temperature=0.7,
                 max_output_tokens=4096,
             ),
-            tools=[genai.Tool(google_search=genai.GoogleSearch())]
+            tools=[genai.Tool(google_search=genai.GoogleSearch())],
         )
 
         return GeminiRoutingWrapper(model)

@@ -1,11 +1,11 @@
 """Request correlation ID management for distributed tracing."""
-import uuid
+
 import contextvars
-from typing import Optional
+import uuid
 
 # Context variable for request-scoped correlation ID
-_correlation_id: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
-    'correlation_id', default=None
+_correlation_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "correlation_id", default=None
 )
 
 

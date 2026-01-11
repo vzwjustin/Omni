@@ -5,10 +5,11 @@ Prevents cascading failures by failing fast when a service is down.
 Automatically recovers when service becomes available again.
 """
 
-import time
 import asyncio
+import time
+from collections.abc import Callable
 from enum import Enum
-from typing import Callable, Any, Optional
+from typing import Any
 
 import structlog
 
@@ -20,8 +21,9 @@ logger = structlog.get_logger(__name__)
 
 class CircuitState(Enum):
     """Circuit breaker states."""
-    CLOSED = "closed"        # Normal operation
-    OPEN = "open"            # Failing, reject requests
+
+    CLOSED = "closed"  # Normal operation
+    OPEN = "open"  # Failing, reject requests
     HALF_OPEN = "half_open"  # Testing if recovered
 
 
@@ -48,7 +50,7 @@ class CircuitBreaker:
         name: str,
         failure_threshold: int = 5,
         timeout: float = 60.0,
-        half_open_timeout: float = 30.0
+        half_open_timeout: float = 30.0,
     ):
         """
         Initialize circuit breaker.
@@ -67,11 +69,11 @@ class CircuitBreaker:
         self.failure_count = 0
         self.success_count = 0
         self.state = CircuitState.CLOSED
-        self.last_failure_time: Optional[float] = None
-        self.last_attempt_time: Optional[float] = None
+        self.last_failure_time: float | None = None
+        self.last_attempt_time: float | None = None
         # Lazy initialization: asyncio.Lock() requires an event loop
         # which may not exist at module load time when global instances are created
-        self._lock: Optional[asyncio.Lock] = None
+        self._lock: asyncio.Lock | None = None
 
     @property
     def lock(self) -> asyncio.Lock:
@@ -101,8 +103,10 @@ class CircuitBreaker:
 
             # Check if we should transition from OPEN to HALF_OPEN
             if self.state == CircuitState.OPEN:
-                if self.last_failure_time and \
-                   (current_time - self.last_failure_time) >= self.timeout:
+                if (
+                    self.last_failure_time
+                    and (current_time - self.last_failure_time) >= self.timeout
+                ):
                     self.state = CircuitState.HALF_OPEN
                     self.success_count = 0
                     logger.info(
@@ -116,8 +120,7 @@ class CircuitBreaker:
                     # Still in OPEN state, reject request
                     time_remaining = self.timeout - (current_time - (self.last_failure_time or 0))
                     raise CircuitBreakerOpenError(
-                        f"Circuit breaker '{self.name}' is OPEN "
-                        f"(retry in {time_remaining:.1f}s)"
+                        f"Circuit breaker '{self.name}' is OPEN (retry in {time_remaining:.1f}s)"
                     )
 
         # Execute function (outside lock to allow concurrent requests in CLOSED state)
@@ -208,34 +211,22 @@ class CircuitBreaker:
 
 # LLM API circuit breaker (more sensitive)
 llm_circuit_breaker = CircuitBreaker(
-    "llm_api",
-    failure_threshold=3,
-    timeout=60.0,
-    half_open_timeout=30.0
+    "llm_api", failure_threshold=3, timeout=60.0, half_open_timeout=30.0
 )
 
 # Embedding API circuit breaker
 embedding_circuit_breaker = CircuitBreaker(
-    "embedding_api",
-    failure_threshold=5,
-    timeout=60.0,
-    half_open_timeout=30.0
+    "embedding_api", failure_threshold=5, timeout=60.0, half_open_timeout=30.0
 )
 
 # ChromaDB circuit breaker
 chromadb_circuit_breaker = CircuitBreaker(
-    "chromadb",
-    failure_threshold=5,
-    timeout=60.0,
-    half_open_timeout=30.0
+    "chromadb", failure_threshold=5, timeout=60.0, half_open_timeout=30.0
 )
 
 # File system operations circuit breaker (high threshold)
 filesystem_circuit_breaker = CircuitBreaker(
-    "filesystem",
-    failure_threshold=10,
-    timeout=30.0,
-    half_open_timeout=15.0
+    "filesystem", failure_threshold=10, timeout=30.0, half_open_timeout=15.0
 )
 
 

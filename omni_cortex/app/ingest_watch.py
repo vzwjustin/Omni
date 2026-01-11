@@ -14,6 +14,7 @@ Designed to be lightweight: debounced, watches only relevant file types.
 import asyncio
 import os
 from pathlib import Path
+
 import structlog
 from watchfiles import awatch
 

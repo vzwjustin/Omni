@@ -20,56 +20,50 @@ since they depend on multiple submodules.
 # =============================================================================
 
 # Memory
-from .memory import OmniCortexMemory, get_memory, MAX_MEMORY_THREADS
-from .memory.manager import get_memory_store, get_memory_store_lock
-
-# Retrieval
-from .retrieval import (
-    get_embeddings as _get_embeddings,
-    get_vectorstore,
-    add_documents,
-    add_documents_with_metadata,
-    get_vectorstore_by_collection,
-    search_vectorstore,
-    search_vectorstore_async,
-    VectorstoreSearchError,
-)
-
-# Callbacks
-from .callbacks import OmniCortexCallback
-
-# Prompts
-from .prompts import (
-    FRAMEWORK_SELECTION_TEMPLATE,
-    REASONING_TEMPLATE,
-    CODE_GENERATION_TEMPLATE,
-    ReasoningOutput,
-    FrameworkSelection,
-    reasoning_parser,
-    framework_parser,
-)
-
-# Models
-from .models import (
-    get_chat_model,
-    get_routing_model,
-    GeminiRoutingWrapper,
-    GeminiResponse,
-)
+import structlog
 
 # =============================================================================
 # Tools for LLM Use (kept here as they have complex dependencies)
 # =============================================================================
-
 from langchain_core.tools import tool
-from langchain_core.documents import Document
-from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
-import structlog
 
-from .core.settings import get_settings
-from .core.correlation import get_correlation_id
+# Callbacks
+from .callbacks import OmniCortexCallback
 from .core.constants import CONTENT
-from .core.errors import OmniCortexError, RAGError, MemoryError as OmniMemoryError
+from .core.correlation import get_correlation_id
+from .core.errors import RAGError
+from .memory import MAX_MEMORY_THREADS, OmniCortexMemory, get_memory
+from .memory.manager import get_memory_store, get_memory_store_lock
+
+# Models
+from .models import (
+    GeminiResponse,
+    GeminiRoutingWrapper,
+    get_chat_model,
+    get_routing_model,
+)
+
+# Prompts
+from .prompts import (
+    CODE_GENERATION_TEMPLATE,
+    FRAMEWORK_SELECTION_TEMPLATE,
+    REASONING_TEMPLATE,
+    FrameworkSelection,
+    ReasoningOutput,
+    framework_parser,
+    reasoning_parser,
+)
+from .retrieval import (
+    VectorstoreSearchError,
+    add_documents,
+    add_documents_with_metadata,
+    get_vectorstore,
+    get_vectorstore_by_collection,
+    search_vectorstore,
+    search_vectorstore_async,
+)
+
+# Retrieval
 
 logger = structlog.get_logger("langchain-integration")
 
@@ -85,7 +79,7 @@ async def search_documentation(query: str) -> str:
             "search_documentation_failed",
             error=str(exc),
             error_type="VectorstoreSearchError",
-            correlation_id=get_correlation_id()
+            correlation_id=get_correlation_id(),
         )
         return f"Search failed: {exc}"
     except RAGError as exc:
@@ -93,7 +87,7 @@ async def search_documentation(query: str) -> str:
             "search_documentation_failed",
             error=str(exc),
             error_type="RAGError",
-            correlation_id=get_correlation_id()
+            correlation_id=get_correlation_id(),
         )
         return f"Search failed: {exc}"
     except Exception as exc:
@@ -103,7 +97,7 @@ async def search_documentation(query: str) -> str:
             "search_documentation_failed",
             error=str(exc),
             error_type=type(exc).__name__,
-            correlation_id=get_correlation_id()
+            correlation_id=get_correlation_id(),
         )
         raise RAGError(f"Documentation search failed: {exc}") from exc
     if not docs:
@@ -112,7 +106,7 @@ async def search_documentation(query: str) -> str:
     for d in docs:
         meta = d.metadata or {}
         path = meta.get("path", "unknown")
-        formatted.append(f"### {path}\n{d.page_content[:CONTENT.SNIPPET_EXTENDED]}")
+        formatted.append(f"### {path}\n{d.page_content[: CONTENT.SNIPPET_EXTENDED]}")
     return "\n\n".join(formatted)
 
 
@@ -124,12 +118,16 @@ async def execute_code(code: str, language: str = "python") -> dict:
 
     logger.info("tool_called", tool="execute_code", language=language)
     if language.lower() != "python":
-        return {"success": False, "output": "", "error": f"Sandbox only supports python (requested: {language})"}
+        return {
+            "success": False,
+            "output": "",
+            "error": f"Sandbox only supports python (requested: {language})",
+        }
     result = await _safe_execute(code)
     return {
         "success": bool(result.get("success")),
         "output": result.get("output", "") or "",
-        "error": result.get("error", "")
+        "error": result.get("error", ""),
     }
 
 
@@ -139,7 +137,7 @@ async def save_learning(
     answer: str,
     framework: str,
     success_rating: float = 1.0,
-    problem_type: str = "general"
+    problem_type: str = "general",
 ) -> str:
     """
     Save a successful solution to the learnings database for future reference.
@@ -156,12 +154,7 @@ async def save_learning(
     """
     from .collection_manager import get_collection_manager
 
-    logger.info(
-        "tool_called",
-        tool="save_learning",
-        framework=framework,
-        problem_type=problem_type
-    )
+    logger.info("tool_called", tool="save_learning", framework=framework, problem_type=problem_type)
 
     try:
         manager = get_collection_manager()
@@ -170,7 +163,7 @@ async def save_learning(
             answer=answer,
             framework_used=framework,
             success_rating=success_rating,
-            problem_type=problem_type
+            problem_type=problem_type,
         )
 
         if success:
@@ -182,7 +175,7 @@ async def save_learning(
             "save_learning_failed",
             error=str(exc),
             error_type="RAGError",
-            correlation_id=get_correlation_id()
+            correlation_id=get_correlation_id(),
         )
         return f"Failed to save learning: {exc}"
     except Exception as exc:
@@ -192,7 +185,7 @@ async def save_learning(
             "save_learning_failed",
             error=str(exc),
             error_type=type(exc).__name__,
-            correlation_id=get_correlation_id()
+            correlation_id=get_correlation_id(),
         )
         raise RAGError(f"Failed to save learning: {exc}") from exc
 
@@ -235,24 +228,28 @@ async def retrieve_context(query: str, thread_id: str = None) -> str:
 # Import enhanced search tools
 try:
     from .enhanced_search_tools import ENHANCED_SEARCH_TOOLS
+
     _enhanced_tools = ENHANCED_SEARCH_TOOLS
 except ImportError:
     _enhanced_tools = []
 
 # Export available tools for MCP
-AVAILABLE_TOOLS = [search_documentation, execute_code, retrieve_context, save_learning] + _enhanced_tools
+AVAILABLE_TOOLS = [
+    search_documentation,
+    execute_code,
+    retrieve_context,
+    save_learning,
+] + _enhanced_tools
 
 
 # =============================================================================
 # State Enrichment - Re-exported from memory submodule
 # =============================================================================
 
-from .state import GraphState
 from .memory.enrichment import (
     enhance_state_with_langchain,
     save_to_langchain_memory,
 )
-
 
 # =============================================================================
 # All Exports

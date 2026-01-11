@@ -11,9 +11,10 @@ Gemini does the analysis work, not just orchestration.
 
 import asyncio
 import json
-import structlog
 from dataclasses import dataclass, field
-from typing import Dict, Any, List, Optional
+from typing import Any
+
+import structlog
 
 from .constants import CONTENT, LIMITS
 from .errors import LLMError, ProviderNotConfiguredError
@@ -23,10 +24,12 @@ from .settings import get_settings
 try:
     from google import genai
     from google.genai import types
+
     GOOGLE_AI_AVAILABLE = True
 except ImportError:
     try:
         import google.generativeai as genai
+
         types = None
         GOOGLE_AI_AVAILABLE = True
     except ImportError:
@@ -40,10 +43,11 @@ logger = structlog.get_logger("analysis_executor")
 @dataclass
 class AnalysisFinding:
     """A specific finding from code analysis."""
+
     severity: str  # critical, high, medium, low
     category: str  # error_handling, async, race_condition, etc.
     file_path: str
-    line_number: Optional[int]
+    line_number: int | None
     code_snippet: str
     issue: str
     recommendation: str
@@ -53,14 +57,15 @@ class AnalysisFinding:
 @dataclass
 class AnalysisResult:
     """Complete analysis result with findings and summary."""
+
     query: str
     framework_used: str
     total_files_analyzed: int
-    findings: List[AnalysisFinding] = field(default_factory=list)
+    findings: list[AnalysisFinding] = field(default_factory=list)
     summary: str = ""
     execution_time_ms: int = 0
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
             "query": self.query,
@@ -88,13 +93,15 @@ class AnalysisResult:
         lines = []
 
         # Header
-        lines.append(f"## Analysis Results")
-        lines.append(f"**Framework**: {self.framework_used} | **Files Analyzed**: {self.total_files_analyzed}")
+        lines.append("## Analysis Results")
+        lines.append(
+            f"**Framework**: {self.framework_used} | **Files Analyzed**: {self.total_files_analyzed}"
+        )
         lines.append("")
 
         # Summary
         if self.summary:
-            lines.append(f"### Summary")
+            lines.append("### Summary")
             lines.append(self.summary)
             lines.append("")
 
@@ -108,12 +115,7 @@ class AnalysisResult:
                 by_severity["medium"].append(finding)
 
         # Output findings by severity
-        severity_icons = {
-            "critical": "🔴",
-            "high": "🟠",
-            "medium": "🟡",
-            "low": "🟢"
-        }
+        severity_icons = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}
 
         for severity in ["critical", "high", "medium", "low"]:
             findings = by_severity[severity]
@@ -133,9 +135,9 @@ class AnalysisResult:
                 lines.append(f"**{i}. {f.category}** - {location}")
                 lines.append(f"- **Issue**: {f.issue}")
                 if f.code_snippet:
-                    lines.append(f"```")
+                    lines.append("```")
                     lines.append(f"{f.code_snippet[:300]}")
-                    lines.append(f"```")
+                    lines.append("```")
                 lines.append(f"- **Fix**: {f.recommendation}")
                 lines.append(f"- **Effort**: {f.effort}")
                 lines.append("")
@@ -165,14 +167,14 @@ class AnalysisExecutor:
             if not GOOGLE_AI_AVAILABLE:
                 raise ProviderNotConfiguredError(
                     "google-genai not installed",
-                    details={"provider": "google", "package": "google-genai"}
+                    details={"provider": "google", "package": "google-genai"},
                 )
 
             api_key = self.settings.google_api_key
             if not api_key:
                 raise ProviderNotConfiguredError(
                     "GOOGLE_API_KEY not configured",
-                    details={"provider": "google", "env_var": "GOOGLE_API_KEY"}
+                    details={"provider": "google", "env_var": "GOOGLE_API_KEY"},
                 )
 
             if types:  # New package
@@ -188,8 +190,8 @@ class AnalysisExecutor:
     async def execute_analysis(
         self,
         query: str,
-        context: Optional[str] = None,
-        file_contents: Optional[Dict[str, str]] = None,
+        context: str | None = None,
+        file_contents: dict[str, str] | None = None,
         framework: str = "chain_of_verification",
     ) -> AnalysisResult:
         """
@@ -205,6 +207,7 @@ class AnalysisExecutor:
             AnalysisResult with specific findings
         """
         import time
+
         start_time = time.monotonic()
 
         client = self._get_client()
@@ -235,7 +238,7 @@ class AnalysisExecutor:
                         contents=contents,
                         config=config,
                     ),
-                    timeout=LIMITS.LLM_TIMEOUT * 2  # Allow more time for analysis
+                    timeout=LIMITS.LLM_TIMEOUT * 2,  # Allow more time for analysis
                 )
 
                 result_data = json.loads(response.text)
@@ -247,10 +250,10 @@ class AnalysisExecutor:
                         prompt,
                         generation_config={
                             "temperature": 0.2,
-                            "response_mime_type": "application/json"
-                        }
+                            "response_mime_type": "application/json",
+                        },
                     ),
-                    timeout=LIMITS.LLM_TIMEOUT * 2
+                    timeout=LIMITS.LLM_TIMEOUT * 2,
                 )
 
                 result_data = json.loads(response.text)
@@ -258,16 +261,18 @@ class AnalysisExecutor:
             # Parse findings
             findings = []
             for f in result_data.get("findings", []):
-                findings.append(AnalysisFinding(
-                    severity=f.get("severity", "medium"),
-                    category=f.get("category", "unknown"),
-                    file_path=f.get("file_path", "unknown"),
-                    line_number=f.get("line_number"),
-                    code_snippet=f.get("code_snippet", ""),
-                    issue=f.get("issue", ""),
-                    recommendation=f.get("recommendation", ""),
-                    effort=f.get("effort", "medium"),
-                ))
+                findings.append(
+                    AnalysisFinding(
+                        severity=f.get("severity", "medium"),
+                        category=f.get("category", "unknown"),
+                        file_path=f.get("file_path", "unknown"),
+                        line_number=f.get("line_number"),
+                        code_snippet=f.get("code_snippet", ""),
+                        issue=f.get("issue", ""),
+                        recommendation=f.get("recommendation", ""),
+                        effort=f.get("effort", "medium"),
+                    )
+                )
 
             execution_time = int((time.monotonic() - start_time) * 1000)
 
@@ -292,8 +297,8 @@ class AnalysisExecutor:
     def _build_analysis_prompt(
         self,
         query: str,
-        context: Optional[str],
-        file_contents: Optional[Dict[str, str]],
+        context: str | None,
+        file_contents: dict[str, str] | None,
         framework: str,
     ) -> str:
         """Build the analysis prompt for Gemini."""
@@ -341,7 +346,7 @@ Focus on ACTIONABLE findings. Skip obvious or nitpick issues.
 
         # Add context if provided
         if context:
-            prompt_parts.append(f"\n## CONTEXT\n{context[:CONTENT.SNIPPET_MAX]}")
+            prompt_parts.append(f"\n## CONTEXT\n{context[: CONTENT.SNIPPET_MAX]}")
 
         # Add file contents
         if file_contents:
@@ -390,7 +395,7 @@ Apply systematic exploration:
 
 
 # Singleton instance
-_executor: Optional[AnalysisExecutor] = None
+_executor: AnalysisExecutor | None = None
 
 
 def get_analysis_executor() -> AnalysisExecutor:
@@ -403,9 +408,9 @@ def get_analysis_executor() -> AnalysisExecutor:
 
 async def execute_code_analysis(
     query: str,
-    workspace_path: Optional[str] = None,
-    context: Optional[str] = None,
-    file_list: Optional[List[str]] = None,
+    workspace_path: str | None = None,
+    context: str | None = None,
+    file_list: list[str] | None = None,
     framework: str = "chain_of_verification",
     max_files: int = 10,
 ) -> AnalysisResult:
@@ -446,13 +451,18 @@ async def execute_code_analysis(
 
             # Read actual file contents for analysis
             import os
+
             for file_ctx in structured_context.relevant_files[:max_files]:
                 file_path = file_ctx.path
-                full_path = os.path.join(workspace_path, file_path) if not os.path.isabs(file_path) else file_path
+                full_path = (
+                    os.path.join(workspace_path, file_path)
+                    if not os.path.isabs(file_path)
+                    else file_path
+                )
 
                 if os.path.exists(full_path):
                     try:
-                        with open(full_path, 'r', encoding='utf-8', errors='ignore') as f:
+                        with open(full_path, encoding="utf-8", errors="ignore") as f:
                             file_contents[file_path] = f.read()
                     except Exception as e:
                         logger.warning("file_read_error", path=file_path, error=str(e))
@@ -463,14 +473,17 @@ async def execute_code_analysis(
     # If specific files provided, read them
     if file_list and not file_contents:
         import os
+
         base_path = workspace_path or os.getcwd()
 
         for file_path in file_list[:max_files]:
-            full_path = os.path.join(base_path, file_path) if not os.path.isabs(file_path) else file_path
+            full_path = (
+                os.path.join(base_path, file_path) if not os.path.isabs(file_path) else file_path
+            )
 
             if os.path.exists(full_path):
                 try:
-                    with open(full_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    with open(full_path, encoding="utf-8", errors="ignore") as f:
                         file_contents[file_path] = f.read()
                 except Exception as e:
                     logger.warning("file_read_error", path=file_path, error=str(e))

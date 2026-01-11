@@ -11,19 +11,18 @@ Implements Socratic method with question-answer agents:
 This is a framework with actual multi-agent Socratic dialogue.
 """
 
-import asyncio
 import re
-import structlog
 from dataclasses import dataclass
+
+import structlog
 
 from ...state import GraphState
 from ..common import (
-    quiet_star,
+    add_reasoning_step,
     call_deep_reasoner,
     call_fast_synthesizer,
-    add_reasoning_step,
-    format_code_context,
     prepare_context_with_gemini,
+    quiet_star,
 )
 
 logger = structlog.get_logger("socratic")
@@ -34,6 +33,7 @@ NUM_EXCHANGES = 4
 @dataclass
 class Exchange:
     """A question-answer exchange in the dialogue."""
+
     round_num: int
     question: str
     answer: str
@@ -42,19 +42,16 @@ class Exchange:
 
 
 async def _questioner_ask(
-    query: str,
-    code_context: str,
-    previous_exchanges: list[Exchange],
-    state: GraphState
+    query: str, code_context: str, previous_exchanges: list[Exchange], state: GraphState
 ) -> str:
     """Questioner agent poses a probing question."""
-    
+
     dialogue_so_far = ""
     if previous_exchanges:
         dialogue_so_far = "\n\nDIALOGUE SO FAR:\n"
         for ex in previous_exchanges:
             dialogue_so_far += f"\nQ: {ex.question}\nA: {ex.answer}\n"
-    
+
     prompt = f"""You are a Socratic questioner. Pose a probing question to deepen understanding.
 
 PROBLEM: {query}
@@ -82,16 +79,16 @@ async def _answerer_respond(
     query: str,
     code_context: str,
     previous_exchanges: list[Exchange],
-    state: GraphState
+    state: GraphState,
 ) -> str:
     """Answerer agent provides thoughtful response."""
-    
+
     dialogue_context = ""
     if previous_exchanges:
         dialogue_context = "\n\nPREVIOUS DIALOGUE:\n"
         for ex in previous_exchanges[-2:]:
             dialogue_context += f"Q: {ex.question}\nA: {ex.answer}\n"
-    
+
     prompt = f"""You are answering Socratic questions to develop understanding.
 
 ORIGINAL PROBLEM: {query}
@@ -115,13 +112,9 @@ ANSWER:
     return response.strip()
 
 
-async def _critic_evaluate(
-    exchange: Exchange,
-    query: str,
-    state: GraphState
-) -> tuple[str, float]:
+async def _critic_evaluate(exchange: Exchange, query: str, state: GraphState) -> tuple[str, float]:
     """Critic agent evaluates the quality of reasoning."""
-    
+
     prompt = f"""You are a Socratic critic. Evaluate this exchange.
 
 ORIGINAL PROBLEM: {query}
@@ -143,41 +136,40 @@ QUALITY: [0.0-1.0]
 """
 
     response, _ = await call_fast_synthesizer(prompt, state, max_tokens=384)
-    
+
     critique = response
     quality = 0.7
-    
+
     for line in response.split("\n"):
         line = line.strip()
         if line.startswith("CRITIQUE:"):
             critique = line.split(":", 1)[-1].strip()
         elif line.startswith("QUALITY:"):
             try:
-                match = re.search(r'(\d+\.?\d*)', line)
+                match = re.search(r"(\d+\.?\d*)", line)
                 if match:
                     quality = max(0.0, min(1.0, float(match.group(1))))
             except ValueError as e:
                 logger.debug("value_parsing_failed", error=str(e))
-    
+
     return critique, quality
 
 
 async def _synthesize_insights(
-    exchanges: list[Exchange],
-    query: str,
-    code_context: str,
-    state: GraphState
+    exchanges: list[Exchange], query: str, code_context: str, state: GraphState
 ) -> str:
     """Synthesize insights from the Socratic dialogue."""
-    
-    dialogue = "\n\n".join([
-        f"**Round {ex.round_num}**\n"
-        f"Q: {ex.question}\n"
-        f"A: {ex.answer}\n"
-        f"Critique: {ex.critique} (Quality: {ex.quality_score:.2f})"
-        for ex in exchanges
-    ])
-    
+
+    dialogue = "\n\n".join(
+        [
+            f"**Round {ex.round_num}**\n"
+            f"Q: {ex.question}\n"
+            f"A: {ex.answer}\n"
+            f"Critique: {ex.critique} (Quality: {ex.quality_score:.2f})"
+            for ex in exchanges
+        ]
+    )
+
     prompt = f"""Synthesize the truth that emerged from this Socratic dialogue.
 
 ORIGINAL PROBLEM: {query}
@@ -201,7 +193,7 @@ Provide a comprehensive solution informed by the dialogue.
 async def self_ask_node(state: GraphState) -> GraphState:
     """
     Socratic Dialogue Framework - REAL IMPLEMENTATION
-    
+
     Multi-agent Socratic method:
     - Questioner poses probing questions
     - Answerer provides reasoned responses
@@ -211,81 +203,72 @@ async def self_ask_node(state: GraphState) -> GraphState:
     query = state.get("query", "")
     # Use Gemini to preprocess context via ContextGateway
 
-    code_context = await prepare_context_with_gemini(
+    code_context = await prepare_context_with_gemini(query=query, state=state)
 
-        query=query,
-
-        state=state
-
-    )
-    
     logger.info("socratic_start", query_preview=query[:50], exchanges=NUM_EXCHANGES)
-    
+
     exchanges: list[Exchange] = []
-    
+
     # Socratic dialogue loop
     for round_num in range(1, NUM_EXCHANGES + 1):
         logger.info("socratic_round", round=round_num)
-        
+
         # Questioner asks
         question = await _questioner_ask(query, code_context, exchanges, state)
-        
+
         add_reasoning_step(
             state=state,
             framework="socratic",
             thought=f"Round {round_num}: Question posed",
             action="question",
-            observation=question[:100] + "..."
+            observation=question[:100] + "...",
         )
-        
+
         # Answerer responds
         answer = await _answerer_respond(question, query, code_context, exchanges, state)
-        
+
         add_reasoning_step(
             state=state,
             framework="socratic",
             thought=f"Round {round_num}: Answer provided",
-            action="answer"
+            action="answer",
         )
-        
+
         # Create exchange
-        exchange = Exchange(
-            round_num=round_num,
-            question=question,
-            answer=answer,
-            critique=""
-        )
-        
+        exchange = Exchange(round_num=round_num, question=question, answer=answer, critique="")
+
         # Critic evaluates
         critique, quality = await _critic_evaluate(exchange, query, state)
         exchange.critique = critique
         exchange.quality_score = quality
-        
+
         exchanges.append(exchange)
-        
+
         add_reasoning_step(
             state=state,
             framework="socratic",
             thought=f"Round {round_num}: Quality {quality:.2f}",
             action="critique",
-            score=quality
+            score=quality,
         )
-    
+
     # Synthesize insights
     solution = await _synthesize_insights(exchanges, query, code_context, state)
-    
+
     avg_quality = sum(ex.quality_score for ex in exchanges) / len(exchanges)
-    
+
     # Format dialogue
-    dialogue_transcript = "\n\n".join([
-        f"### Exchange {ex.round_num}\n"
-        f"**Questioner**: {ex.question}\n\n"
-        f"**Answerer**: {ex.answer}\n\n"
-        f"**Critic**: {ex.critique}\n"
-        f"**Quality**: {ex.quality_score:.2f}"
-        for ex in exchanges
-    ])
-    
+    dialogue_transcript = "\n\n".join(
+        [
+            f"### Exchange {ex.round_num}\n"
+            f"**Questioner**: {ex.question}\n\n"
+            f"**Answerer**: {ex.answer}\n\n"
+            f"**Critic**: {ex.critique}\n"
+            f"**Quality**: {ex.quality_score:.2f}"
+            for ex in exchanges
+        ]
+    )
+
     final_answer = f"""# Socratic Dialogue Analysis
 
 ## Dialectic Process ({NUM_EXCHANGES} exchanges)
@@ -302,11 +285,7 @@ async def self_ask_node(state: GraphState) -> GraphState:
 
     state["final_answer"] = final_answer
     state["confidence_score"] = avg_quality
-    
-    logger.info(
-        "socratic_complete",
-        exchanges=len(exchanges),
-        avg_quality=avg_quality
-    )
-    
+
+    logger.info("socratic_complete", exchanges=len(exchanges), avg_quality=avg_quality)
+
     return state

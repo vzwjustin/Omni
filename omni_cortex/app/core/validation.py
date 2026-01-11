@@ -6,9 +6,8 @@ All user input should be sanitized through these functions.
 """
 
 import re
-from typing import Optional
-from app.core.errors import OmniCortexError, ValidationError
 
+from app.core.errors import ValidationError
 
 # Maximum input lengths (from constants)
 MAX_QUERY_LENGTH = 10000
@@ -18,24 +17,22 @@ MAX_CONTEXT_LENGTH = 100000
 
 # Suspicious patterns that could indicate injection attacks
 SUSPICIOUS_PATTERNS = [
-    r'<\s*script',  # Script tags
-    r'javascript:',  # JavaScript protocol
-    r'on\w+\s*=',   # Event handlers (onclick=, onerror=, etc.)
-    r'\\x[0-9a-f]{2}',  # Hex escapes
-    r'\\u[0-9a-f]{4}',  # Unicode escapes
-    r'eval\s*\(',  # eval() calls
-    r'exec\s*\(',  # exec() calls
-    r'__import__',  # Dynamic imports
-    r'<iframe',  # iframe injection
-    r'<embed',   # embed tags
-    r'<object',  # object tags
+    r"<\s*script",  # Script tags
+    r"javascript:",  # JavaScript protocol
+    r"on\w+\s*=",  # Event handlers (onclick=, onerror=, etc.)
+    r"\\x[0-9a-f]{2}",  # Hex escapes
+    r"\\u[0-9a-f]{4}",  # Unicode escapes
+    r"eval\s*\(",  # eval() calls
+    r"exec\s*\(",  # exec() calls
+    r"__import__",  # Dynamic imports
+    r"<iframe",  # iframe injection
+    r"<embed",  # embed tags
+    r"<object",  # object tags
 ]
 
 
 def sanitize_user_input(
-    text: str,
-    max_length: int = MAX_QUERY_LENGTH,
-    allow_code: bool = False
+    text: str, max_length: int = MAX_QUERY_LENGTH, allow_code: bool = False
 ) -> str:
     """
     Sanitize user input to prevent injection attacks.
@@ -52,16 +49,13 @@ def sanitize_user_input(
         ValidationError: If input is invalid or suspicious
     """
     if not isinstance(text, str):
-        raise ValidationError(
-            "Input must be a string",
-            details={"type": type(text).__name__}
-        )
+        raise ValidationError("Input must be a string", details={"type": type(text).__name__})
 
     # Check length
     if len(text) > max_length:
         raise ValidationError(
             f"Input exceeds maximum length of {max_length} characters",
-            details={"length": len(text), "max": max_length}
+            details={"length": len(text), "max": max_length},
         )
 
     # Check for suspicious patterns (unless code is explicitly allowed)
@@ -71,7 +65,7 @@ def sanitize_user_input(
             if match:
                 raise ValidationError(
                     f"Input contains suspicious pattern: {match.group()}",
-                    details={"pattern": pattern, "match": match.group()}
+                    details={"pattern": pattern, "match": match.group()},
                 )
 
     # Strip leading/trailing whitespace
@@ -90,14 +84,10 @@ def sanitize_query(query: str) -> str:
 
     Applies strict validation suitable for natural language queries.
     """
-    return sanitize_user_input(
-        query,
-        max_length=MAX_QUERY_LENGTH,
-        allow_code=False
-    )
+    return sanitize_user_input(query, max_length=MAX_QUERY_LENGTH, allow_code=False)
 
 
-def sanitize_code_snippet(code: Optional[str]) -> Optional[str]:
+def sanitize_code_snippet(code: str | None) -> str | None:
     """
     Sanitize code snippet input.
 
@@ -109,11 +99,11 @@ def sanitize_code_snippet(code: Optional[str]) -> Optional[str]:
     return sanitize_user_input(
         code,
         max_length=MAX_CODE_SNIPPET_LENGTH,
-        allow_code=True  # Allow code patterns
+        allow_code=True,  # Allow code patterns
     )
 
 
-def sanitize_context(context: Optional[str]) -> Optional[str]:
+def sanitize_context(context: str | None) -> str | None:
     """
     Sanitize IDE context input.
 
@@ -125,11 +115,11 @@ def sanitize_context(context: Optional[str]) -> Optional[str]:
     return sanitize_user_input(
         context,
         max_length=MAX_CONTEXT_LENGTH,
-        allow_code=True  # Context may contain code
+        allow_code=True,  # Context may contain code
     )
 
 
-def validate_thread_id(thread_id: Optional[str]) -> Optional[str]:
+def validate_thread_id(thread_id: str | None) -> str | None:
     """
     Validate thread ID format.
 
@@ -142,22 +132,20 @@ def validate_thread_id(thread_id: Optional[str]) -> Optional[str]:
         raise ValidationError("thread_id must be a string")
 
     # Allow alphanumeric, hyphens, underscores only
-    if not re.match(r'^[a-zA-Z0-9_-]+$', thread_id):
+    if not re.match(r"^[a-zA-Z0-9_-]+$", thread_id):
         raise ValidationError(
-            "thread_id contains invalid characters",
-            details={"thread_id": thread_id[:50]}
+            "thread_id contains invalid characters", details={"thread_id": thread_id[:50]}
         )
 
     if len(thread_id) > 256:
         raise ValidationError(
-            "thread_id too long (max 256 characters)",
-            details={"length": len(thread_id)}
+            "thread_id too long (max 256 characters)", details={"length": len(thread_id)}
         )
 
     return thread_id
 
 
-def validate_framework_name(framework: Optional[str]) -> Optional[str]:
+def validate_framework_name(framework: str | None) -> str | None:
     """
     Validate framework name.
 
@@ -178,10 +166,9 @@ def validate_framework_name(framework: Optional[str]) -> Optional[str]:
         raise ValidationError("framework name too long (max 100 chars)")
 
     # Framework names must start with letter, then alphanumeric with underscores
-    if not re.match(r'^[a-z][a-z0-9_]*$', framework):
+    if not re.match(r"^[a-z][a-z0-9_]*$", framework):
         raise ValidationError(
-            "framework name contains invalid characters",
-            details={"framework": framework}
+            "framework name contains invalid characters", details={"framework": framework}
         )
 
     return framework
@@ -201,21 +188,15 @@ def sanitize_file_path(path: str) -> str:
         ValidationError: If path contains traversal attempts
     """
     # Check for directory traversal
-    if '..' in path:
-        raise ValidationError(
-            "Path contains directory traversal",
-            details={"path": path[:100]}
-        )
+    if ".." in path:
+        raise ValidationError("Path contains directory traversal", details={"path": path[:100]})
 
     # Check for absolute paths (should be relative)
-    if path.startswith('/'):
-        raise ValidationError(
-            "Absolute paths not allowed",
-            details={"path": path[:100]}
-        )
+    if path.startswith("/"):
+        raise ValidationError("Absolute paths not allowed", details={"path": path[:100]})
 
     # Check for null bytes
-    if '\x00' in path:
+    if "\x00" in path:
         raise ValidationError("Path contains null bytes")
 
     return path
@@ -232,26 +213,23 @@ def validate_boolean(value: any, field_name: str = "value") -> bool:
 
     if isinstance(value, str):
         lower = value.lower()
-        if lower in ('true', '1', 'yes', 'on'):
+        if lower in ("true", "1", "yes", "on"):
             return True
-        if lower in ('false', '0', 'no', 'off'):
+        if lower in ("false", "0", "no", "off"):
             return False
 
     if isinstance(value, int):
         if value in (0, 1):
             return bool(value)
 
-    raise ValidationError(
-        f"{field_name} must be a boolean",
-        details={"value": str(value)[:100]}
-    )
+    raise ValidationError(f"{field_name} must be a boolean", details={"value": str(value)[:100]})
 
 
 def validate_integer(
     value: any,
     field_name: str = "value",
-    min_value: Optional[int] = None,
-    max_value: Optional[int] = None
+    min_value: int | None = None,
+    max_value: int | None = None,
 ) -> int:
     """
     Validate and convert integer input with range checking.
@@ -260,20 +238,17 @@ def validate_integer(
         int_value = int(value)
     except (ValueError, TypeError):
         raise ValidationError(
-            f"{field_name} must be an integer",
-            details={"value": str(value)[:100]}
+            f"{field_name} must be an integer", details={"value": str(value)[:100]}
         )
 
     if min_value is not None and int_value < min_value:
         raise ValidationError(
-            f"{field_name} must be >= {min_value}",
-            details={"value": int_value, "min": min_value}
+            f"{field_name} must be >= {min_value}", details={"value": int_value, "min": min_value}
         )
 
     if max_value is not None and int_value > max_value:
         raise ValidationError(
-            f"{field_name} must be <= {max_value}",
-            details={"value": int_value, "max": max_value}
+            f"{field_name} must be <= {max_value}", details={"value": int_value, "max": max_value}
         )
 
     return int_value
@@ -282,8 +257,8 @@ def validate_integer(
 def validate_float(
     value: any,
     field_name: str = "value",
-    min_value: Optional[float] = None,
-    max_value: Optional[float] = None
+    min_value: float | None = None,
+    max_value: float | None = None,
 ) -> float:
     """
     Validate and convert float input with range checking.
@@ -291,21 +266,16 @@ def validate_float(
     try:
         float_value = float(value)
     except (ValueError, TypeError):
-        raise ValidationError(
-            f"{field_name} must be a number",
-            details={"value": str(value)[:100]}
-        )
+        raise ValidationError(f"{field_name} must be a number", details={"value": str(value)[:100]})
 
     if min_value is not None and float_value < min_value:
         raise ValidationError(
-            f"{field_name} must be >= {min_value}",
-            details={"value": float_value, "min": min_value}
+            f"{field_name} must be >= {min_value}", details={"value": float_value, "min": min_value}
         )
 
     if max_value is not None and float_value > max_value:
         raise ValidationError(
-            f"{field_name} must be <= {max_value}",
-            details={"value": float_value, "max": max_value}
+            f"{field_name} must be <= {max_value}", details={"value": float_value, "max": max_value}
         )
 
     return float_value

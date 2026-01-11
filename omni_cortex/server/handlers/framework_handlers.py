@@ -8,23 +8,24 @@ Integrates with ContextGateway for automatic context preparation.
 import structlog
 from mcp.types import TextContent
 
-from app.langchain_integration import get_memory, save_to_langchain_memory
+from app.core.context_gateway import get_context_gateway
+from app.core.errors import FrameworkNotFoundError
+from app.core.routing import get_framework_info
 from app.core.sampling import (
+    LANGCHAIN_LLM_ENABLED,
     SamplingNotSupportedError,
     call_llm_with_fallback,
-    LANGCHAIN_LLM_ENABLED,
 )
-from app.core.context_gateway import get_context_gateway
-from app.core.routing import get_framework_info
-from app.core.errors import FrameworkNotFoundError
+from app.langchain_integration import get_memory, save_to_langchain_memory
 from app.orchestrators import FRAMEWORK_ORCHESTRATORS
+
 from ..framework_prompts import FRAMEWORKS
 from .validation import (
     ValidationError,
-    validate_query,
     validate_context,
-    validate_thread_id,
     validate_framework_name,
+    validate_query,
+    validate_thread_id,
 )
 
 logger = structlog.get_logger("omni-cortex.framework_handlers")
@@ -78,7 +79,7 @@ async def handle_think_framework(
             # Graceful degradation: proceed without auto-context if gateway fails
             logger.warning(
                 f"Auto-context failed for {fw_name}",
-                extra={"error": str(e), "error_type": type(e).__name__}
+                extra={"error": str(e), "error_type": type(e).__name__},
             )
             context = "None provided"
 
@@ -90,7 +91,9 @@ async def handle_think_framework(
             history_str = "\n".join(str(m) for m in mem_context["chat_history"][-5:])
             context = f"CONVERSATION HISTORY:\n{history_str}\n\n{context}"
         if mem_context.get("framework_history"):
-            context = f"PREVIOUSLY USED FRAMEWORKS: {mem_context['framework_history'][-5:]}\n\n{context}"
+            context = (
+                f"PREVIOUSLY USED FRAMEWORKS: {mem_context['framework_history'][-5:]}\n\n{context}"
+            )
 
     # Try orchestrator with MCP sampling first (if client supports it)
     if fw_name in FRAMEWORK_ORCHESTRATORS:
@@ -100,12 +103,7 @@ async def handle_think_framework(
 
             # Save to memory if thread_id provided
             if thread_id:
-                await save_to_langchain_memory(
-                    thread_id,
-                    query,
-                    result["final_answer"],
-                    fw_name
-                )
+                await save_to_langchain_memory(thread_id, query, result["final_answer"], fw_name)
 
             # Return result with metadata
             output = f"# Framework: {fw_name}\n"
@@ -132,7 +130,7 @@ async def handle_think_framework(
                 prompt=prompt,
                 sampler=None,  # Skip sampling, go straight to LangChain
                 max_tokens=4000,
-                temperature=0.7
+                temperature=0.7,
             )
 
             # Save to memory if thread_id provided

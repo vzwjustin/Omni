@@ -4,12 +4,13 @@ Strategy Framework Orchestrators
 High-level planning and architectural reasoning frameworks.
 """
 
-from typing import Dict, Any
-from ..core.sampling import ClientSampler
+from typing import Any
+
 from ..core.constants import CONTENT
+from ..core.sampling import ClientSampler
 
 
-async def reason_flux(sampler: ClientSampler, query: str, context: str) -> Dict[str, Any]:
+async def reason_flux(sampler: ClientSampler, query: str, context: str) -> dict[str, Any]:
     """
     ReasonFlux: Hierarchical planning (Template -> Expand -> Refine)
     """
@@ -65,12 +66,12 @@ Provide:
             "framework": "reason_flux",
             "phases": ["template", "expand", "refine"],
             "template": template[:300] + "...",
-            "expanded": expanded[:300] + "..."
-        }
+            "expanded": expanded[:300] + "...",
+        },
     }
 
 
-async def self_discover(sampler: ClientSampler, query: str, context: str) -> Dict[str, Any]:
+async def self_discover(sampler: ClientSampler, query: str, context: str) -> dict[str, Any]:
     """
     Self-Discover: Discover and apply custom reasoning patterns
     """
@@ -136,12 +137,12 @@ Provide final verified solution."""
         "final_answer": verified,
         "metadata": {
             "framework": "self_discover",
-            "selected_patterns": selected_patterns[:CONTENT.ERROR_PREVIEW] + "..."
-        }
+            "selected_patterns": selected_patterns[: CONTENT.ERROR_PREVIEW] + "...",
+        },
     }
 
 
-async def buffer_of_thoughts(sampler: ClientSampler, query: str, context: str) -> Dict[str, Any]:
+async def buffer_of_thoughts(sampler: ClientSampler, query: str, context: str) -> dict[str, Any]:
     """
     Buffer of Thoughts: Build context progressively in a thought buffer
     """
@@ -180,8 +181,8 @@ What's the core challenge? What makes this difficult?"""
     approaches_prompt = f"""Generate possible approaches:
 
 ## Buffer So Far
-INIT: {buffer[0][1][:CONTENT.ERROR_PREVIEW]}...
-ANALYSIS: {buffer[1][1][:CONTENT.ERROR_PREVIEW]}...
+INIT: {buffer[0][1][: CONTENT.ERROR_PREVIEW]}...
+ANALYSIS: {buffer[1][1][: CONTENT.ERROR_PREVIEW]}...
 
 List 3 different approaches to solve this."""
 
@@ -206,7 +207,7 @@ Which approach is best and why?"""
     synthesis_prompt = f"""Synthesize final solution using the thought buffer:
 
 ## Complete Thought Buffer
-{chr(10).join(f'{label}: {text[:150]}...' for label, text in buffer)}
+{chr(10).join(f"{label}: {text[:150]}..." for label, text in buffer)}
 
 ## Original Problem
 {query}
@@ -220,12 +221,12 @@ Provide complete solution based on the reasoning chain."""
         "metadata": {
             "framework": "buffer_of_thoughts",
             "buffer_steps": len(buffer),
-            "reasoning_chain": [label for label, _ in buffer]
-        }
+            "reasoning_chain": [label for label, _ in buffer],
+        },
     }
 
 
-async def coala(sampler: ClientSampler, query: str, context: str) -> Dict[str, Any]:
+async def coala(sampler: ClientSampler, query: str, context: str) -> dict[str, Any]:
     """
     CoALA: Cognitive architecture with working + episodic memory
     """
@@ -253,10 +254,10 @@ What relevant knowledge applies? Any similar problems solved before? Best practi
     reasoning_prompt = f"""REASONING: Analyze and create action plan
 
 ## Perception
-{perception[:CONTENT.ERROR_PREVIEW]}...
+{perception[: CONTENT.ERROR_PREVIEW]}...
 
 ## Memory
-{memory[:CONTENT.ERROR_PREVIEW]}...
+{memory[: CONTENT.ERROR_PREVIEW]}...
 
 ## Goal
 {query}
@@ -298,12 +299,12 @@ What worked well? What could be improved? Key learnings to remember?"""
         "final_answer": final_output,
         "metadata": {
             "framework": "coala",
-            "cognitive_stages": ["perception", "memory", "reasoning", "action", "learning"]
-        }
+            "cognitive_stages": ["perception", "memory", "reasoning", "action", "learning"],
+        },
     }
 
 
-async def least_to_most(sampler: ClientSampler, query: str, context: str) -> Dict[str, Any]:
+async def least_to_most(sampler: ClientSampler, query: str, context: str) -> dict[str, Any]:
     """
     Least-to-Most: Bottom-up atomic function decomposition
     """
@@ -365,14 +366,11 @@ Check: Do all components work together? Any gaps? Any conflicts?"""
 
     return {
         "final_answer": verified,
-        "metadata": {
-            "framework": "least_to_most",
-            "subproblems": subproblems[:300] + "..."
-        }
+        "metadata": {"framework": "least_to_most", "subproblems": subproblems[:300] + "..."},
     }
 
 
-async def comparative_arch(sampler: ClientSampler, query: str, context: str) -> Dict[str, Any]:
+async def comparative_arch(sampler: ClientSampler, query: str, context: str) -> dict[str, Any]:
     """
     Comparative Architecture: Compare multiple approaches (readability/memory/speed)
     """
@@ -389,7 +387,7 @@ Context: {context}
 Prioritize: Clear names, simple logic, good documentation.
 Provide code with pros/cons analysis."""
 
-    approaches['readable'] = await sampler.request_sample(readable_prompt, temperature=0.5)
+    approaches["readable"] = await sampler.request_sample(readable_prompt, temperature=0.5)
 
     # Approach 2: Efficient (memory)
     efficient_prompt = f"""Design for MEMORY EFFICIENCY:
@@ -401,7 +399,7 @@ Context: {context}
 Prioritize: Minimal memory footprint, efficient data structures.
 Provide code with space complexity analysis and pros/cons."""
 
-    approaches['efficient'] = await sampler.request_sample(efficient_prompt, temperature=0.5)
+    approaches["efficient"] = await sampler.request_sample(efficient_prompt, temperature=0.5)
 
     # Approach 3: Fast (speed)
     fast_prompt = f"""Design for SPEED and PERFORMANCE:
@@ -413,19 +411,19 @@ Context: {context}
 Prioritize: Fast execution, optimal algorithms, minimal overhead.
 Provide code with time complexity analysis and pros/cons."""
 
-    approaches['fast'] = await sampler.request_sample(fast_prompt, temperature=0.5)
+    approaches["fast"] = await sampler.request_sample(fast_prompt, temperature=0.5)
 
     # Compare and recommend
     compare_prompt = f"""Compare these three approaches:
 
 ## Readable Approach
-{approaches['readable'][:400]}...
+{approaches["readable"][:400]}...
 
 ## Memory-Efficient Approach
-{approaches['efficient'][:400]}...
+{approaches["efficient"][:400]}...
 
 ## Fast Approach
-{approaches['fast'][:400]}...
+{approaches["fast"][:400]}...
 
 ## Original Problem
 {query}
@@ -440,12 +438,12 @@ Provide final recommended solution."""
         "metadata": {
             "framework": "comparative_arch",
             "approaches_generated": 3,
-            "dimensions": ["readability", "memory_efficiency", "speed"]
-        }
+            "dimensions": ["readability", "memory_efficiency", "speed"],
+        },
     }
 
 
-async def plan_and_solve(sampler: ClientSampler, query: str, context: str) -> Dict[str, Any]:
+async def plan_and_solve(sampler: ClientSampler, query: str, context: str) -> dict[str, Any]:
     """
     Plan-and-Solve: Explicit planning before execution
     """
@@ -503,8 +501,5 @@ Did we follow the plan? Any deviations? Complete and correct?"""
 
     return {
         "final_answer": final_output,
-        "metadata": {
-            "framework": "plan_and_solve",
-            "plan": plan[:300] + "..."
-        }
+        "metadata": {"framework": "plan_and_solve", "plan": plan[:300] + "..."},
     }

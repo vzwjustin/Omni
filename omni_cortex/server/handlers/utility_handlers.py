@@ -6,37 +6,38 @@ Handles memory, context, code execution, and utility tools.
 
 import json
 import os
-import structlog
 
+import structlog
 from mcp.types import TextContent
 
-from app.langchain_integration import get_memory, save_to_langchain_memory
-from app.core.context_gateway import get_context_gateway
 from app.core.audit import log_tool_call
+from app.core.context_gateway import get_context_gateway
 from app.core.context_utils import (
-    count_tokens,
-    compress_content,
-    detect_truncation,
+    RULE_PRESETS,
     analyze_claude_md,
+    compress_content,
+    count_tokens,
+    detect_truncation,
     generate_claude_md_template,
     inject_rules,
-    RULE_PRESETS,
 )
+from app.langchain_integration import get_memory, save_to_langchain_memory
+
 from ..framework_prompts import FRAMEWORKS
 from .validation import (
     ValidationError,
-    validate_thread_id,
-    validate_query,
-    validate_text,
-    validate_code,
-    validate_path,
     validate_action,
-    validate_file_list,
-    validate_string_list,
     validate_boolean,
+    validate_category,
+    validate_code,
+    validate_file_list,
     validate_float,
     validate_int,
-    validate_category,
+    validate_path,
+    validate_query,
+    validate_string_list,
+    validate_text,
+    validate_thread_id,
 )
 
 logger = structlog.get_logger("omni-cortex")
@@ -45,7 +46,17 @@ logger = structlog.get_logger("omni-cortex")
 async def handle_list_frameworks(arguments: dict) -> list[TextContent]:
     """List all thinking frameworks by category."""
     output = f"# Omni-Cortex: {len(FRAMEWORKS)} Thinking Frameworks\n\n"
-    for cat in ["strategy", "search", "iterative", "code", "context", "fast", "verification", "agent", "rag"]:
+    for cat in [
+        "strategy",
+        "search",
+        "iterative",
+        "code",
+        "context",
+        "fast",
+        "verification",
+        "agent",
+        "rag",
+    ]:
         output += f"## {cat.upper()}\n"
         for n, fw in FRAMEWORKS.items():
             if fw["category"] == cat:
@@ -81,10 +92,12 @@ async def handle_recommend(arguments: dict) -> list[TextContent]:
         rec = "self_discover"
 
     fw = FRAMEWORKS[rec]
-    return [TextContent(
-        type="text",
-        text=f"Recommended: `think_{rec}`\n\n{fw['description']}\nBest for: {', '.join(fw['best_for'])}"
-    )]
+    return [
+        TextContent(
+            type="text",
+            text=f"Recommended: `think_{rec}`\n\n{fw['description']}\nBest for: {', '.join(fw['best_for'])}",
+        )
+    ]
 
 
 async def handle_get_context(arguments: dict) -> list[TextContent]:
@@ -107,7 +120,9 @@ async def handle_save_context(arguments: dict) -> list[TextContent]:
         thread_id = validate_thread_id(arguments.get("thread_id"), required=True)
         query = validate_query(arguments.get("query"), required=True)
         answer = validate_text(arguments.get("answer"), "answer", max_length=100000, required=True)
-        framework = validate_text(arguments.get("framework"), "framework", max_length=100, required=True)
+        framework = validate_text(
+            arguments.get("framework"), "framework", max_length=100, required=True
+        )
     except ValidationError as e:
         return [TextContent(type="text", text=f"Validation error: {str(e)}")]
 
@@ -124,22 +139,25 @@ async def handle_save_context(arguments: dict) -> list[TextContent]:
 
 async def handle_execute_code(arguments: dict) -> list[TextContent]:
     """Execute Python code in sandboxed environment."""
-    from app.nodes.code.pot import _safe_execute
-    from app.core.settings import get_settings
     import time
-    
+
+    from app.core.settings import get_settings
+    from app.nodes.code.pot import _safe_execute
+
     # Code execution rate limiter state (sliding window)
     if not hasattr(handle_execute_code, "_executions"):
         handle_execute_code._executions = []
-    
+
     settings = get_settings()
     max_rpm = settings.rate_limit_execute_rpm
     now = time.time()
     window_start = now - 60  # 1-minute sliding window
-    
+
     # Clean old entries
-    handle_execute_code._executions = [t for t in handle_execute_code._executions if t > window_start]
-    
+    handle_execute_code._executions = [
+        t for t in handle_execute_code._executions if t > window_start
+    ]
+
     # Check rate limit
     if len(handle_execute_code._executions) >= max_rpm:
         wait_time = int(handle_execute_code._executions[0] - window_start) + 1
@@ -147,31 +165,47 @@ async def handle_execute_code(arguments: dict) -> list[TextContent]:
             "execute_code_rate_limited",
             executions_in_window=len(handle_execute_code._executions),
             limit=max_rpm,
-            wait_seconds=wait_time
+            wait_seconds=wait_time,
         )
-        return [TextContent(type="text", text=json.dumps({
-            "success": False,
-            "error": f"Rate limit exceeded: {max_rpm} executions/minute. Try again in {wait_time}s."
-        }))]
-    
+        return [
+            TextContent(
+                type="text",
+                text=json.dumps(
+                    {
+                        "success": False,
+                        "error": f"Rate limit exceeded: {max_rpm} executions/minute. Try again in {wait_time}s.",
+                    }
+                ),
+            )
+        ]
+
     # Record this execution
     handle_execute_code._executions.append(now)
 
     # Validate inputs
     try:
         code = validate_code(arguments.get("code"))
-        language = validate_text(arguments.get("language"), "language", max_length=50, required=False) or "python"
+        language = (
+            validate_text(arguments.get("language"), "language", max_length=50, required=False)
+            or "python"
+        )
     except ValidationError as e:
-        return [TextContent(type="text", text=json.dumps({
-            "success": False,
-            "error": f"Validation error: {str(e)}"
-        }))]
+        return [
+            TextContent(
+                type="text",
+                text=json.dumps({"success": False, "error": f"Validation error: {str(e)}"}),
+            )
+        ]
 
     if language.lower() != "python":
-        return [TextContent(type="text", text=json.dumps({
-            "success": False,
-            "error": f"Only python supported, got: {language}"
-        }))]
+        return [
+            TextContent(
+                type="text",
+                text=json.dumps(
+                    {"success": False, "error": f"Only python supported, got: {language}"}
+                ),
+            )
+        ]
 
     result = await _safe_execute(code)
     return [TextContent(type="text", text=json.dumps(result, indent=2))]
@@ -179,12 +213,12 @@ async def handle_execute_code(arguments: dict) -> list[TextContent]:
 
 async def handle_health(arguments: dict, manager, lean_mode: bool) -> list[TextContent]:
     """Check server health and capabilities."""
-    from app.core.settings import get_settings
     from app.core.context.context_cache import get_context_cache
-    
+    from app.core.settings import get_settings
+
     settings = get_settings()
     collections = list(manager.COLLECTIONS.keys())
-    
+
     if lean_mode:
         exposed_tools = 10
         note = (
@@ -195,7 +229,7 @@ async def handle_health(arguments: dict, manager, lean_mode: bool) -> list[TextC
     else:
         exposed_tools = len(FRAMEWORKS) + 21
         note = "FULL MODE: All 83 tools exposed (62 think_* + 21 utilities)"
-    
+
     # Get cache status
     cache_status = "disabled"
     cache_entries = 0
@@ -209,7 +243,7 @@ async def handle_health(arguments: dict, manager, lean_mode: bool) -> list[TextC
             cache_hit_rate = stats["hit_rate"]
     except Exception as e:
         logger.warning("health_check_cache_status_failed", error=str(e))
-    
+
     # Build enhanced health response
     health_data = {
         "status": "healthy",
@@ -246,7 +280,7 @@ async def handle_health(arguments: dict, manager, lean_mode: bool) -> list[TextC
                 "enabled": settings.enable_enhanced_metrics,
                 "prometheus": settings.enable_prometheus_metrics,
             },
-        }
+        },
     }
 
     return [TextContent(type="text", text=json.dumps(health_data, indent=2))]
@@ -255,45 +289,57 @@ async def handle_health(arguments: dict, manager, lean_mode: bool) -> list[TextC
 async def handle_prepare_context(arguments: dict) -> list[TextContent]:
     """Gemini-powered context preparation with enhanced features."""
     from app.core.settings import get_settings
-    
+
     valid_formats = ["prompt", "json"]
     settings = get_settings()
 
     # Validate inputs
     try:
         query = validate_query(arguments.get("query"), required=True)
-        workspace_path = validate_path(arguments.get("workspace_path"), "workspace_path", required=False)
-        code_context = validate_text(arguments.get("code_context"), "code_context", max_length=100000, required=False) or None
+        workspace_path = validate_path(
+            arguments.get("workspace_path"), "workspace_path", required=False
+        )
+        code_context = (
+            validate_text(
+                arguments.get("code_context"), "code_context", max_length=100000, required=False
+            )
+            or None
+        )
         file_list = validate_file_list(arguments.get("file_list"))
         search_docs = validate_boolean(arguments.get("search_docs"), "search_docs", default=True)
         output_format = validate_category(
-            arguments.get("output_format") or "prompt",
-            valid_formats,
-            "output_format"
+            arguments.get("output_format") or "prompt", valid_formats, "output_format"
         )
         # New enhanced options
-        enable_cache = validate_boolean(arguments.get("enable_cache"), "enable_cache", default=settings.enable_context_cache)
-        enable_multi_repo = validate_boolean(arguments.get("enable_multi_repo"), "enable_multi_repo", default=settings.enable_multi_repo_discovery)
-        enable_source_attribution = validate_boolean(arguments.get("enable_source_attribution"), "enable_source_attribution", default=settings.enable_source_attribution)
-    except ValidationError as e:
-        log_tool_call(
-            tool_name="prepare_context",
-            arguments=arguments,
-            success=False,
-            error=str(e)
+        enable_cache = validate_boolean(
+            arguments.get("enable_cache"), "enable_cache", default=settings.enable_context_cache
         )
-        return [TextContent(type="text", text=json.dumps({
-            "error": f"Validation error: {str(e)}"
-        }, indent=2))]
+        enable_multi_repo = validate_boolean(
+            arguments.get("enable_multi_repo"),
+            "enable_multi_repo",
+            default=settings.enable_multi_repo_discovery,
+        )
+        enable_source_attribution = validate_boolean(
+            arguments.get("enable_source_attribution"),
+            "enable_source_attribution",
+            default=settings.enable_source_attribution,
+        )
+    except ValidationError as e:
+        log_tool_call(tool_name="prepare_context", arguments=arguments, success=False, error=str(e))
+        return [
+            TextContent(
+                type="text", text=json.dumps({"error": f"Validation error: {str(e)}"}, indent=2)
+            )
+        ]
 
     try:
         gateway = get_context_gateway()
-        
+
         # Temporarily override settings if requested
         original_cache_setting = gateway._enable_cache
         try:
             gateway._enable_cache = enable_cache
-            
+
             context = await gateway.prepare_context(
                 query=query,
                 workspace_path=workspace_path,
@@ -308,16 +354,12 @@ async def handle_prepare_context(arguments: dict) -> list[TextContent]:
             gateway._enable_cache = original_cache_setting
 
         # Audit log successful call
-        log_tool_call(
-            tool_name="prepare_context",
-            arguments=arguments,
-            success=True
-        )
+        log_tool_call(tool_name="prepare_context", arguments=arguments, success=True)
 
         if output_format == "json":
             result = context.to_dict()
             # Add cache metadata if available
-            if hasattr(context, 'cache_metadata') and context.cache_metadata:
+            if hasattr(context, "cache_metadata") and context.cache_metadata:
                 result["cache_metadata"] = {
                     "cache_hit": context.cache_metadata.cache_hit,
                     "cache_age_seconds": context.cache_metadata.cache_age.total_seconds(),
@@ -331,7 +373,7 @@ async def handle_prepare_context(arguments: dict) -> list[TextContent]:
             metadata_parts = []
 
             # Cache status
-            if hasattr(context, 'cache_metadata') and context.cache_metadata:
+            if hasattr(context, "cache_metadata") and context.cache_metadata:
                 if context.cache_metadata.cache_hit:
                     cache_age = int(context.cache_metadata.cache_age.total_seconds())
                     cache_status = f"Cache Hit ({cache_age}s old"
@@ -341,13 +383,13 @@ async def handle_prepare_context(arguments: dict) -> list[TextContent]:
                     metadata_parts.append(cache_status)
 
             # Quality metrics
-            if hasattr(context, 'quality_metrics') and context.quality_metrics:
+            if hasattr(context, "quality_metrics") and context.quality_metrics:
                 qm = context.quality_metrics
                 quality_info = f"Quality: {qm.context_coverage_score:.0%} coverage, {qm.avg_file_relevance:.0%} file relevance"
                 metadata_parts.append(quality_info)
 
             # Token budget usage
-            if hasattr(context, 'token_budget_usage') and context.token_budget_usage:
+            if hasattr(context, "token_budget_usage") and context.token_budget_usage:
                 tbu = context.token_budget_usage
                 budget_info = f"Budget: {tbu.used_tokens}/{tbu.allocated_tokens} tokens ({tbu.utilization_percentage:.0f}%)"
                 if not tbu.within_budget:
@@ -366,16 +408,19 @@ async def handle_prepare_context(arguments: dict) -> list[TextContent]:
         # missing credentials). We log with error_type for diagnostics and provide
         # a hint about common configuration issues rather than exposing raw errors.
         logger.error("context_gateway_failed", error=str(e), error_type=type(e).__name__)
-        log_tool_call(
-            tool_name="prepare_context",
-            arguments=arguments,
-            success=False,
-            error=str(e)
-        )
-        return [TextContent(type="text", text=json.dumps({
-            "error": str(e),
-            "hint": "Ensure GOOGLE_API_KEY is set for Gemini-powered context preparation"
-        }, indent=2))]
+        log_tool_call(tool_name="prepare_context", arguments=arguments, success=False, error=str(e))
+        return [
+            TextContent(
+                type="text",
+                text=json.dumps(
+                    {
+                        "error": str(e),
+                        "hint": "Ensure GOOGLE_API_KEY is set for Gemini-powered context preparation",
+                    },
+                    indent=2,
+                ),
+            )
+        ]
 
 
 async def handle_count_tokens(arguments: dict) -> list[TextContent]:
@@ -384,27 +429,32 @@ async def handle_count_tokens(arguments: dict) -> list[TextContent]:
     try:
         text = validate_text(arguments.get("text"), "text", max_length=500000, required=True)
     except ValidationError as e:
-        return [TextContent(type="text", text=json.dumps({
-            "error": f"Validation error: {str(e)}"
-        }))]
+        return [TextContent(type="text", text=json.dumps({"error": f"Validation error: {str(e)}"}))]
 
     tokens = count_tokens(text)
-    return [TextContent(type="text", text=json.dumps({
-        "tokens": tokens,
-        "characters": len(text)
-    }))]
+    return [TextContent(type="text", text=json.dumps({"tokens": tokens, "characters": len(text)}))]
 
 
 async def handle_compress_content(arguments: dict) -> list[TextContent]:
     """Compress file content by removing comments/whitespace."""
     # Validate inputs
     try:
-        content = validate_text(arguments.get("content"), "content", max_length=500000, required=True)
-        target = validate_float(arguments.get("target_reduction"), "target_reduction", default=0.3, min_value=0.0, max_value=1.0)
+        content = validate_text(
+            arguments.get("content"), "content", max_length=500000, required=True
+        )
+        target = validate_float(
+            arguments.get("target_reduction"),
+            "target_reduction",
+            default=0.3,
+            min_value=0.0,
+            max_value=1.0,
+        )
     except ValidationError as e:
-        return [TextContent(type="text", text=json.dumps({
-            "error": f"Validation error: {str(e)}"
-        }, indent=2))]
+        return [
+            TextContent(
+                type="text", text=json.dumps({"error": f"Validation error: {str(e)}"}, indent=2)
+            )
+        ]
 
     result = compress_content(content, target)
     return [TextContent(type="text", text=json.dumps(result, indent=2))]
@@ -416,9 +466,11 @@ async def handle_detect_truncation(arguments: dict) -> list[TextContent]:
     try:
         text = validate_text(arguments.get("text"), "text", max_length=500000, required=True)
     except ValidationError as e:
-        return [TextContent(type="text", text=json.dumps({
-            "error": f"Validation error: {str(e)}"
-        }, indent=2))]
+        return [
+            TextContent(
+                type="text", text=json.dumps({"error": f"Validation error: {str(e)}"}, indent=2)
+            )
+        ]
 
     result = detect_truncation(text)
     return [TextContent(type="text", text=json.dumps(result, indent=2))]
@@ -433,53 +485,72 @@ async def handle_manage_claude_md(arguments: dict) -> list[TextContent]:
     try:
         action = validate_action(arguments.get("action") or "analyze", valid_actions)
     except ValidationError as e:
-        return [TextContent(type="text", text=json.dumps({
-            "error": f"Validation error: {str(e)}"
-        }, indent=2))]
+        return [
+            TextContent(
+                type="text", text=json.dumps({"error": f"Validation error: {str(e)}"}, indent=2)
+            )
+        ]
 
     if action == "analyze":
         try:
-            directory = validate_path(arguments.get("directory"), "directory", required=False) or os.getcwd()
+            directory = (
+                validate_path(arguments.get("directory"), "directory", required=False)
+                or os.getcwd()
+            )
         except ValidationError as e:
-            return [TextContent(type="text", text=json.dumps({
-                "error": f"Validation error: {str(e)}"
-            }, indent=2))]
+            return [
+                TextContent(
+                    type="text", text=json.dumps({"error": f"Validation error: {str(e)}"}, indent=2)
+                )
+            ]
         result = analyze_claude_md(directory)
         return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
     elif action == "generate":
         try:
             project_type = validate_category(
-                arguments.get("project_type") or "general",
-                valid_project_types,
-                "project_type"
+                arguments.get("project_type") or "general", valid_project_types, "project_type"
             )
             rules = validate_string_list(arguments.get("rules"), "rules", max_items=100) or []
             presets = validate_string_list(arguments.get("presets"), "presets", max_items=20) or []
         except ValidationError as e:
-            return [TextContent(type="text", text=json.dumps({
-                "error": f"Validation error: {str(e)}"
-            }, indent=2))]
+            return [
+                TextContent(
+                    type="text", text=json.dumps({"error": f"Validation error: {str(e)}"}, indent=2)
+                )
+            ]
         result = generate_claude_md_template(project_type, rules, presets)
         return [TextContent(type="text", text=result)]
 
     elif action == "inject":
         try:
-            existing = validate_text(arguments.get("existing_content"), "existing_content", max_length=100000, required=False) or ""
+            existing = (
+                validate_text(
+                    arguments.get("existing_content"),
+                    "existing_content",
+                    max_length=100000,
+                    required=False,
+                )
+                or ""
+            )
             rules = validate_string_list(arguments.get("rules"), "rules", max_items=100) or []
             presets = validate_string_list(arguments.get("presets"), "presets", max_items=20) or []
-            section = validate_text(arguments.get("section"), "section", max_length=100, required=False) or "Rules"
+            section = (
+                validate_text(arguments.get("section"), "section", max_length=100, required=False)
+                or "Rules"
+            )
         except ValidationError as e:
-            return [TextContent(type="text", text=json.dumps({
-                "error": f"Validation error: {str(e)}"
-            }, indent=2))]
+            return [
+                TextContent(
+                    type="text", text=json.dumps({"error": f"Validation error: {str(e)}"}, indent=2)
+                )
+            ]
         result = inject_rules(existing, rules, section, presets)
         return [TextContent(type="text", text=result)]
 
     elif action == "list_presets":
         result = {
-            name: {"rules": rules, "count": len(rules)}
-            for name, rules in RULE_PRESETS.items()
+            name: {"rules": rules, "count": len(rules)} for name, rules in RULE_PRESETS.items()
         }
         return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
@@ -489,52 +560,58 @@ async def handle_manage_claude_md(arguments: dict) -> list[TextContent]:
 async def handle_prepare_context_streaming(arguments: dict) -> list[TextContent]:
     """Gemini-powered context preparation with streaming progress."""
     from app.core.context.streaming_gateway import get_streaming_context_gateway
-    
+
     valid_formats = ["prompt", "json"]
-    
+
     # Validate inputs
     try:
         query = validate_query(arguments.get("query"), required=True)
-        workspace_path = validate_path(arguments.get("workspace_path"), "workspace_path", required=False)
-        code_context = validate_text(arguments.get("code_context"), "code_context", max_length=100000, required=False) or None
+        workspace_path = validate_path(
+            arguments.get("workspace_path"), "workspace_path", required=False
+        )
+        code_context = (
+            validate_text(
+                arguments.get("code_context"), "code_context", max_length=100000, required=False
+            )
+            or None
+        )
         file_list = validate_file_list(arguments.get("file_list"))
         search_docs = validate_boolean(arguments.get("search_docs"), "search_docs", default=True)
         output_format = validate_category(
-            arguments.get("output_format") or "prompt",
-            valid_formats,
-            "output_format"
+            arguments.get("output_format") or "prompt", valid_formats, "output_format"
         )
     except ValidationError as e:
         log_tool_call(
-            tool_name="prepare_context_streaming",
-            arguments=arguments,
-            success=False,
-            error=str(e)
+            tool_name="prepare_context_streaming", arguments=arguments, success=False, error=str(e)
         )
-        return [TextContent(type="text", text=json.dumps({
-            "error": f"Validation error: {str(e)}"
-        }, indent=2))]
-    
+        return [
+            TextContent(
+                type="text", text=json.dumps({"error": f"Validation error: {str(e)}"}, indent=2)
+            )
+        ]
+
     try:
         gateway = get_streaming_context_gateway()
-        
+
         # Collect progress events
         progress_events = []
-        
+
         def progress_callback(event):
             """Collect progress events."""
-            progress_events.append({
-                "component": event.component,
-                "status": event.status.value,
-                "progress": event.progress,
-                "message": event.message,
-                "timestamp": event.timestamp.isoformat(),
-                "estimated_completion": event.estimated_completion,
-            })
-        
+            progress_events.append(
+                {
+                    "component": event.component,
+                    "status": event.status.value,
+                    "progress": event.progress,
+                    "message": event.message,
+                    "timestamp": event.timestamp.isoformat(),
+                    "estimated_completion": event.estimated_completion,
+                }
+            )
+
         # Create cancellation token (not used in MCP, but required by API)
         cancellation_token = asyncio.Event()
-        
+
         # Prepare context with streaming
         context = await gateway.prepare_context_streaming(
             query=query,
@@ -545,14 +622,10 @@ async def handle_prepare_context_streaming(arguments: dict) -> list[TextContent]
             progress_callback=progress_callback,
             cancellation_token=cancellation_token,
         )
-        
+
         # Audit log successful call
-        log_tool_call(
-            tool_name="prepare_context_streaming",
-            arguments=arguments,
-            success=True
-        )
-        
+        log_tool_call(tool_name="prepare_context_streaming", arguments=arguments, success=True)
+
         # Format output
         if output_format == "json":
             result = context.to_detailed_json()
@@ -560,7 +633,7 @@ async def handle_prepare_context_streaming(arguments: dict) -> list[TextContent]
             return [TextContent(type="text", text=json.dumps(result, indent=2))]
         else:
             output = "# Context Prepared by Gemini (Streaming)\n\n"
-            
+
             # Add progress summary
             output += "## Progress Summary\n"
             for event in progress_events:
@@ -569,35 +642,40 @@ async def handle_prepare_context_streaming(arguments: dict) -> list[TextContent]
                 elif event["status"] == "failed":
                     output += f"- ❌ {event['component']}: {event['message']}\n"
             output += "\n"
-            
+
             # Add main context
             output += context.to_claude_prompt_enhanced()
             return [TextContent(type="text", text=output)]
-    
+
     except Exception as e:
         logger.error("streaming_context_gateway_failed", error=str(e), error_type=type(e).__name__)
         log_tool_call(
-            tool_name="prepare_context_streaming",
-            arguments=arguments,
-            success=False,
-            error=str(e)
+            tool_name="prepare_context_streaming", arguments=arguments, success=False, error=str(e)
         )
-        return [TextContent(type="text", text=json.dumps({
-            "error": str(e),
-            "hint": "Ensure GOOGLE_API_KEY is set and streaming is enabled"
-        }, indent=2))]
+        return [
+            TextContent(
+                type="text",
+                text=json.dumps(
+                    {
+                        "error": str(e),
+                        "hint": "Ensure GOOGLE_API_KEY is set and streaming is enabled",
+                    },
+                    indent=2,
+                ),
+            )
+        ]
 
 
 async def handle_context_cache_status(arguments: dict) -> list[TextContent]:
     """Get context cache status and statistics."""
     from app.core.context.context_cache import get_context_cache
-    
+
     try:
         cache = get_context_cache()
-        
+
         # Get cache statistics
         stats = cache.get_statistics()
-        
+
         # Format output
         result = {
             "cache_enabled": cache._enabled,
@@ -616,20 +694,25 @@ async def handle_context_cache_status(arguments: dict) -> list[TextContent]:
                 "documentation": cache._ttl_settings.get("documentation", 86400),
             },
         }
-        
+
         return [TextContent(type="text", text=json.dumps(result, indent=2))]
-    
+
     except Exception as e:
         logger.error("cache_status_failed", error=str(e), error_type=type(e).__name__)
-        return [TextContent(type="text", text=json.dumps({
-            "error": str(e),
-            "hint": "Cache may not be initialized or enabled"
-        }, indent=2))]
+        return [
+            TextContent(
+                type="text",
+                text=json.dumps(
+                    {"error": str(e), "hint": "Cache may not be initialized or enabled"}, indent=2
+                ),
+            )
+        ]
 
 
 # =============================================================================
 # Token Reduction Tools (TOON + LLMLingua-2)
 # =============================================================================
+
 
 async def handle_serialize_to_toon(arguments: dict) -> list[TextContent]:
     """
@@ -647,13 +730,14 @@ async def handle_serialize_to_toon(arguments: dict) -> list[TextContent]:
     try:
         data_str = validate_text(arguments.get("data"), "data", max_length=500000, required=True)
     except ValidationError as e:
-        return [TextContent(type="text", text=json.dumps({
-            "error": f"Validation error: {str(e)}"
-        }, indent=2))]
+        return [
+            TextContent(
+                type="text", text=json.dumps({"error": f"Validation error: {str(e)}"}, indent=2)
+            )
+        ]
 
     try:
         from app.core.token_reduction import get_manager
-        from app.core.context_utils import count_tokens
 
         # Parse JSON input
         data = json.loads(data_str)
@@ -667,23 +751,19 @@ async def handle_serialize_to_toon(arguments: dict) -> list[TextContent]:
         # Get comparison stats
         comparison = manager.get_format_comparison(data)
 
-        result = {
-            "toon_output": toon_str,
-            "statistics": comparison,
-            "success": True
-        }
+        result = {"toon_output": toon_str, "statistics": comparison, "success": True}
 
         return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
     except json.JSONDecodeError as e:
-        return [TextContent(type="text", text=json.dumps({
-            "error": f"Invalid JSON input: {str(e)}"
-        }, indent=2))]
+        return [
+            TextContent(
+                type="text", text=json.dumps({"error": f"Invalid JSON input: {str(e)}"}, indent=2)
+            )
+        ]
     except Exception as e:
         logger.error("toon_serialization_failed", error=str(e))
-        return [TextContent(type="text", text=json.dumps({
-            "error": str(e)
-        }, indent=2))]
+        return [TextContent(type="text", text=json.dumps({"error": str(e)}, indent=2))]
 
 
 async def handle_deserialize_from_toon(arguments: dict) -> list[TextContent]:
@@ -697,11 +777,15 @@ async def handle_deserialize_from_toon(arguments: dict) -> list[TextContent]:
         JSON representation of the data
     """
     try:
-        toon_str = validate_text(arguments.get("toon_data"), "toon_data", max_length=500000, required=True)
+        toon_str = validate_text(
+            arguments.get("toon_data"), "toon_data", max_length=500000, required=True
+        )
     except ValidationError as e:
-        return [TextContent(type="text", text=json.dumps({
-            "error": f"Validation error: {str(e)}"
-        }, indent=2))]
+        return [
+            TextContent(
+                type="text", text=json.dumps({"error": f"Validation error: {str(e)}"}, indent=2)
+            )
+        ]
 
     try:
         from app.core.token_reduction import deserialize_from_toon
@@ -709,18 +793,13 @@ async def handle_deserialize_from_toon(arguments: dict) -> list[TextContent]:
         # Deserialize from TOON
         data = deserialize_from_toon(toon_str)
 
-        result = {
-            "data": data,
-            "success": True
-        }
+        result = {"data": data, "success": True}
 
         return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
     except Exception as e:
         logger.error("toon_deserialization_failed", error=str(e))
-        return [TextContent(type="text", text=json.dumps({
-            "error": str(e)
-        }, indent=2))]
+        return [TextContent(type="text", text=json.dumps({"error": str(e)}, indent=2))]
 
 
 async def handle_compress_prompt(arguments: dict) -> list[TextContent]:
@@ -740,12 +819,18 @@ async def handle_compress_prompt(arguments: dict) -> list[TextContent]:
     """
     try:
         prompt = validate_text(arguments.get("prompt"), "prompt", max_length=500000, required=True)
-        rate = validate_float(arguments.get("rate"), "rate", default=0.5, min_value=0.1, max_value=0.9)
-        min_tokens = validate_int(arguments.get("min_tokens"), "min_tokens", default=None, min_value=1000)
+        rate = validate_float(
+            arguments.get("rate"), "rate", default=0.5, min_value=0.1, max_value=0.9
+        )
+        min_tokens = validate_int(
+            arguments.get("min_tokens"), "min_tokens", default=None, min_value=1000
+        )
     except ValidationError as e:
-        return [TextContent(type="text", text=json.dumps({
-            "error": f"Validation error: {str(e)}"
-        }, indent=2))]
+        return [
+            TextContent(
+                type="text", text=json.dumps({"error": f"Validation error: {str(e)}"}, indent=2)
+            )
+        ]
 
     try:
         from app.core.token_reduction import get_manager, get_reduction_stats
@@ -756,9 +841,7 @@ async def handle_compress_prompt(arguments: dict) -> list[TextContent]:
         # Add stats if compression succeeded
         if result.get("compressed", False):
             stats = get_reduction_stats(
-                original=prompt,
-                reduced=result.get("compressed_prompt", prompt),
-                method="llmlingua"
+                original=prompt, reduced=result.get("compressed_prompt", prompt), method="llmlingua"
             )
             result["statistics"] = stats
 
@@ -766,10 +849,18 @@ async def handle_compress_prompt(arguments: dict) -> list[TextContent]:
 
     except Exception as e:
         logger.error("prompt_compression_failed", error=str(e))
-        return [TextContent(type="text", text=json.dumps({
-            "error": str(e),
-            "hint": "LLMLingua may not be installed or initialized. Run: pip install llmlingua"
-        }, indent=2))]
+        return [
+            TextContent(
+                type="text",
+                text=json.dumps(
+                    {
+                        "error": str(e),
+                        "hint": "LLMLingua may not be installed or initialized. Run: pip install llmlingua",
+                    },
+                    indent=2,
+                ),
+            )
+        ]
 
 
 async def handle_compress_context(arguments: dict) -> list[TextContent]:
@@ -788,13 +879,21 @@ async def handle_compress_context(arguments: dict) -> list[TextContent]:
         Compressed result with preserved instruction
     """
     try:
-        instruction = validate_text(arguments.get("instruction"), "instruction", max_length=50000, required=True)
-        context = validate_text(arguments.get("context"), "context", max_length=500000, required=True)
-        rate = validate_float(arguments.get("rate"), "rate", default=0.5, min_value=0.1, max_value=0.9)
+        instruction = validate_text(
+            arguments.get("instruction"), "instruction", max_length=50000, required=True
+        )
+        context = validate_text(
+            arguments.get("context"), "context", max_length=500000, required=True
+        )
+        rate = validate_float(
+            arguments.get("rate"), "rate", default=0.5, min_value=0.1, max_value=0.9
+        )
     except ValidationError as e:
-        return [TextContent(type="text", text=json.dumps({
-            "error": f"Validation error: {str(e)}"
-        }, indent=2))]
+        return [
+            TextContent(
+                type="text", text=json.dumps({"error": f"Validation error: {str(e)}"}, indent=2)
+            )
+        ]
 
     try:
         from app.core.token_reduction import get_manager
@@ -806,10 +905,18 @@ async def handle_compress_context(arguments: dict) -> list[TextContent]:
 
     except Exception as e:
         logger.error("context_compression_failed", error=str(e))
-        return [TextContent(type="text", text=json.dumps({
-            "error": str(e),
-            "hint": "LLMLingua may not be installed. Run: pip install llmlingua"
-        }, indent=2))]
+        return [
+            TextContent(
+                type="text",
+                text=json.dumps(
+                    {
+                        "error": str(e),
+                        "hint": "LLMLingua may not be installed. Run: pip install llmlingua",
+                    },
+                    indent=2,
+                ),
+            )
+        ]
 
 
 async def handle_token_reduction_compare(arguments: dict) -> list[TextContent]:
@@ -823,24 +930,28 @@ async def handle_token_reduction_compare(arguments: dict) -> list[TextContent]:
         Comparison of JSON, TOON, and LLMLingua compression methods
     """
     try:
-        content = validate_text(arguments.get("content"), "content", max_length=500000, required=True)
+        content = validate_text(
+            arguments.get("content"), "content", max_length=500000, required=True
+        )
     except ValidationError as e:
-        return [TextContent(type="text", text=json.dumps({
-            "error": f"Validation error: {str(e)}"
-        }, indent=2))]
+        return [
+            TextContent(
+                type="text", text=json.dumps({"error": f"Validation error: {str(e)}"}, indent=2)
+            )
+        ]
 
     try:
-        from app.core.token_reduction import get_manager, reduce_tokens
         from app.core.context_utils import count_tokens
+        from app.core.token_reduction import get_manager
 
         manager = get_manager()
         result = {
             "original": {
                 "content": content[:200] + "..." if len(content) > 200 else content,
                 "tokens": count_tokens(content),
-                "chars": len(content)
+                "chars": len(content),
             },
-            "methods": {}
+            "methods": {},
         }
 
         # Try TOON serialization
@@ -853,13 +964,10 @@ async def handle_token_reduction_compare(arguments: dict) -> list[TextContent]:
                     "tokens": comparison["toon"]["tokens"],
                     "chars": comparison["toon"]["chars"],
                     "reduction_percent": comparison["savings"]["reduction_percent"],
-                    "recommendation": comparison["recommendation"]
+                    "recommendation": comparison["recommendation"],
                 }
         except json.JSONDecodeError:
-            result["methods"]["toon"] = {
-                "applicable": False,
-                "reason": "Content is not valid JSON"
-            }
+            result["methods"]["toon"] = {"applicable": False, "reason": "Content is not valid JSON"}
 
         # Try LLMLingua compression
         try:
@@ -870,23 +978,18 @@ async def handle_token_reduction_compare(arguments: dict) -> list[TextContent]:
                     "compressed_tokens": compress_result.get("compressed_tokens", -1),
                     "original_tokens": compress_result.get("origin_tokens", -1),
                     "ratio": compress_result.get("ratio", 1.0),
-                    "reduction_percent": (1 - compress_result.get("ratio", 1.0)) * 100
+                    "reduction_percent": (1 - compress_result.get("ratio", 1.0)) * 100,
                 }
             else:
                 result["methods"]["llmlingua"] = {
                     "applicable": False,
-                    "reason": compress_result.get("reason", "Compression not available")
+                    "reason": compress_result.get("reason", "Compression not available"),
                 }
         except Exception as e:
-            result["methods"]["llmlingua"] = {
-                "applicable": False,
-                "reason": str(e)
-            }
+            result["methods"]["llmlingua"] = {"applicable": False, "reason": str(e)}
 
         return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
     except Exception as e:
         logger.error("token_reduction_compare_failed", error=str(e))
-        return [TextContent(type="text", text=json.dumps({
-            "error": str(e)
-        }, indent=2))]
+        return [TextContent(type="text", text=json.dumps({"error": str(e)}, indent=2))]

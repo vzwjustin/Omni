@@ -5,11 +5,10 @@ Handles heuristic and keyword-based routing ("vibes") to categorize tasks.
 """
 
 import re
-from typing import Tuple, Dict, Optional, List, Pattern
+from re import Pattern
 
 from ..vibe_dictionary import match_vibes
 from . import (
-    CATEGORIES,
     CATEGORY_VIBES,
     HEURISTIC_MAP,
     PATTERNS,
@@ -20,18 +19,18 @@ class VibeMatcher:
     """Service for vibe-based routing and categorization."""
 
     def __init__(self):
-        self._compiled_patterns: Dict[str, List[Pattern]] = {
+        self._compiled_patterns: dict[str, list[Pattern]] = {
             task_type: [re.compile(p, re.IGNORECASE) for p in patterns]
             for task_type, patterns in PATTERNS.items()
         }
 
-    def route_to_category(self, query: str) -> Tuple[str, float]:
+    def route_to_category(self, query: str) -> tuple[str, float]:
         """
         Fast first-stage routing to a category based on vibes.
-        
+
         Args:
             query: User query
-            
+
         Returns:
             Tuple of (category_name, confidence_score)
         """
@@ -55,26 +54,26 @@ class VibeMatcher:
         confidence = min(scores[best] / 5.0, 1.0)  # Normalize to 0-1
         return best, confidence
 
-    def check_vibe_dictionary(self, query: str) -> Optional[str]:
+    def check_vibe_dictionary(self, query: str) -> str | None:
         """
         Quick check against vibe dictionary with weighted scoring.
-        
+
         Args:
             query: User query
-            
+
         Returns:
             Matched framework name or None
         """
         return match_vibes(query)
 
-    def heuristic_select(self, query: str, code_snippet: Optional[str] = None) -> str:
+    def heuristic_select(self, query: str, code_snippet: str | None = None) -> str:
         """
         Fast heuristic selection (fallback) using regex patterns.
-        
+
         Args:
             query: User query
             code_snippet: Optional code context
-            
+
         Returns:
             Selected framework name
         """

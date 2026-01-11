@@ -8,18 +8,17 @@ Combines multiple retrieval queries with reciprocal rank fusion:
 4. Generate answer from fused context
 """
 
-import asyncio
-import structlog
 from dataclasses import dataclass
+
+import structlog
 
 from ...state import GraphState
 from ..common import (
-    quiet_star,
+    add_reasoning_step,
     call_deep_reasoner,
     call_fast_synthesizer,
-    add_reasoning_step,
-    format_code_context,
     prepare_context_with_gemini,
+    quiet_star,
 )
 
 logger = structlog.get_logger("rag_fusion")
@@ -30,6 +29,7 @@ NUM_QUERY_VARIATIONS = 4
 @dataclass
 class QueryVariation:
     """A variation of the original query."""
+
     text: str
     retrieved_items: list[str]
     fusion_score: float = 0.0
@@ -52,16 +52,16 @@ VARIATION_2: [Second variation]
 VARIATION_3: [Third variation]
 VARIATION_4: [Fourth variation]
 """
-    
+
     response, _ = await call_fast_synthesizer(prompt, state, max_tokens=384)
-    
+
     variations = []
     for line in response.split("\n"):
         if line.startswith("VARIATION_"):
             var = line.split(":", 1)[-1].strip()
             if var:
                 variations.append(var)
-    
+
     return variations[:NUM_QUERY_VARIATIONS]
 
 
@@ -71,7 +71,7 @@ async def _reciprocal_rank_fusion(variations: list[QueryVariation]) -> str:
     all_items = []
     for var in variations:
         all_items.extend(var.retrieved_items)
-    
+
     # Remove duplicates while preserving order
     seen = set()
     fused = []
@@ -79,7 +79,7 @@ async def _reciprocal_rank_fusion(variations: list[QueryVariation]) -> str:
         if item not in seen:
             seen.add(item)
             fused.append(item)
-    
+
     return "\n".join(fused[:10])  # Top 10
 
 
@@ -89,27 +89,21 @@ async def rag_fusion_node(state: GraphState) -> GraphState:
     query = state.get("query", "")
     # Use Gemini to preprocess context via ContextGateway
 
-    code_context = await prepare_context_with_gemini(
+    code_context = await prepare_context_with_gemini(query=query, state=state)
 
-        query=query,
-
-        state=state
-
-    )
-    
     variations_text = await _generate_query_variations(query, state)
-    
+
     variations = [QueryVariation(text=v, retrieved_items=[code_context]) for v in variations_text]
-    
+
     add_reasoning_step(
         state=state,
         framework="rag_fusion",
         thought=f"Generated {len(variations)} query variations",
-        action="generate_queries"
+        action="generate_queries",
     )
-    
+
     fused_context = await _reciprocal_rank_fusion(variations)
-    
+
     prompt = f"""Answer using fused retrieval context.
 
 QUERY: {query}
@@ -119,17 +113,17 @@ FUSED CONTEXT:
 
 Provide comprehensive answer:
 """
-    
+
     answer, _ = await call_deep_reasoner(prompt, state, max_tokens=1536)
-    
+
     state["final_answer"] = f"""# RAG-Fusion Analysis
 
 ## Query Variations
-{chr(10).join(f'{i+1}. {v.text}' for i, v in enumerate(variations))}
+{chr(10).join(f"{i + 1}. {v.text}" for i, v in enumerate(variations))}
 
 ## Answer
 {answer}
 """
     state["confidence_score"] = 0.8
-    
+
     return state

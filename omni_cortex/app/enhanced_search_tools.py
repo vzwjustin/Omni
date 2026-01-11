@@ -5,9 +5,8 @@ Provides specialized search capabilities across multiple collections
 with metadata filtering for precise retrieval.
 """
 
-from typing import List, Optional, Dict, Any
-from langchain_core.tools import tool
 import structlog
+from langchain_core.tools import tool
 
 from .collection_manager import get_collection_manager
 
@@ -24,7 +23,9 @@ async def search_frameworks_by_name(framework_name: str, query: str, k: int = 3)
         query: What to search for
         k: Number of results
     """
-    logger.info("tool_called", tool="search_frameworks_by_name", framework=framework_name, query=query)
+    logger.info(
+        "tool_called", tool="search_frameworks_by_name", framework=framework_name, query=query
+    )
 
     manager = get_collection_manager()
     docs = manager.search_frameworks(query, framework_name=framework_name, k=k)
@@ -71,10 +72,10 @@ async def search_by_category(query: str, category: str, k: int = 5) -> str:
         "config": ["configs"],
         "utility": ["utilities"],
         "test": ["tests"],
-        "integration": ["integrations"]
+        "integration": ["integrations"],
     }
 
-    collections = collection_map.get(category, None)
+    collections = collection_map.get(category)
     if not collections:
         return f"Invalid category '{category}'. Use: framework, documentation, config, utility, test, integration"
 
@@ -112,7 +113,11 @@ async def search_function_implementation(function_name: str, k: int = 3) -> str:
     for doc in docs:
         meta = doc.metadata or {}
         path = meta.get("path", "unknown")
-        lines = f"Lines {meta.get('line_start')}-{meta.get('line_end')}" if meta.get('line_start') else ""
+        lines = (
+            f"Lines {meta.get('line_start')}-{meta.get('line_end')}"
+            if meta.get("line_start")
+            else ""
+        )
 
         formatted.append(f"### {path} {lines}\n{doc.page_content[:1200]}")
 
@@ -179,18 +184,19 @@ async def search_with_framework_context(query: str, framework_category: str, k: 
         framework_category: Category - one of: strategy, search, iterative, code, context, fast
         k: Number of results
     """
-    logger.info("tool_called", tool="search_with_framework_context", category=framework_category, query=query)
+    logger.info(
+        "tool_called",
+        tool="search_with_framework_context",
+        category=framework_category,
+        query=query,
+    )
 
     valid_categories = ["strategy", "search", "iterative", "code", "context", "fast"]
     if framework_category not in valid_categories:
         return f"Invalid category '{framework_category}'. Use: {', '.join(valid_categories)}"
 
     manager = get_collection_manager()
-    docs = manager.search_frameworks(
-        query,
-        framework_category=framework_category,
-        k=k
-    )
+    docs = manager.search_frameworks(query, framework_category=framework_category, k=k)
 
     if not docs:
         return f"No results in category '{framework_category}'."
@@ -199,7 +205,9 @@ async def search_with_framework_context(query: str, framework_category: str, k: 
     for doc in docs:
         meta = doc.metadata or {}
         fw_name = meta.get("framework_name", "unknown")
-        formatted.append(f"### Framework: {fw_name}\nPath: {meta.get('path', 'unknown')}\n\n{doc.page_content[:900]}")
+        formatted.append(
+            f"### Framework: {fw_name}\nPath: {meta.get('path', 'unknown')}\n\n{doc.page_content[:900]}"
+        )
 
     return "\n\n".join(formatted)
 
@@ -211,5 +219,5 @@ ENHANCED_SEARCH_TOOLS = [
     search_function_implementation,
     search_class_implementation,
     search_documentation_only,
-    search_with_framework_context
+    search_with_framework_context,
 ]

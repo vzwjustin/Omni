@@ -10,16 +10,16 @@ import ast
 import asyncio
 import builtins
 import io
+from contextlib import redirect_stderr, redirect_stdout
+from typing import Any
+
 import structlog
-from contextlib import redirect_stdout, redirect_stderr
-from typing import Dict, Any
 
 from ...state import GraphState
 from ..common import (
-    quiet_star,
-    format_code_context,
-    prepare_context_with_gemini,
     add_reasoning_step,
+    prepare_context_with_gemini,
+    quiet_star,
 )
 from ..example_utilities import search_code_examples
 
@@ -31,12 +31,32 @@ logger = structlog.get_logger(__name__)
 # =============================================================================
 
 # Safe imports whitelist - only allow safe standard library modules
-ALLOWED_IMPORTS = frozenset([
-    'math', 'statistics', 'itertools', 'functools', 'collections',
-    're', 'json', 'datetime', 'decimal', 'fractions', 'random',
-    'string', 'textwrap', 'unicodedata', 'operator', 'copy',
-    'heapq', 'bisect', 'array', 'enum', 'dataclasses', 'typing'
-])
+ALLOWED_IMPORTS = frozenset(
+    [
+        "math",
+        "statistics",
+        "itertools",
+        "functools",
+        "collections",
+        "re",
+        "json",
+        "datetime",
+        "decimal",
+        "fractions",
+        "random",
+        "string",
+        "textwrap",
+        "unicodedata",
+        "operator",
+        "copy",
+        "heapq",
+        "bisect",
+        "array",
+        "enum",
+        "dataclasses",
+        "typing",
+    ]
+)
 
 # Safe builtins whitelist
 # SECURITY: Intentionally EXCLUDES:
@@ -47,27 +67,56 @@ ALLOWED_IMPORTS = frozenset([
 # - open/__import__: file/module access (raw __import__ excluded, wrapped version added below)
 SAFE_BUILTINS = {
     # Math/logic
-    'abs': abs, 'all': all, 'any': any, 'divmod': divmod, 'pow': pow,
-    'round': round, 'sum': sum, 'min': min, 'max': max,
+    "abs": abs,
+    "all": all,
+    "any": any,
+    "divmod": divmod,
+    "pow": pow,
+    "round": round,
+    "sum": sum,
+    "min": min,
+    "max": max,
     # Type constructors (safe - can't define methods)
-    'bool': bool, 'int': int, 'float': float, 'str': str,
-    'list': list, 'dict': dict, 'set': set, 'frozenset': frozenset, 'tuple': tuple,
+    "bool": bool,
+    "int": int,
+    "float": float,
+    "str": str,
+    "list": list,
+    "dict": dict,
+    "set": set,
+    "frozenset": frozenset,
+    "tuple": tuple,
     # Iteration
-    'range': range, 'enumerate': enumerate, 'zip': zip,
-    'map': map, 'filter': filter, 'reversed': reversed, 'sorted': sorted,
-    'iter': iter, 'next': next, 'slice': slice,
+    "range": range,
+    "enumerate": enumerate,
+    "zip": zip,
+    "map": map,
+    "filter": filter,
+    "reversed": reversed,
+    "sorted": sorted,
+    "iter": iter,
+    "next": next,
+    "slice": slice,
     # String/repr
-    'chr': chr, 'ord': ord, 'repr': repr, 'format': format,
-    'bin': bin, 'hex': hex, 'oct': oct, 'hash': hash,
+    "chr": chr,
+    "ord": ord,
+    "repr": repr,
+    "format": format,
+    "bin": bin,
+    "hex": hex,
+    "oct": oct,
+    "hash": hash,
     # Length
-    'len': len,
+    "len": len,
     # I/O (sandboxed)
-    'print': print,
+    "print": print,
     # Constants
-    'True': True, 'False': False, 'None': None,
+    "True": True,
+    "False": False,
+    "None": None,
     # Internal Python builtins needed for exec()
     # __build_class__ is required for 'class' keyword to work
-    '__build_class__': builtins.__build_class__,
+    "__build_class__": builtins.__build_class__,
 }
 
 
@@ -79,13 +128,16 @@ def _safe_import(name, globals=None, locals=None, fromlist=(), level=0):
     'import' statements in the code being executed.
     """
     # Get the root module name (e.g., 'math' from 'math.sin')
-    root_module = name.split('.')[0]
+    root_module = name.split(".")[0]
 
     if root_module not in ALLOWED_IMPORTS:
-        raise ImportError(f"Import of '{name}' is not allowed. Allowed imports: {', '.join(sorted(ALLOWED_IMPORTS))}")
+        raise ImportError(
+            f"Import of '{name}' is not allowed. Allowed imports: {', '.join(sorted(ALLOWED_IMPORTS))}"
+        )
 
     # Use the real __import__ for allowed modules
     return builtins.__import__(name, globals, locals, fromlist, level)
+
 
 # exec() for sandboxed code execution
 # This is intentionally using exec() - the sandbox security comes from:
@@ -96,22 +148,56 @@ def _safe_import(name, globals=None, locals=None, fromlist=(), level=0):
 _python_code_runner = exec
 
 # Dangerous functions to block
-_DANGEROUS_FUNCS = {'eval', 'compile', 'open', 'input', '__import__',
-                    'globals', 'locals', 'vars', 'dir', 'getattr', 'setattr',
-                    'delattr', 'hasattr', 'breakpoint', 'exit', 'quit',
-                    'type'}  # type() allows dynamic class creation - sandbox escape vector
+_DANGEROUS_FUNCS = {
+    "eval",
+    "compile",
+    "open",
+    "input",
+    "__import__",
+    "globals",
+    "locals",
+    "vars",
+    "dir",
+    "getattr",
+    "setattr",
+    "delattr",
+    "hasattr",
+    "breakpoint",
+    "exit",
+    "quit",
+    "type",
+}  # type() allows dynamic class creation - sandbox escape vector
 
 # Dangerous method names to block (shell/process/introspection related)
 _DANGEROUS_METHODS = {
     # Process execution
-    'popen', 'spawn', 'fork', 'call', 'run', 'Popen', 'check_output', 'check_call',
-    'system', 'execv', 'execve', 'spawnl', 'spawnle',
+    "popen",
+    "spawn",
+    "fork",
+    "call",
+    "run",
+    "Popen",
+    "check_output",
+    "check_call",
+    "system",
+    "execv",
+    "execve",
+    "spawnl",
+    "spawnle",
     # File operations
-    'read', 'write', 'readlines', 'writelines',
+    "read",
+    "write",
+    "readlines",
+    "writelines",
     # Dangerous introspection
-    'mro', '__subclasses__', '__bases__', '__class__',
+    "mro",
+    "__subclasses__",
+    "__bases__",
+    "__class__",
     # Code execution
-    'exec', 'eval', 'compile',
+    "exec",
+    "eval",
+    "compile",
 }
 
 
@@ -123,14 +209,14 @@ class _SafetyValidator(ast.NodeVisitor):
 
     def visit_Import(self, node: ast.Import) -> None:
         for alias in node.names:
-            module = alias.name.split('.')[0]
+            module = alias.name.split(".")[0]
             if module not in ALLOWED_IMPORTS:
                 self.errors.append(f"Import of '{alias.name}' is not allowed")
         self.generic_visit(node)
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
         if node.module:
-            module = node.module.split('.')[0]
+            module = node.module.split(".")[0]
             if module not in ALLOWED_IMPORTS:
                 self.errors.append(f"Import from '{node.module}' is not allowed")
         self.generic_visit(node)
@@ -146,13 +232,33 @@ class _SafetyValidator(ast.NodeVisitor):
 
     def visit_Attribute(self, node: ast.Attribute) -> None:
         # Block dunder attribute access (except common safe ones)
-        if node.attr.startswith('__') and node.attr.endswith('__'):
-            safe_dunders = ('__init__', '__str__', '__repr__', '__len__',
-                            '__iter__', '__next__', '__getitem__', '__setitem__',
-                            '__contains__', '__eq__', '__ne__', '__lt__',
-                            '__le__', '__gt__', '__ge__', '__hash__',
-                            '__bool__', '__add__', '__sub__', '__mul__',
-                            '__truediv__', '__floordiv__', '__mod__', '__pow__')
+        if node.attr.startswith("__") and node.attr.endswith("__"):
+            safe_dunders = (
+                "__init__",
+                "__str__",
+                "__repr__",
+                "__len__",
+                "__iter__",
+                "__next__",
+                "__getitem__",
+                "__setitem__",
+                "__contains__",
+                "__eq__",
+                "__ne__",
+                "__lt__",
+                "__le__",
+                "__gt__",
+                "__ge__",
+                "__hash__",
+                "__bool__",
+                "__add__",
+                "__sub__",
+                "__mul__",
+                "__truediv__",
+                "__floordiv__",
+                "__mod__",
+                "__pow__",
+            )
             if node.attr not in safe_dunders:
                 self.errors.append(f"Access to '{node.attr}' is not allowed")
         self.generic_visit(node)
@@ -174,7 +280,7 @@ def _validate_code(code: str) -> tuple[bool, str]:
     return True, ""
 
 
-async def _safe_execute(code: str, timeout: float = 5.0) -> Dict[str, Any]:
+async def _safe_execute(code: str, timeout: float = 5.0) -> dict[str, Any]:
     """
     Run Python code in a sandboxed environment.
 
@@ -195,7 +301,7 @@ async def _safe_execute(code: str, timeout: float = 5.0) -> Dict[str, Any]:
     # Prepare restricted environment with safe builtins
     restricted_builtins = SAFE_BUILTINS.copy()
     # Add the safe import wrapper so 'import' statements work for allowed modules
-    restricted_builtins['__import__'] = _safe_import
+    restricted_builtins["__import__"] = _safe_import
     safe_globals = {
         "__builtins__": restricted_builtins,
         "__name__": "__main__",  # Required for class definitions
@@ -229,10 +335,15 @@ async def _safe_execute(code: str, timeout: float = 5.0) -> Dict[str, Any]:
 
     except asyncio.TimeoutError:
         logger.warning("code_timeout", timeout=timeout)
-        return {"success": False, "output": stdout_capture.getvalue(), "error": f"Timed out after {timeout}s"}
+        return {
+            "success": False,
+            "output": stdout_capture.getvalue(),
+            "error": f"Timed out after {timeout}s",
+        }
     except Exception as e:
         logger.error("code_failed", error=str(e))
         return {"success": False, "output": stdout_capture.getvalue(), "error": str(e)}
+
 
 @quiet_star
 async def program_of_thoughts_node(state: GraphState) -> GraphState:
@@ -242,13 +353,7 @@ async def program_of_thoughts_node(state: GraphState) -> GraphState:
     query = state.get("query", "")
     # Use Gemini to preprocess context via ContextGateway
 
-    code_context = await prepare_context_with_gemini(
-
-        query=query,
-
-        state=state
-
-    )
+    code_context = await prepare_context_with_gemini(query=query, state=state)
 
     # Search for similar code examples
     code_examples = search_code_examples(query, task_type="code_generation")
@@ -279,10 +384,14 @@ Please execute the reasoning steps for **Program of Thoughts** using your intern
 
 ## 📝 Code Context
 {code_context}
-{f'''
+{
+        f'''
 ## 💡 Similar Code Examples from 12K+ Knowledge Base
 {code_examples}
-''' if code_examples else ''}
+'''
+        if code_examples
+        else ""
+    }
 **Please start by outlining your approach following the Program of Thoughts process.**
 """
 
@@ -294,7 +403,7 @@ Please execute the reasoning steps for **Program of Thoughts** using your intern
         framework="program_of_thoughts",
         thought="Generated Framework protocol for client execution",
         action="handoff",
-        observation="Prompt generated"
+        observation="Prompt generated",
     )
 
     return state

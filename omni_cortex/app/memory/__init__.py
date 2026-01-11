@@ -4,9 +4,9 @@ Memory Systems for Omni-Cortex
 Provides conversation memory, thread management, and state enrichment.
 """
 
-from .omni_memory import OmniCortexMemory
-from .manager import get_memory, MAX_MEMORY_THREADS
 from .enrichment import enhance_state_with_langchain, save_to_langchain_memory
+from .manager import MAX_MEMORY_THREADS, get_memory
+from .omni_memory import OmniCortexMemory
 
 __all__ = [
     "OmniCortexMemory",

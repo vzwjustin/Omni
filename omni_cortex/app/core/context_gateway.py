@@ -21,36 +21,34 @@ This module uses composition with specialized components:
 """
 
 import asyncio
-import re
 import threading
 import time
-import structlog
 from dataclasses import dataclass, field
 from datetime import timedelta
-from typing import Optional, List, Dict, Any
+from typing import Any
+
+import structlog
 
 from .constants import CONTENT, LLM
 from .context import (
-    QueryAnalyzer,
-    FileDiscoverer,
-    DocumentationSearcher,
-    CodeSearcher,
-    ContextCache,
-    get_context_cache,
     CacheMetadata,
-    EnhancedFileContext,
-    EnhancedDocumentationContext,
+    CodeSearcher,
     ComponentStatus,
-    QualityMetrics,
+    ContextCache,
+    DocumentationSearcher,
+    EnhancedDocumentationContext,
+    EnhancedFileContext,
+    FileDiscoverer,
     MultiRepoFileDiscoverer,
-    ThinkingModeOptimizer,
+    QualityMetrics,
+    QueryAnalyzer,
     ThinkingModeDecision,
-    ThinkingLevel,
+    ThinkingModeOptimizer,
+    get_context_cache,
     get_thinking_mode_optimizer,
 )
 from .context.fallback_analysis import (
     get_fallback_analyzer,
-    ComponentFallbackMethods,
 )
 from .settings import get_settings
 
@@ -61,13 +59,15 @@ logger = structlog.get_logger("context_gateway")
 # Dataclasses - Keep in gateway for cross-module compatibility
 # =============================================================================
 
+
 @dataclass
 class FileContext:
     """Context about a discovered file."""
+
     path: str
     relevance_score: float  # 0-1
     summary: str  # Gemini-generated summary
-    key_elements: List[str] = field(default_factory=list)  # functions, classes, etc.
+    key_elements: list[str] = field(default_factory=list)  # functions, classes, etc.
     line_count: int = 0
     size_kb: float = 0
 
@@ -75,6 +75,7 @@ class FileContext:
 @dataclass
 class DocumentationContext:
     """Context from web documentation lookup."""
+
     source: str  # URL or doc name
     title: str
     snippet: str  # Relevant excerpt
@@ -84,6 +85,7 @@ class DocumentationContext:
 @dataclass
 class CodeSearchContext:
     """Context from code search (grep/git)."""
+
     search_type: str  # grep, git_log, git_blame
     query: str
     results: str  # Command output
@@ -94,6 +96,7 @@ class CodeSearchContext:
 @dataclass
 class LibraryDocContext:
     """Context from library documentation (Context7)."""
+
     library: str
     library_id: str
     snippet: str
@@ -103,6 +106,7 @@ class LibraryDocContext:
 @dataclass
 class RepoContext:
     """Context from repository analysis (Greptile)."""
+
     context_type: str  # search, pr, review, custom
     title: str
     summary: str
@@ -118,34 +122,35 @@ class StructuredContext:
     Everything Claude needs, pre-organized and ready for deep reasoning.
     No egg hunting required.
     """
+
     # Task Understanding
     task_type: str  # debug, implement, refactor, architect, etc.
     task_summary: str  # Clear description of what needs to be done
     complexity: str  # low, medium, high, very_high
 
     # Relevant Files (paths + summaries, not full contents)
-    relevant_files: List[FileContext] = field(default_factory=list)
-    entry_point: Optional[str] = None  # Where to start
+    relevant_files: list[FileContext] = field(default_factory=list)
+    entry_point: str | None = None  # Where to start
 
     # Documentation (pre-fetched snippets)
-    documentation: List[DocumentationContext] = field(default_factory=list)
+    documentation: list[DocumentationContext] = field(default_factory=list)
 
     # Code Search Results (grep/git)
-    code_search: List[CodeSearchContext] = field(default_factory=list)
+    code_search: list[CodeSearchContext] = field(default_factory=list)
 
     # Framework Recommendation
     recommended_framework: str = "reason_flux"
     framework_reason: str = ""
-    chain_suggestion: Optional[List[str]] = None  # For complex tasks
+    chain_suggestion: list[str] | None = None  # For complex tasks
 
     # Execution Plan
-    execution_steps: List[str] = field(default_factory=list)
-    success_criteria: List[str] = field(default_factory=list)
-    potential_blockers: List[str] = field(default_factory=list)
+    execution_steps: list[str] = field(default_factory=list)
+    success_criteria: list[str] = field(default_factory=list)
+    potential_blockers: list[str] = field(default_factory=list)
 
     # Additional Context
-    related_patterns: List[str] = field(default_factory=list)  # Similar code patterns
-    dependencies: List[str] = field(default_factory=list)  # External deps to consider
+    related_patterns: list[str] = field(default_factory=list)  # Similar code patterns
+    dependencies: list[str] = field(default_factory=list)  # External deps to consider
 
     # Token Budget (Gemini optimizes to stay under this)
     token_budget: int = LLM.CONTEXT_TOKEN_BUDGET  # Max tokens for Claude prompt
@@ -199,7 +204,9 @@ class StructuredContext:
             if self.entry_point:
                 file_lines.append(f"**Start here**: `{self.entry_point}`\n")
             for f in self.relevant_files[:10]:  # Top 10
-                score_bar = "█" * int(f.relevance_score * 5) + "░" * (5 - int(f.relevance_score * 5))
+                score_bar = "█" * int(f.relevance_score * 5) + "░" * (
+                    5 - int(f.relevance_score * 5)
+                )
                 repo_label = f"[{f.repository}] " if getattr(f, "repository", None) else ""
                 file_lines.append(f"- {repo_label}`{f.path}` [{score_bar}] - {f.summary}")
                 if f.key_elements:
@@ -249,7 +256,7 @@ class StructuredContext:
             for search in self.code_search[:3]:
                 search_lines.append(f"### {search.search_type.upper()}: {search.query}")
                 search_lines.append(f"*Files: {search.file_count} | Matches: {search.match_count}*")
-                search_lines.append(f"```\n{search.results[:CONTENT.SNIPPET_MAX]}\n```")
+                search_lines.append(f"```\n{search.results[: CONTENT.SNIPPET_MAX]}\n```")
             sections.append("\n".join(search_lines))
 
         # Framework Section
@@ -282,7 +289,7 @@ class StructuredContext:
 
         return "\n\n".join(sections)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         relevant_files = []
         for f in self.relevant_files:
@@ -338,27 +345,30 @@ class EnhancedStructuredContext(StructuredContext):
     - Repository information for multi-repo contexts
     - Thinking mode decision for adaptive reasoning
     """
+
     # Cache information
-    cache_metadata: Optional[CacheMetadata] = None
+    cache_metadata: CacheMetadata | None = None
 
     # Quality metrics
-    quality_metrics: Optional[QualityMetrics] = None
+    quality_metrics: QualityMetrics | None = None
 
     # Token budget transparency
-    token_budget_usage: Optional[Any] = None  # TokenBudgetUsage - avoid circular import
+    token_budget_usage: Any | None = None  # TokenBudgetUsage - avoid circular import
 
     # Component status tracking
-    component_status: Dict[str, ComponentStatus] = field(default_factory=dict)
+    component_status: dict[str, ComponentStatus] = field(default_factory=dict)
 
     # Multi-repository information
-    repository_info: List[Any] = field(default_factory=list)  # List[RepoInfo] - avoid circular import
-    cross_repo_dependencies: List[Any] = field(default_factory=list)
-    source_attributions: List[Any] = field(default_factory=list)
+    repository_info: list[Any] = field(
+        default_factory=list
+    )  # List[RepoInfo] - avoid circular import
+    cross_repo_dependencies: list[Any] = field(default_factory=list)
+    source_attributions: list[Any] = field(default_factory=list)
 
     # Thinking mode decision for adaptive reasoning
-    thinking_mode_decision: Optional[ThinkingModeDecision] = None
+    thinking_mode_decision: ThinkingModeDecision | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary with enhanced fields."""
         base_dict = super().to_dict()
 
@@ -366,7 +376,9 @@ class EnhancedStructuredContext(StructuredContext):
         if self.cache_metadata:
             base_dict["cache_metadata"] = {
                 "cache_hit": self.cache_metadata.cache_hit,
-                "cache_age_seconds": self.cache_metadata.cache_age.total_seconds() if self.cache_metadata.cache_age else 0,
+                "cache_age_seconds": self.cache_metadata.cache_age.total_seconds()
+                if self.cache_metadata.cache_age
+                else 0,
                 "is_stale_fallback": self.cache_metadata.is_stale_fallback,
             }
 
@@ -442,6 +454,7 @@ class EnhancedStructuredContext(StructuredContext):
 # ContextGateway - Now uses composition with specialized components
 # =============================================================================
 
+
 class ContextGateway:
     """
     Gemini-powered context optimization layer.
@@ -463,11 +476,11 @@ class ContextGateway:
 
     def __init__(
         self,
-        query_analyzer: Optional[QueryAnalyzer] = None,
-        file_discoverer: Optional[FileDiscoverer] = None,
-        doc_searcher: Optional[DocumentationSearcher] = None,
-        code_searcher: Optional[CodeSearcher] = None,
-        cache: Optional[ContextCache] = None,
+        query_analyzer: QueryAnalyzer | None = None,
+        file_discoverer: FileDiscoverer | None = None,
+        doc_searcher: DocumentationSearcher | None = None,
+        code_searcher: CodeSearcher | None = None,
+        cache: ContextCache | None = None,
     ):
         """
         Initialize ContextGateway with optional dependency injection.
@@ -487,15 +500,15 @@ class ContextGateway:
         self._cache = cache or get_context_cache()
         self._settings = get_settings()
         self._enable_cache = self._settings.enable_context_cache
-        self._multi_repo_discoverer: Optional[MultiRepoFileDiscoverer] = None
-        self._enhanced_doc_searcher: Optional[Any] = None
+        self._multi_repo_discoverer: MultiRepoFileDiscoverer | None = None
+        self._enhanced_doc_searcher: Any | None = None
 
         # Enhanced components (lazy-loaded to avoid circular imports and support testing)
-        self._circuit_breakers: Dict[str, Any] = {}
-        self._metrics: Optional[Any] = None
-        self._budget_integration: Optional[Any] = None
-        self._relevance_tracker: Optional[Any] = None
-        self._thinking_mode_optimizer: Optional[ThinkingModeOptimizer] = None
+        self._circuit_breakers: dict[str, Any] = {}
+        self._metrics: Any | None = None
+        self._budget_integration: Any | None = None
+        self._relevance_tracker: Any | None = None
+        self._thinking_mode_optimizer: ThinkingModeOptimizer | None = None
 
         # Initialize enhanced components if enabled
         if self._settings.enable_circuit_breaker:
@@ -516,6 +529,7 @@ class ContextGateway:
     def _init_circuit_breakers(self) -> None:
         """Initialize circuit breakers for each component."""
         from .context import get_circuit_breaker
+
         self._circuit_breakers = {
             "query_analysis": get_circuit_breaker("query_analysis"),
             "file_discovery": get_circuit_breaker("file_discovery"),
@@ -526,16 +540,19 @@ class ContextGateway:
     def _init_metrics(self) -> None:
         """Initialize gateway metrics collector."""
         from .context import get_gateway_metrics
+
         self._metrics = get_gateway_metrics()
 
     def _init_budget_integration(self) -> None:
         """Initialize token budget integration."""
         from .context import get_budget_integration
+
         self._budget_integration = get_budget_integration()
 
     def _init_relevance_tracking(self) -> None:
         """Initialize relevance tracker."""
         from .context import get_relevance_tracker
+
         self._relevance_tracker = get_relevance_tracker()
 
     def _init_thinking_mode_optimizer(self) -> None:
@@ -554,14 +571,15 @@ class ContextGateway:
         if enable_source_attribution:
             if self._enhanced_doc_searcher is None:
                 from .context.doc_searcher import EnhancedDocumentationSearcher
+
                 self._enhanced_doc_searcher = EnhancedDocumentationSearcher()
             return self._enhanced_doc_searcher
         return self._doc_searcher
 
     @staticmethod
     def _normalize_file_discovery_result(
-        file_result: Any
-    ) -> tuple[List[Any], List[Any], List[Any]]:
+        file_result: Any,
+    ) -> tuple[list[Any], list[Any], list[Any]]:
         """Normalize file discovery result to (files, repos, dependencies)."""
         if isinstance(file_result, dict) and "files" in file_result:
             return (
@@ -588,7 +606,7 @@ class ContextGateway:
             git_blame_info=getattr(file_item, "git_blame_info", None),
         )
 
-    def _fallback_analyze(self, query: str) -> Dict[str, Any]:
+    def _fallback_analyze(self, query: str) -> dict[str, Any]:
         """
         Fallback analyzer using enhanced pattern matching when Gemini is unavailable.
 
@@ -606,13 +624,13 @@ class ContextGateway:
     async def prepare_context(
         self,
         query: str,
-        workspace_path: Optional[str] = None,
-        code_context: Optional[str] = None,
-        file_list: Optional[List[str]] = None,
+        workspace_path: str | None = None,
+        code_context: str | None = None,
+        file_list: list[str] | None = None,
         search_docs: bool = True,
         max_files: int = 15,
-        enable_multi_repo: Optional[bool] = None,
-        enable_source_attribution: Optional[bool] = None,
+        enable_multi_repo: bool | None = None,
+        enable_source_attribution: bool | None = None,
     ) -> EnhancedStructuredContext:
         """
         Prepare rich, structured context for Claude.
@@ -640,19 +658,27 @@ class ContextGateway:
         # Start timer for metrics
         start_time = time.time()
 
-        logger.info("context_gateway_start", query=query[:CONTENT.QUERY_LOG])
+        logger.info("context_gateway_start", query=query[: CONTENT.QUERY_LOG])
 
         # Initialize tracking variables
-        cache_metadata: Optional[CacheMetadata] = None
+        cache_metadata: CacheMetadata | None = None
         is_stale_fallback = False
-        component_status: Dict[str, ComponentStatus] = {}
-        relevance_session_id: Optional[str] = None
-        repository_info: List[Any] = []
-        cross_repo_dependencies: List[Any] = []
-        source_attributions: List[Any] = []
+        component_status: dict[str, ComponentStatus] = {}
+        relevance_session_id: str | None = None
+        repository_info: list[Any] = []
+        cross_repo_dependencies: list[Any] = []
+        source_attributions: list[Any] = []
 
-        use_multi_repo = self._settings.enable_multi_repo_discovery if enable_multi_repo is None else enable_multi_repo
-        use_source_attribution = self._settings.enable_source_attribution if enable_source_attribution is None else enable_source_attribution
+        use_multi_repo = (
+            self._settings.enable_multi_repo_discovery
+            if enable_multi_repo is None
+            else enable_multi_repo
+        )
+        use_source_attribution = (
+            self._settings.enable_source_attribution
+            if enable_source_attribution is None
+            else enable_source_attribution
+        )
         use_doc_prioritization = self._settings.enable_documentation_prioritization
         if file_list or not workspace_path:
             use_multi_repo = False
@@ -664,7 +690,7 @@ class ContextGateway:
             else doc_searcher.search_web
         )
 
-        async def _run_doc_search() -> List[Any]:
+        async def _run_doc_search() -> list[Any]:
             doc_task_type = "general"
             if use_doc_prioritization:
                 doc_task_type = self._fallback_analyze(query).get("task_type", "general")
@@ -699,36 +725,32 @@ class ContextGateway:
             query_cache_key = self._cache.generate_cache_key(
                 query, workspace_path, "query_analysis"
             )
-            file_cache_key = self._cache.generate_cache_key(
-                query, workspace_path, "file_discovery"
-            )
-            doc_cache_key = self._cache.generate_cache_key(
-                query, workspace_path, "documentation"
-            )
-            
+            file_cache_key = self._cache.generate_cache_key(query, workspace_path, "file_discovery")
+            doc_cache_key = self._cache.generate_cache_key(query, workspace_path, "documentation")
+
             # Check cache for query analysis
             cached_query_analysis = await self._cache.get(query_cache_key)
-            
+
             # Check cache for file discovery
             cached_file_result = await self._cache.get(file_cache_key)
-            
+
             # Check cache for documentation
             cached_doc_result = await self._cache.get(doc_cache_key)
-            
+
             # If we have all cached results, use them
             if cached_query_analysis and cached_file_result and cached_doc_result:
                 logger.info(
                     "cache_full_hit",
                     query_age=cached_query_analysis.age.total_seconds(),
                     file_age=cached_file_result.age.total_seconds(),
-                    doc_age=cached_doc_result.age.total_seconds()
+                    doc_age=cached_doc_result.age.total_seconds(),
                 )
-                
+
                 # Build context from cache
                 query_analysis = cached_query_analysis.value
                 file_result = cached_file_result.value
                 doc_result = cached_doc_result.value
-                
+
                 # Still need to run code search (not cached as it's fast)
                 try:
                     if workspace_path:
@@ -738,7 +760,7 @@ class ContextGateway:
                 except Exception as e:
                     logger.warning("code_search_failed", error=str(e))
                     code_result = None
-                
+
                 # Create cache metadata
                 cache_metadata = CacheMetadata(
                     cache_key=query_cache_key,
@@ -746,17 +768,17 @@ class ContextGateway:
                     cache_age=cached_query_analysis.age,
                     cache_type="full",
                     workspace_fingerprint=cached_query_analysis.workspace_fingerprint,
-                    is_stale_fallback=False
+                    is_stale_fallback=False,
                 )
-                
+
                 # Skip to context assembly
-                file_items, repository_info, cross_repo_dependencies = self._normalize_file_discovery_result(file_result)
+                file_items, repository_info, cross_repo_dependencies = (
+                    self._normalize_file_discovery_result(file_result)
+                )
                 converted_files = [self._coerce_enhanced_file(f) for f in file_items]
                 doc_contexts = doc_result
                 source_attributions = [
-                    doc.attribution
-                    for doc in doc_contexts
-                    if getattr(doc, "attribution", None)
+                    doc.attribution for doc in doc_contexts if getattr(doc, "attribution", None)
                 ]
                 code_search_results = []
                 if code_result:
@@ -770,9 +792,9 @@ class ContextGateway:
                         )
                         for c in code_result
                     ]
-                
+
                 # Determine thinking mode for cached results
-                cached_thinking_mode_decision: Optional[ThinkingModeDecision] = None
+                cached_thinking_mode_decision: ThinkingModeDecision | None = None
                 cached_complexity = query_analysis.get("complexity", "medium")
                 cached_task_type = query_analysis.get("task_type", "general")
                 if self._thinking_mode_optimizer:
@@ -785,11 +807,13 @@ class ContextGateway:
                         elif cached_complexity == "very_high":
                             available_budget = self._settings.token_budget_very_high_complexity
 
-                        cached_thinking_mode_decision = self._thinking_mode_optimizer.decide_thinking_mode(
-                            query=query,
-                            complexity=cached_complexity,
-                            available_budget=available_budget,
-                            task_type=cached_task_type,
+                        cached_thinking_mode_decision = (
+                            self._thinking_mode_optimizer.decide_thinking_mode(
+                                query=query,
+                                complexity=cached_complexity,
+                                available_budget=available_budget,
+                                task_type=cached_task_type,
+                            )
                         )
                     except Exception as e:
                         logger.warning("thinking_mode_decision_failed_cached", error=str(e))
@@ -804,7 +828,9 @@ class ContextGateway:
                     documentation=doc_contexts,
                     code_search=code_search_results,
                     recommended_framework=query_analysis.get("framework", "reason_flux"),
-                    framework_reason=query_analysis.get("framework_reason", "General-purpose reasoning"),
+                    framework_reason=query_analysis.get(
+                        "framework_reason", "General-purpose reasoning"
+                    ),
                     chain_suggestion=query_analysis.get("chain"),
                     execution_steps=query_analysis.get("steps", []),
                     success_criteria=query_analysis.get("success_criteria", []),
@@ -826,8 +852,12 @@ class ContextGateway:
                     docs=len(context.documentation),
                     code_searches=len(context.code_search),
                     framework=context.recommended_framework,
-                    thinking_mode=cached_thinking_mode_decision.thinking_level.value if cached_thinking_mode_decision else None,
-                    thinking_enabled=cached_thinking_mode_decision.use_thinking_mode if cached_thinking_mode_decision else False,
+                    thinking_mode=cached_thinking_mode_decision.thinking_level.value
+                    if cached_thinking_mode_decision
+                    else None,
+                    thinking_enabled=cached_thinking_mode_decision.use_thinking_mode
+                    if cached_thinking_mode_decision
+                    else False,
                 )
 
                 return context
@@ -862,14 +892,16 @@ class ContextGateway:
                     try:
                         result = await _run_file_discovery()
                         # Cache the result
-                        await self._cache.set(file_cache_key, result, "file_discovery", workspace_path)
+                        await self._cache.set(
+                            file_cache_key, result, "file_discovery", workspace_path
+                        )
                         return result
                     except Exception as e:
                         logger.warning("file_discovery_failed_using_stale_cache", error=str(e))
                         nonlocal is_stale_fallback
                         is_stale_fallback = True
                         return cached.value
-            
+
             # No cache, do fresh discovery with circuit breaker protection
             comp_start = time.time()
             try:
@@ -885,7 +917,9 @@ class ContextGateway:
                 # Record metrics
                 if self._metrics:
                     duration = time.time() - comp_start
-                    self._metrics.record_component_performance("file_discovery", duration, success=True)
+                    self._metrics.record_component_performance(
+                        "file_discovery", duration, success=True
+                    )
 
                 # Cache the result
                 if self._enable_cache and workspace_path:
@@ -898,15 +932,17 @@ class ContextGateway:
             except Exception as e:
                 duration = time.time() - comp_start
                 if self._metrics:
-                    self._metrics.record_component_performance("file_discovery", duration, success=False)
+                    self._metrics.record_component_performance(
+                        "file_discovery", duration, success=False
+                    )
                 component_status["file_discovery"] = ComponentStatus.FAILED
                 logger.error("file_discovery_error", error=str(e))
                 raise
-        
+
         async def _search_docs():
             if not search_docs:
                 return None
-            
+
             # Check cache first
             if self._enable_cache and workspace_path:
                 doc_cache_key = self._cache.generate_cache_key(
@@ -921,21 +957,21 @@ class ContextGateway:
                     try:
                         result = await _run_doc_search()
                         # Cache the result
-                        await self._cache.set(doc_cache_key, result, "documentation", workspace_path)
+                        await self._cache.set(
+                            doc_cache_key, result, "documentation", workspace_path
+                        )
                         return result
                     except Exception as e:
                         logger.warning("doc_search_failed_using_stale_cache", error=str(e))
                         nonlocal is_stale_fallback
                         is_stale_fallback = True
                         return cached.value
-            
+
             # No cache, do fresh search with circuit breaker protection
             comp_start = time.time()
             try:
                 if self._circuit_breakers and "doc_search" in self._circuit_breakers:
-                    result = await self._circuit_breakers["doc_search"].call(
-                        _run_doc_search
-                    )
+                    result = await self._circuit_breakers["doc_search"].call(_run_doc_search)
                     component_status["doc_search"] = ComponentStatus.SUCCESS
                 else:
                     result = await _run_doc_search()
@@ -957,11 +993,13 @@ class ContextGateway:
             except Exception as e:
                 duration = time.time() - comp_start
                 if self._metrics:
-                    self._metrics.record_component_performance("doc_search", duration, success=False)
+                    self._metrics.record_component_performance(
+                        "doc_search", duration, success=False
+                    )
                 component_status["doc_search"] = ComponentStatus.FAILED
                 logger.error("doc_search_error", error=str(e))
                 raise
-        
+
         async def _search_code():
             # Code search is fast, don't cache it
             if not workspace_path:
@@ -981,17 +1019,21 @@ class ContextGateway:
                 # Record metrics
                 if self._metrics:
                     duration = time.time() - comp_start
-                    self._metrics.record_component_performance("code_search", duration, success=True)
+                    self._metrics.record_component_performance(
+                        "code_search", duration, success=True
+                    )
 
                 return result
             except Exception as e:
                 duration = time.time() - comp_start
                 if self._metrics:
-                    self._metrics.record_component_performance("code_search", duration, success=False)
+                    self._metrics.record_component_performance(
+                        "code_search", duration, success=False
+                    )
                 component_status["code_search"] = ComponentStatus.FAILED
                 logger.error("code_search_error", error=str(e))
                 raise
-        
+
         # Execute all discovery tasks in parallel
         file_result, doc_result, code_result = await asyncio.gather(
             _discover_files(),
@@ -999,13 +1041,15 @@ class ContextGateway:
             _search_code(),
             return_exceptions=True,
         )
-        
+
         # Process file discovery results
         converted_files = []
         if isinstance(file_result, Exception):
             logger.warning("file_discovery_failed", error=str(file_result))
         elif file_result:
-            file_items, repository_info, cross_repo_dependencies = self._normalize_file_discovery_result(file_result)
+            file_items, repository_info, cross_repo_dependencies = (
+                self._normalize_file_discovery_result(file_result)
+            )
             converted_files = [self._coerce_enhanced_file(f) for f in file_items]
 
         # Process documentation search results
@@ -1043,7 +1087,7 @@ class ContextGateway:
             docs_context_str += "DOCUMENTATION FOUND:\n"
             for d in doc_contexts[:3]:
                 docs_context_str += f"- {d.title} ({d.source}): {d.snippet[:200]}...\n"
-        
+
         if converted_files:
             docs_context_str += "\nRELEVANT FILES:\n"
             for f in converted_files[:5]:
@@ -1059,7 +1103,7 @@ class ContextGateway:
             if cached and not cached.is_expired:
                 logger.info("cache_hit_query_analysis", age=cached.age.total_seconds())
                 query_analysis = cached.value
-                
+
                 # Create cache metadata
                 cache_metadata = CacheMetadata(
                     cache_key=query_cache_key,
@@ -1067,7 +1111,7 @@ class ContextGateway:
                     cache_age=cached.age,
                     cache_type="query_analysis",
                     workspace_fingerprint=cached.workspace_fingerprint,
-                    is_stale_fallback=is_stale_fallback
+                    is_stale_fallback=is_stale_fallback,
                 )
             elif cached and cached.is_expired:
                 # Try fresh analysis with circuit breaker, fallback to stale cache on error
@@ -1078,39 +1122,45 @@ class ContextGateway:
                             self._query_analyzer.analyze,
                             query,
                             code_context,
-                            documentation_context=docs_context_str if docs_context_str else None
+                            documentation_context=docs_context_str if docs_context_str else None,
                         )
                     else:
                         query_analysis = await self._query_analyzer.analyze(
                             query,
                             code_context,
-                            documentation_context=docs_context_str if docs_context_str else None
+                            documentation_context=docs_context_str if docs_context_str else None,
                         )
 
                     # Record metrics
                     if self._metrics:
                         duration = time.time() - comp_start
-                        self._metrics.record_component_performance("query_analysis", duration, success=True)
+                        self._metrics.record_component_performance(
+                            "query_analysis", duration, success=True
+                        )
 
                     component_status["query_analysis"] = ComponentStatus.SUCCESS
 
                     # Cache the result
-                    await self._cache.set(query_cache_key, query_analysis, "query_analysis", workspace_path)
-                    
+                    await self._cache.set(
+                        query_cache_key, query_analysis, "query_analysis", workspace_path
+                    )
+
                     # Create cache metadata
                     cache_metadata = CacheMetadata(
                         cache_key=query_cache_key,
                         cache_hit=False,
                         cache_age=timedelta(0),
                         cache_type="query_analysis",
-                        workspace_fingerprint=self._cache._compute_workspace_fingerprint(workspace_path),
-                        is_stale_fallback=False
+                        workspace_fingerprint=self._cache._compute_workspace_fingerprint(
+                            workspace_path
+                        ),
+                        is_stale_fallback=False,
                     )
                 except Exception as e:
                     logger.warning("query_analysis_failed_using_stale_cache", error=str(e))
                     query_analysis = cached.value
                     is_stale_fallback = True
-                    
+
                     # Create cache metadata
                     cache_metadata = CacheMetadata(
                         cache_key=query_cache_key,
@@ -1118,9 +1168,9 @@ class ContextGateway:
                         cache_age=cached.age,
                         cache_type="query_analysis",
                         workspace_fingerprint=cached.workspace_fingerprint,
-                        is_stale_fallback=True
+                        is_stale_fallback=True,
                     )
-        
+
         # If no cached analysis, do fresh analysis
         if query_analysis is None:
             comp_start = time.time()
@@ -1130,19 +1180,21 @@ class ContextGateway:
                         self._query_analyzer.analyze,
                         query,
                         code_context,
-                        documentation_context=docs_context_str if docs_context_str else None
+                        documentation_context=docs_context_str if docs_context_str else None,
                     )
                 else:
                     query_analysis = await self._query_analyzer.analyze(
                         query,
                         code_context,
-                        documentation_context=docs_context_str if docs_context_str else None
+                        documentation_context=docs_context_str if docs_context_str else None,
                     )
 
                 # Record metrics
                 if self._metrics:
                     duration = time.time() - comp_start
-                    self._metrics.record_component_performance("query_analysis", duration, success=True)
+                    self._metrics.record_component_performance(
+                        "query_analysis", duration, success=True
+                    )
 
                 component_status["query_analysis"] = ComponentStatus.SUCCESS
 
@@ -1151,7 +1203,9 @@ class ContextGateway:
                     query_cache_key = self._cache.generate_cache_key(
                         query, workspace_path, "query_analysis"
                     )
-                    await self._cache.set(query_cache_key, query_analysis, "query_analysis", workspace_path)
+                    await self._cache.set(
+                        query_cache_key, query_analysis, "query_analysis", workspace_path
+                    )
 
                     # Create cache metadata
                     cache_metadata = CacheMetadata(
@@ -1159,13 +1213,17 @@ class ContextGateway:
                         cache_hit=False,
                         cache_age=timedelta(0),
                         cache_type="query_analysis",
-                        workspace_fingerprint=self._cache._compute_workspace_fingerprint(workspace_path),
-                        is_stale_fallback=False
+                        workspace_fingerprint=self._cache._compute_workspace_fingerprint(
+                            workspace_path
+                        ),
+                        is_stale_fallback=False,
                     )
             except Exception as e:
                 duration = time.time() - comp_start
                 if self._metrics:
-                    self._metrics.record_component_performance("query_analysis", duration, success=False)
+                    self._metrics.record_component_performance(
+                        "query_analysis", duration, success=False
+                    )
                 component_status["query_analysis"] = ComponentStatus.FALLBACK
                 logger.warning("query_analysis_failed_using_fallback", error=str(e))
                 query_analysis = self._fallback_analyze(query)
@@ -1174,7 +1232,7 @@ class ContextGateway:
         task_type = query_analysis.get("task_type", "general")
         complexity = query_analysis.get("complexity", "medium")
         token_budget_usage = None
-        thinking_mode_decision: Optional[ThinkingModeDecision] = None
+        thinking_mode_decision: ThinkingModeDecision | None = None
 
         # Determine thinking mode based on complexity (if enabled)
         if self._thinking_mode_optimizer:
@@ -1208,48 +1266,56 @@ class ContextGateway:
                 # Continue without thinking mode decision
 
         # Convert to enhanced models for budget optimization
-        enhanced_files = [
-            self._coerce_enhanced_file(f)
-            for f in converted_files
-        ]
+        enhanced_files = [self._coerce_enhanced_file(f) for f in converted_files]
 
         enhanced_docs = []
         for d in doc_contexts:
             if isinstance(d, EnhancedDocumentationContext):
                 enhanced_docs.append(d)
             else:
-                enhanced_docs.append(EnhancedDocumentationContext(
-                    source=d.source,
-                    title=d.title,
-                    snippet=d.snippet,
-                    relevance_score=d.relevance_score,
-                    attribution=getattr(d, "attribution", None),
-                    merge_source=getattr(d, "merge_source", "web"),
-                ))
+                enhanced_docs.append(
+                    EnhancedDocumentationContext(
+                        source=d.source,
+                        title=d.title,
+                        snippet=d.snippet,
+                        relevance_score=d.relevance_score,
+                        attribution=getattr(d, "attribution", None),
+                        merge_source=getattr(d, "merge_source", "web"),
+                    )
+                )
 
         # Apply token budget optimization if enabled
         if self._budget_integration:
             try:
-                logger.info("token_budget_optimization_start", files=len(enhanced_files), docs=len(enhanced_docs))
-                optimized_files, optimized_docs, optimized_code, token_budget_usage = \
-                    await self._budget_integration.optimize_context_for_budget(
-                        query, task_type, complexity,
-                        enhanced_files, enhanced_docs, code_search_results
-                    )
+                logger.info(
+                    "token_budget_optimization_start",
+                    files=len(enhanced_files),
+                    docs=len(enhanced_docs),
+                )
+                (
+                    optimized_files,
+                    optimized_docs,
+                    optimized_code,
+                    token_budget_usage,
+                ) = await self._budget_integration.optimize_context_for_budget(
+                    query, task_type, complexity, enhanced_files, enhanced_docs, code_search_results
+                )
                 # Use optimized content
                 converted_files = [self._coerce_enhanced_file(f) for f in optimized_files]
                 doc_contexts = list(optimized_docs)
                 code_search_results = optimized_code
-                logger.info("token_budget_optimization_complete", optimized_files=len(converted_files), optimized_docs=len(doc_contexts))
+                logger.info(
+                    "token_budget_optimization_complete",
+                    optimized_files=len(converted_files),
+                    optimized_docs=len(doc_contexts),
+                )
             except Exception as e:
                 logger.warning("token_budget_optimization_failed", error=str(e))
                 # Continue with unoptimized content
 
         # Refresh source attributions after any optimization
         source_attributions = [
-            doc.attribution
-            for doc in doc_contexts
-            if getattr(doc, "attribution", None)
+            doc.attribution for doc in doc_contexts if getattr(doc, "attribution", None)
         ]
 
         # Phase 4: Relevance Tracking (if enabled)
@@ -1272,10 +1338,22 @@ class ContextGateway:
         quality_metrics = None
         if converted_files or doc_contexts:
             try:
-                avg_file_relevance = sum(f.relevance_score for f in converted_files) / len(converted_files) if converted_files else 0
-                avg_doc_relevance = sum(d.relevance_score for d in doc_contexts) / len(doc_contexts) if doc_contexts else 0
-                context_coverage_score = min(1.0, (len(converted_files) / max_files) * 0.7 + (len(doc_contexts) / 5) * 0.3)
-                diversity_score = len(set(f.path.split('/')[0] for f in converted_files if '/' in f.path)) / max(1, len(converted_files))
+                avg_file_relevance = (
+                    sum(f.relevance_score for f in converted_files) / len(converted_files)
+                    if converted_files
+                    else 0
+                )
+                avg_doc_relevance = (
+                    sum(d.relevance_score for d in doc_contexts) / len(doc_contexts)
+                    if doc_contexts
+                    else 0
+                )
+                context_coverage_score = min(
+                    1.0, (len(converted_files) / max_files) * 0.7 + (len(doc_contexts) / 5) * 0.3
+                )
+                diversity_score = len(
+                    set(f.path.split("/")[0] for f in converted_files if "/" in f.path)
+                ) / max(1, len(converted_files))
 
                 quality_metrics = QualityMetrics(
                     overall_quality_score=context_coverage_score,
@@ -1320,14 +1398,18 @@ class ContextGateway:
         if self._metrics:
             try:
                 # Record overall gateway performance
-                self._metrics.record_component_performance("context_gateway", total_duration, success=True)
+                self._metrics.record_component_performance(
+                    "context_gateway", total_duration, success=True
+                )
 
                 # Record context quality if available
                 if quality_metrics:
-                    relevance_scores = [f.relevance_score for f in converted_files] + [d.relevance_score for d in doc_contexts]
+                    relevance_scores = [f.relevance_score for f in converted_files] + [
+                        d.relevance_score for d in doc_contexts
+                    ]
                     self._metrics.record_context_quality(
                         quality_score=quality_metrics.context_coverage_score,
-                        relevance_scores=relevance_scores
+                        relevance_scores=relevance_scores,
                     )
 
                 # Record cache effectiveness
@@ -1338,7 +1420,7 @@ class ContextGateway:
                         self._metrics.record_cache_operation(
                             operation="hit" if cache_metadata.cache_hit else "miss",
                             hit=cache_metadata.cache_hit,
-                            tokens_saved=tokens_saved if cache_metadata.cache_hit else 0
+                            tokens_saved=tokens_saved if cache_metadata.cache_hit else 0,
                         )
             except Exception as e:
                 logger.warning("final_metrics_recording_failed", error=str(e))
@@ -1355,13 +1437,17 @@ class ContextGateway:
             duration_seconds=f"{total_duration:.2f}",
             quality_score=quality_metrics.context_coverage_score if quality_metrics else None,
             budget_within=token_budget_usage.within_budget if token_budget_usage else None,
-            thinking_mode=thinking_mode_decision.thinking_level.value if thinking_mode_decision else None,
-            thinking_enabled=thinking_mode_decision.use_thinking_mode if thinking_mode_decision else False,
+            thinking_mode=thinking_mode_decision.thinking_level.value
+            if thinking_mode_decision
+            else None,
+            thinking_enabled=thinking_mode_decision.use_thinking_mode
+            if thinking_mode_decision
+            else False,
         )
 
         return context
 
-    async def quick_analyze(self, query: str) -> Dict[str, Any]:
+    async def quick_analyze(self, query: str) -> dict[str, Any]:
         """
         Quick analysis without file discovery or doc search.
 
@@ -1374,7 +1460,7 @@ class ContextGateway:
 # Global singleton with thread-safe initialization
 # =============================================================================
 
-_gateway: Optional[ContextGateway] = None
+_gateway: ContextGateway | None = None
 _gateway_lock = threading.Lock()
 
 
@@ -1395,12 +1481,12 @@ def get_context_gateway() -> ContextGateway:
 
 async def prepare_context_for_claude(
     query: str,
-    workspace_path: Optional[str] = None,
-    code_context: Optional[str] = None,
-    file_list: Optional[List[str]] = None,
+    workspace_path: str | None = None,
+    code_context: str | None = None,
+    file_list: list[str] | None = None,
     search_docs: bool = True,
-    enable_multi_repo: Optional[bool] = None,
-    enable_source_attribution: Optional[bool] = None,
+    enable_multi_repo: bool | None = None,
+    enable_source_attribution: bool | None = None,
 ) -> EnhancedStructuredContext:
     """
     Convenience function to prepare context with all enhancements.

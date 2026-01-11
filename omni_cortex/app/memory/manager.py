@@ -27,8 +27,8 @@ from __future__ import annotations
 import threading
 from collections import OrderedDict
 
-from .omni_memory import OmniCortexMemory
 from ..core.constants import LIMITS
+from .omni_memory import OmniCortexMemory
 
 # Global memory store (keyed by thread_id) with simple LRU eviction
 _memory_store: OrderedDict[str, OmniCortexMemory] = OrderedDict()

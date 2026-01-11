@@ -8,28 +8,28 @@ with proper state management and memory persistence.
 import asyncio
 import os
 import time
-from typing import Awaitable, Callable, Dict, Literal, Union
+from collections.abc import Awaitable, Callable
+from typing import Literal
 
-from langgraph.graph import StateGraph, END
-from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 import structlog
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+from langgraph.graph import END, StateGraph
 
-from .state import GraphState
-from .core.router import HyperRouter
-from .core.settings import get_settings
 from .core.audit import log_framework_execution
 from .core.metrics import record_framework_execution
-from .core.errors import OmniCortexError, ExecutionError, RoutingError
+from .core.router import HyperRouter
+from .core.settings import get_settings
 from .langchain_integration import (
+    AVAILABLE_TOOLS,
+    OmniCortexCallback,
     enhance_state_with_langchain,
     save_to_langchain_memory,
-    OmniCortexCallback,
-    AVAILABLE_TOOLS
 )
 
 # Import generated nodes - SINGLE SOURCE OF TRUTH
 # This replaces 62 manual imports with one line
 from .nodes.generator import GENERATED_NODES
+from .state import GraphState
 
 CHECKPOINT_PATH = str(get_settings().checkpoint_path)
 logger = structlog.get_logger("graph")
@@ -40,7 +40,7 @@ BASE_BACKOFF_MS = 100  # Base delay for exponential backoff
 
 # Framework registry - now auto-generated from FrameworkDefinition
 # Type annotation for the framework nodes dictionary
-FRAMEWORK_NODES: Dict[str, Callable[[GraphState], Awaitable[GraphState]]] = GENERATED_NODES
+FRAMEWORK_NODES: dict[str, Callable[[GraphState], Awaitable[GraphState]]] = GENERATED_NODES
 
 
 # Initialize router
@@ -53,7 +53,7 @@ def _log_framework_metrics(
     duration_ms: float,
     confidence_score: float,
     category: str = "unknown",
-    success: bool = True
+    success: bool = True,
 ) -> None:
     """Log execution metrics for a framework."""
     logger.info(
@@ -61,7 +61,7 @@ def _log_framework_metrics(
         framework=framework_name,
         tokens_used=tokens_used,
         duration_ms=round(duration_ms, 2),
-        confidence_score=round(confidence_score, 3)
+        confidence_score=round(confidence_score, 3),
     )
     # Record Prometheus metrics
     record_framework_execution(
@@ -70,14 +70,12 @@ def _log_framework_metrics(
         duration_seconds=duration_ms / 1000.0,
         tokens_used=tokens_used,
         confidence=confidence_score,
-        success=success
+        success=success,
     )
 
 
 async def _execute_pipeline(
-    state: GraphState,
-    framework_chain: list[str],
-    list_tools_fn: Callable
+    state: GraphState, framework_chain: list[str], list_tools_fn: Callable
 ) -> GraphState:
     """
     Execute multiple frameworks in sequence (pipeline mode).
@@ -129,9 +127,7 @@ async def _execute_pipeline(
         Updated graph state after all frameworks have executed
     """
     logger.info(
-        "pipeline_execution_start",
-        chain=framework_chain,
-        chain_length=len(framework_chain)
+        "pipeline_execution_start", chain=framework_chain, chain_length=len(framework_chain)
     )
 
     executed_frameworks = []
@@ -139,13 +135,13 @@ async def _execute_pipeline(
     for i, framework_name in enumerate(framework_chain):
         if framework_name not in FRAMEWORK_NODES:
             # CRITICAL: Invalid framework in chain should fail the pipeline, not silently skip
-            error_msg = f"Framework '{framework_name}' not found in chain at position {i+1}"
+            error_msg = f"Framework '{framework_name}' not found in chain at position {i + 1}"
             logger.error(
-                "invalid_framework_in_chain", 
+                "invalid_framework_in_chain",
                 framework=framework_name,
-                position=i+1,
+                position=i + 1,
                 chain=framework_chain,
-                available_count=len(FRAMEWORK_NODES)
+                available_count=len(FRAMEWORK_NODES),
             )
             state["error"] = error_msg
             state["final_answer"] = (
@@ -156,22 +152,20 @@ async def _execute_pipeline(
 
         # Update current framework context
         state["selected_framework"] = framework_name
-        state["working_memory"]["recommended_tools"] = list_tools_fn(
-            framework_name, state
-        )
+        state["working_memory"]["recommended_tools"] = list_tools_fn(framework_name, state)
         state["working_memory"]["pipeline_position"] = {
             "index": i,
             "total": len(framework_chain),
             "is_first": i == 0,
             "is_last": i == len(framework_chain) - 1,
-            "previous_frameworks": executed_frameworks.copy()
+            "previous_frameworks": executed_frameworks.copy(),
         }
 
         logger.info(
             "pipeline_step_start",
             step=i + 1,
             framework=framework_name,
-            total_steps=len(framework_chain)
+            total_steps=len(framework_chain),
         )
 
         # Execute framework with metrics and error handling
@@ -198,11 +192,13 @@ async def _execute_pipeline(
                 state["final_answer"] = f"Framework {framework_name} failed: {str(e)[:100]}"
             if "reasoning_steps" not in state:
                 state["reasoning_steps"] = []
-            state["reasoning_steps"].append({
-                "thought": f"Framework {framework_name} failed with error",
-                "action": "error_recovery",
-                "observation": f"Error: {str(e)[:200]}"
-            })
+            state["reasoning_steps"].append(
+                {
+                    "thought": f"Framework {framework_name} failed with error",
+                    "action": "error_recovery",
+                    "observation": f"Error: {str(e)[:200]}",
+                }
+            )
             # Continue to next framework in chain instead of crashing
             continue
 
@@ -216,7 +212,7 @@ async def _execute_pipeline(
             framework_name=framework_name,
             tokens_used=step_tokens,
             duration_ms=duration_ms,
-            confidence_score=state.get("confidence_score", 0.0)
+            confidence_score=state.get("confidence_score", 0.0),
         )
 
         # Track execution
@@ -230,26 +226,25 @@ async def _execute_pipeline(
                 "answer": state.get("final_answer", ""),
                 "code": state.get("final_code"),
                 "confidence": state.get("confidence_score", 0.5),
-                "tokens": step_tokens
+                "tokens": step_tokens,
             }
 
             # Add to reasoning steps for context
             if "reasoning_steps" not in state:
                 state["reasoning_steps"] = []
-            state["reasoning_steps"].append({
-                "thought": f"Pipeline step {i + 1}: {framework_name}",
-                "action": "framework_execution",
-                "observation": (state.get("final_answer") or "")[:500]
-            })
+            state["reasoning_steps"].append(
+                {
+                    "thought": f"Pipeline step {i + 1}: {framework_name}",
+                    "action": "framework_execution",
+                    "observation": (state.get("final_answer") or "")[:500],
+                }
+            )
 
             # For next framework, the previous answer becomes context
             state["working_memory"]["pipeline_context"] = intermediate_result
 
             logger.info(
-                "pipeline_step_complete",
-                step=i + 1,
-                framework=framework_name,
-                tokens=step_tokens
+                "pipeline_step_complete", step=i + 1, framework=framework_name, tokens=step_tokens
             )
 
     # Record all executed frameworks
@@ -257,16 +252,14 @@ async def _execute_pipeline(
     logger.info(
         "pipeline_execution_complete",
         executed=executed_frameworks,
-        total_tokens=state.get("tokens_used", 0)
+        total_tokens=state.get("tokens_used", 0),
     )
 
     return state
 
 
 async def _execute_single(
-    state: GraphState,
-    selected_framework: str | None,
-    list_tools_fn: Callable
+    state: GraphState, selected_framework: str | None, list_tools_fn: Callable
 ) -> GraphState:
     """
     Execute a single framework.
@@ -315,11 +308,13 @@ async def _execute_single(
             state["final_answer"] = f"Framework execution failed: {str(e)[:100]}"
         if "reasoning_steps" not in state:
             state["reasoning_steps"] = []
-        state["reasoning_steps"].append({
-            "thought": f"Framework {framework_name} failed",
-            "action": "error_recovery",
-            "observation": f"Error: {str(e)[:200]}"
-        })
+        state["reasoning_steps"].append(
+            {
+                "thought": f"Framework {framework_name} failed",
+                "action": "error_recovery",
+                "observation": f"Error: {str(e)[:200]}",
+            }
+        )
 
     end_time = time.perf_counter()
     post_tokens = state.get("tokens_used", 0)
@@ -330,7 +325,7 @@ async def _execute_single(
         framework_name=framework_name or "unknown",
         tokens_used=post_tokens - pre_tokens,
         duration_ms=duration_ms,
-        confidence_score=state.get("confidence_score", 0.0)
+        confidence_score=state.get("confidence_score", 0.0),
     )
 
     return state
@@ -355,9 +350,7 @@ async def route_node(state: GraphState) -> GraphState:
         logger.info("state_enhanced_with_memory", thread_id=thread_id)
 
     # Make LangChain tools available to router if needed
-    state["working_memory"]["available_tools"] = [
-        tool.name for tool in AVAILABLE_TOOLS
-    ]
+    state["working_memory"]["available_tools"] = [tool.name for tool in AVAILABLE_TOOLS]
 
     return await router.route(state, use_ai=True)
 
@@ -398,10 +391,11 @@ async def execute_framework_node(state: GraphState) -> GraphState:
 
     # Audit log the framework execution
     frameworks_used = state.get("working_memory", {}).get(
-        "executed_chain",
-        [state.get("selected_framework", "unknown")]
+        "executed_chain", [state.get("selected_framework", "unknown")]
     )
-    framework_str = " -> ".join(frameworks_used) if isinstance(frameworks_used, list) else frameworks_used
+    framework_str = (
+        " -> ".join(frameworks_used) if isinstance(frameworks_used, list) else frameworks_used
+    )
 
     log_framework_execution(
         framework=framework_str,
@@ -411,7 +405,7 @@ async def execute_framework_node(state: GraphState) -> GraphState:
         confidence=state.get("confidence_score", 0.0),
         duration_ms=0.0,  # Duration tracked per-step in pipeline/single execution
         success=True,
-        error=None
+        error=None,
     )
 
     # Save to LangChain memory after execution
@@ -420,13 +414,13 @@ async def execute_framework_node(state: GraphState) -> GraphState:
             thread_id=thread_id,
             query=state.get("query", ""),
             answer=state.get("final_answer", ""),
-            framework=framework_str
+            framework=framework_str,
         )
         logger.info(
             "saved_to_langchain_memory",
             thread_id=thread_id,
             framework=framework_str,
-            is_pipeline=len(frameworks_used) > 1 if isinstance(frameworks_used, list) else False
+            is_pipeline=len(frameworks_used) > 1 if isinstance(frameworks_used, list) else False,
         )
 
     return state
@@ -453,7 +447,7 @@ def should_continue(state: GraphState) -> Literal["execute", "end", "retry", "er
             "routing_to_error_node",
             error=str(error)[:200],
             selected_framework=state.get("selected_framework"),
-            retry_count=state.get("retry_count", 0)
+            retry_count=state.get("retry_count", 0),
         )
         return "error"
 
@@ -467,13 +461,13 @@ def should_continue(state: GraphState) -> Literal["execute", "end", "retry", "er
 
     if last_error and retry_count < MAX_RETRIES:
         # Calculate exponential backoff delay for logging
-        backoff_ms = BASE_BACKOFF_MS * (2 ** retry_count)
+        backoff_ms = BASE_BACKOFF_MS * (2**retry_count)
         logger.warning(
             "retry_scheduled",
             retry_count=retry_count + 1,
             max_retries=MAX_RETRIES,
             backoff_ms=backoff_ms,
-            error=last_error
+            error=last_error,
         )
         return "retry"
 
@@ -482,7 +476,7 @@ def should_continue(state: GraphState) -> Literal["execute", "end", "retry", "er
             "max_retries_exceeded",
             retry_count=retry_count,
             max_retries=MAX_RETRIES,
-            last_error=last_error
+            last_error=last_error,
         )
         # After max retries, route to error node for graceful termination
         state["error"] = f"Max retries exceeded: {last_error}"
@@ -498,7 +492,7 @@ async def retry_with_backoff(state: GraphState) -> GraphState:
     Increments retry_count and waits before allowing another attempt.
     """
     retry_count = state.get("retry_count", 0)
-    backoff_ms = BASE_BACKOFF_MS * (2 ** retry_count)
+    backoff_ms = BASE_BACKOFF_MS * (2**retry_count)
 
     # Apply backoff delay
     await asyncio.sleep(backoff_ms / 1000.0)
@@ -509,11 +503,7 @@ async def retry_with_backoff(state: GraphState) -> GraphState:
     # Clear error for fresh attempt
     state["last_error"] = None
 
-    logger.info(
-        "retry_attempt",
-        retry_count=state["retry_count"],
-        backoff_applied_ms=backoff_ms
-    )
+    logger.info("retry_attempt", retry_count=state["retry_count"], backoff_applied_ms=backoff_ms)
 
     return state
 
@@ -537,7 +527,7 @@ async def error_node(state: GraphState) -> GraphState:
         error=error_message[:200],
         selected_framework=state.get("selected_framework"),
         query_preview=state.get("query", "")[:100],
-        retry_count=state.get("retry_count", 0)
+        retry_count=state.get("retry_count", 0),
     )
 
     # Set safe defaults for required output fields
@@ -564,11 +554,13 @@ async def error_node(state: GraphState) -> GraphState:
         state["reasoning_steps"] = []
 
     # Add error to reasoning steps for audit trail
-    state["reasoning_steps"].append({
-        "thought": "Error detected in workflow",
-        "action": "error_handling",
-        "observation": f"Error: {error_message[:200]}"
-    })
+    state["reasoning_steps"].append(
+        {
+            "thought": "Error detected in workflow",
+            "action": "error_handling",
+            "observation": f"Error: {error_message[:200]}",
+        }
+    )
 
     # Clear the error after handling (prevent re-triggering)
     # Keep last_error for diagnostics but clear the active error flag
@@ -584,7 +576,7 @@ async def error_node(state: GraphState) -> GraphState:
         confidence=0.0,
         duration_ms=0.0,
         success=False,
-        error=error_message[:200]
+        error=error_message[:200],
     )
 
     return state
@@ -606,7 +598,7 @@ def should_continue_after_execute(state: GraphState) -> Literal["end", "error"]:
         logger.warning(
             "post_execute_error_detected",
             error=str(error)[:200],
-            selected_framework=state.get("selected_framework")
+            selected_framework=state.get("selected_framework"),
         )
         return "error"
     return "end"
@@ -655,12 +647,7 @@ def create_reasoning_graph(checkpointer=None) -> StateGraph:
     workflow.add_conditional_edges(
         "route",
         should_continue,
-        {
-            "execute": "execute",
-            "retry": "retry",
-            "error": "error",
-            "end": END
-        }
+        {"execute": "execute", "retry": "retry", "error": "error", "end": END},
     )
 
     # Retry loops back to routing
@@ -668,12 +655,7 @@ def create_reasoning_graph(checkpointer=None) -> StateGraph:
 
     # After execute: check for errors or end
     workflow.add_conditional_edges(
-        "execute",
-        should_continue_after_execute,
-        {
-            "error": "error",
-            "end": END
-        }
+        "execute", should_continue_after_execute, {"error": "error", "end": END}
     )
 
     # Error node always terminates the workflow
@@ -720,14 +702,14 @@ async def get_checkpointer() -> AsyncSqliteSaver:
             os.makedirs(checkpoint_dir, exist_ok=True)
             _checkpointer = await AsyncSqliteSaver.from_conn_string(CHECKPOINT_PATH)
             logger.info("checkpointer_initialized", path=CHECKPOINT_PATH)
-    
+
     return _checkpointer
 
 
 async def cleanup_checkpointer() -> None:
     """
     Clean up checkpointer resources on shutdown.
-    
+
     Call this from your shutdown handler to properly close database connections.
     Critical for Docker deployments to prevent "database locked" errors.
     """
@@ -735,10 +717,10 @@ async def cleanup_checkpointer() -> None:
     if _checkpointer is not None:
         try:
             # Try documented async close methods first (LangGraph 0.4+ compatibility)
-            if hasattr(_checkpointer, 'aclose') and callable(_checkpointer.aclose):
+            if hasattr(_checkpointer, "aclose") and callable(_checkpointer.aclose):
                 await _checkpointer.aclose()
                 logger.info("checkpointer_cleaned_up", method="aclose")
-            elif hasattr(_checkpointer, 'close') and callable(_checkpointer.close):
+            elif hasattr(_checkpointer, "close") and callable(_checkpointer.close):
                 # Some versions have sync close
                 result = _checkpointer.close()
                 # If close returns a coroutine, await it
@@ -746,19 +728,21 @@ async def cleanup_checkpointer() -> None:
                     await result
                 logger.info("checkpointer_cleaned_up", method="close")
             # Fallback to direct connection close
-            elif hasattr(_checkpointer, 'conn') and _checkpointer.conn:
-                if hasattr(_checkpointer.conn, 'close'):
+            elif hasattr(_checkpointer, "conn") and _checkpointer.conn:
+                if hasattr(_checkpointer.conn, "close"):
                     result = _checkpointer.conn.close()
                     if asyncio.iscoroutine(result):
                         await result
                 logger.info("checkpointer_cleaned_up", method="conn.close")
             else:
-                logger.warning("checkpointer_no_close_method", 
-                             available_attrs=[attr for attr in dir(_checkpointer) if not attr.startswith('_')][:10])
+                logger.warning(
+                    "checkpointer_no_close_method",
+                    available_attrs=[
+                        attr for attr in dir(_checkpointer) if not attr.startswith("_")
+                    ][:10],
+                )
         except Exception as e:
-            logger.error("checkpointer_cleanup_error", 
-                        error=str(e), 
-                        error_type=type(e).__name__)
+            logger.error("checkpointer_cleanup_error", error=str(e), error_type=type(e).__name__)
         finally:
             _checkpointer = None
 
@@ -766,7 +750,7 @@ async def cleanup_checkpointer() -> None:
 async def get_graph_with_memory() -> StateGraph:
     """
     Get the reasoning graph with checkpointing enabled.
-    
+
     Use this for operations that need memory persistence.
     """
     checkpointer = await get_checkpointer()
@@ -776,4 +760,3 @@ async def get_graph_with_memory() -> StateGraph:
 # Create the global graph instance (without checkpointer for import-time initialization)
 # For memory-enabled operations, use get_graph_with_memory() instead
 graph = create_reasoning_graph()
-

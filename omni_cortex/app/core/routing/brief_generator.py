@@ -5,22 +5,26 @@ Generates GeminiRouterOutput with ClaudeCodeBrief for handoff protocol.
 """
 
 import time
-from typing import List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 import structlog
 
 from ..constants import CONTENT
 from .framework_registry import CATEGORIES
 from .task_analysis import (
-    gemini_analyze_task,
     enrich_evidence_from_chroma,
+    gemini_analyze_task,
     save_task_analysis,
 )
 
 if TYPE_CHECKING:
     from ..schemas import (
-        GeminiRouterOutput, DetectedSignal, TaskType, RiskLevel,
-        StageRole, OutputType
+        DetectedSignal,
+        GeminiRouterOutput,
+        OutputType,
+        RiskLevel,
+        StageRole,
+        TaskType,
     )
 
 logger = structlog.get_logger("brief_generator")
@@ -44,20 +48,38 @@ class StructuredBriefGenerator:
     async def generate(
         self,
         query: str,
-        context: Optional[str] = None,
-        code_snippet: Optional[str] = None,
-        ide_context: Optional[str] = None,
-        file_list: Optional[List[str]] = None
+        context: str | None = None,
+        code_snippet: str | None = None,
+        ide_context: str | None = None,
+        file_list: list[str] | None = None,
     ) -> "GeminiRouterOutput":
         """Generate a structured GeminiRouterOutput with ClaudeCodeBrief."""
         from ..schemas import (
-            GeminiRouterOutput, RouterMeta, TaskProfile, TaskType, RiskLevel,
-            DetectedSignal, SignalType, Pipeline, PipelineStage, StageRole,
-            StageInputs, StageBudget, CostClass, OutputType, SelectionRationale,
-            PipelineFallback, FallbackAction, IntegrityGate, Confidence,
-            ConfidenceBand, AlignmentCheck, GateRecommendation, GateAction,
-            ClaudeCodeBrief, RepoTargets, Verification, EvidenceExcerpt,
-            SourceType, Telemetry, DEFAULT_STOP_CONDITIONS
+            DEFAULT_STOP_CONDITIONS,
+            AlignmentCheck,
+            ClaudeCodeBrief,
+            Confidence,
+            ConfidenceBand,
+            CostClass,
+            EvidenceExcerpt,
+            FallbackAction,
+            GateAction,
+            GateRecommendation,
+            GeminiRouterOutput,
+            IntegrityGate,
+            Pipeline,
+            PipelineFallback,
+            PipelineStage,
+            RepoTargets,
+            RouterMeta,
+            SelectionRationale,
+            SourceType,
+            StageBudget,
+            StageInputs,
+            StageRole,
+            TaskProfile,
+            Telemetry,
+            Verification,
         )
 
         start_time = time.monotonic()  # monotonic for elapsed time measurement
@@ -75,9 +97,9 @@ class StructuredBriefGenerator:
             # We fall back to safe baseline frameworks to ensure the user always gets a response.
             logger.warning(
                 "framework_selection_failed",
-                error=str(e)[:CONTENT.QUERY_LOG],
+                error=str(e)[: CONTENT.QUERY_LOG],
                 error_type=type(e).__name__,
-                fallback="self_discover->chain_of_thought"
+                fallback="self_discover->chain_of_thought",
             )
             framework_chain = ["self_discover", "chain_of_thought"]
             reasoning = "Safe baseline fallback"
@@ -94,24 +116,24 @@ class StructuredBriefGenerator:
             stage_role = role_sequence[min(i, 2)]
             cost = CostClass.LIGHT if i == 0 else (CostClass.MEDIUM if i == 1 else CostClass.HEAVY)
 
-            stages.append(PipelineStage(
-                stage_role=stage_role,
-                framework_id=fw,
-                inputs=StageInputs(
-                    facts_only=(i > 0),
-                    derived_allowed=(i < 2),
-                    evidence=[]
-                ),
-                expected_outputs=self._get_expected_outputs(stage_role),
-                budget=StageBudget(cost_class=cost, notes=f"Stage {i+1}: {fw}")
-            ))
+            stages.append(
+                PipelineStage(
+                    stage_role=stage_role,
+                    framework_id=fw,
+                    inputs=StageInputs(facts_only=(i > 0), derived_allowed=(i < 2), evidence=[]),
+                    expected_outputs=self._get_expected_outputs(stage_role),
+                    budget=StageBudget(cost_class=cost, notes=f"Stage {i + 1}: {fw}"),
+                )
+            )
 
         # Calculate confidence
         confidence_score = self._calculate_confidence(detected_signals, framework_chain, category)
         confidence_band = (
-            ConfidenceBand.HIGH if confidence_score >= 0.75 else
-            ConfidenceBand.MEDIUM if confidence_score >= 0.5 else
-            ConfidenceBand.LOW
+            ConfidenceBand.HIGH
+            if confidence_score >= 0.75
+            else ConfidenceBand.MEDIUM
+            if confidence_score >= 0.5
+            else ConfidenceBand.LOW
         )
 
         # Build pipeline
@@ -122,14 +144,16 @@ class StructuredBriefGenerator:
                 top_pick=framework_chain[0] if framework_chain else "self_discover",
                 runner_up=framework_chain[1] if len(framework_chain) > 1 else "chain_of_thought",
                 why_top_pick=reasoning[:260],
-                why_not_runner_up="Used as subsequent stage" if len(framework_chain) > 1 else "Alternative approach",
-                confidence=Confidence(band=confidence_band, score=confidence_score)
+                why_not_runner_up="Used as subsequent stage"
+                if len(framework_chain) > 1
+                else "Alternative approach",
+                confidence=Confidence(band=confidence_band, score=confidence_score),
             ),
             fallback=PipelineFallback(
                 action=FallbackAction.USE_SAFE_BASELINE,
                 framework_id="self_discover",
-                notes="Fallback to self_discover if pipeline fails"
-            )
+                notes="Fallback to self_discover if pipeline fails",
+            ),
         )
 
         # Build integrity gate
@@ -137,41 +161,47 @@ class StructuredBriefGenerator:
         assumptions = self._extract_assumptions(query, context)
 
         integrity_gate = IntegrityGate(
-            top_facts=facts[:5] if facts else ["Query received: " + query[:CONTENT.QUERY_LOG]],
+            top_facts=facts[:5] if facts else ["Query received: " + query[: CONTENT.QUERY_LOG]],
             top_assumptions=assumptions[:5],
             falsifiers=self._generate_falsifiers(query, detected_signals),
             alignment_check=AlignmentCheck(
                 matches_user_goal=True,
-                notes=f"Pipeline matches detected task type: {task_type.value}"
+                notes=f"Pipeline matches detected task type: {task_type.value}",
             ),
             confidence=Confidence(band=confidence_band, score=confidence_score),
             recommendation=GateRecommendation(
-                action=GateAction.PROCEED if confidence_score >= 0.5 else GateAction.REQUEST_MORE_INPUT,
-                notes="Proceed with pipeline" if confidence_score >= 0.5 else "Low confidence - may need more context"
-            )
+                action=GateAction.PROCEED
+                if confidence_score >= 0.5
+                else GateAction.REQUEST_MORE_INPUT,
+                notes="Proceed with pipeline"
+                if confidence_score >= 0.5
+                else "Low confidence - may need more context",
+            ),
         )
 
         # Build evidence excerpts
         evidence = []
         if code_snippet:
-            evidence.append(EvidenceExcerpt(
-                source_type=SourceType.FILE,
-                ref="code_snippet",
-                content=code_snippet[:1800],
-                relevance="User-provided code context"
-            ))
+            evidence.append(
+                EvidenceExcerpt(
+                    source_type=SourceType.FILE,
+                    ref="code_snippet",
+                    content=code_snippet[:1800],
+                    relevance="User-provided code context",
+                )
+            )
         if context and len(context) > 10:
-            evidence.append(EvidenceExcerpt(
-                source_type=SourceType.USER_TEXT,
-                ref="context",
-                content=context[:1800],
-                relevance="User-provided context"
-            ))
+            evidence.append(
+                EvidenceExcerpt(
+                    source_type=SourceType.USER_TEXT,
+                    ref="context",
+                    content=context[:1800],
+                    relevance="User-provided context",
+                )
+            )
 
         # Use Gemini for rich task analysis
-        gemini_analysis = await gemini_analyze_task(
-            query, context, framework_chain, category
-        )
+        gemini_analysis = await gemini_analyze_task(query, context, framework_chain, category)
 
         # Use Gemini's analysis if available, fallback to static templates
         if gemini_analysis.get("execution_plan"):
@@ -196,19 +226,21 @@ class StructuredBriefGenerator:
 
         # Add prior knowledge as evidence if available
         if gemini_analysis.get("prior_knowledge") and gemini_analysis["prior_knowledge"] != "none":
-            evidence.append(EvidenceExcerpt(
-                source_type=SourceType.USER_TEXT,
-                ref="prior_knowledge",
-                content=gemini_analysis["prior_knowledge"][:CONTENT.SNIPPET_SHORT],
-                relevance="Relevant insight from similar past problems"
-            ))
+            evidence.append(
+                EvidenceExcerpt(
+                    source_type=SourceType.USER_TEXT,
+                    ref="prior_knowledge",
+                    content=gemini_analysis["prior_knowledge"][: CONTENT.SNIPPET_SHORT],
+                    relevance="Relevant insight from similar past problems",
+                )
+            )
 
         # Enrich with Chroma RAG context
         chroma_evidence = await enrich_evidence_from_chroma(
             query=query,
             category=category,
             framework_chain=framework_chain,
-            task_type=task_type.value if hasattr(task_type, 'value') else str(task_type)
+            task_type=task_type.value if hasattr(task_type, "value") else str(task_type),
         )
         evidence.extend(chroma_evidence)
 
@@ -217,19 +249,17 @@ class StructuredBriefGenerator:
             task_type=task_type,
             constraints=self._extract_constraints(query, context),
             repo_targets=RepoTargets(
-                files=file_list[:10] if file_list else [],
-                areas=focus_areas,
-                do_not_touch=[]
+                files=file_list[:10] if file_list else [], areas=focus_areas, do_not_touch=[]
             ),
             execution_plan=execution_plan,
             verification=Verification(
                 commands=self._suggest_verification_commands(task_type),
-                acceptance_criteria=self._generate_acceptance_criteria(query, task_type)
+                acceptance_criteria=self._generate_acceptance_criteria(query, task_type),
             ),
             stop_conditions=DEFAULT_STOP_CONDITIONS[:3],
             evidence=evidence[:6],
             assumptions=rich_assumptions,
-            open_questions=open_questions
+            open_questions=open_questions,
         )
 
         # Enforce token budget for Claude Max efficiency
@@ -250,7 +280,7 @@ class StructuredBriefGenerator:
                 task_type=task_type,
                 risk_level=risk_level,
                 primary_goal=query[:240],
-                constraints=claude_brief.constraints
+                constraints=claude_brief.constraints,
             ),
             detected_signals=detected_signals,
             pipeline=pipeline,
@@ -260,18 +290,15 @@ class StructuredBriefGenerator:
                 routing_latency_ms=routing_latency,
                 inputs_token_estimate=inputs_estimate // 4,
                 brief_token_estimate=brief_estimate // 4,
-                notes=f"Pipeline: {' -> '.join(framework_chain[:3])}"
-            )
+                notes=f"Pipeline: {' -> '.join(framework_chain[:3])}",
+            ),
         )
 
         return output
 
     def _detect_signals(
-        self,
-        query: str,
-        context: Optional[str],
-        code_snippet: Optional[str]
-    ) -> List["DetectedSignal"]:
+        self, query: str, context: str | None, code_snippet: str | None
+    ) -> list["DetectedSignal"]:
         """Detect signals from input to guide framework selection."""
         from ..schemas import DetectedSignal, SignalType
 
@@ -279,38 +306,84 @@ class StructuredBriefGenerator:
         combined = f"{query} {context or ''} {code_snippet or ''}".lower()
 
         signal_patterns = {
-            SignalType.STACK_TRACE: ["traceback", "exception", "error at line", "stack trace", "at line"],
-            SignalType.FAILING_TESTS: ["test fail", "assertion error", "expected", "actual", "npm test", "pytest"],
+            SignalType.STACK_TRACE: [
+                "traceback",
+                "exception",
+                "error at line",
+                "stack trace",
+                "at line",
+            ],
+            SignalType.FAILING_TESTS: [
+                "test fail",
+                "assertion error",
+                "expected",
+                "actual",
+                "npm test",
+                "pytest",
+            ],
             SignalType.REPRO_STEPS: ["to reproduce", "steps:", "1.", "when i", "after running"],
-            SignalType.PERF_REGRESSION: ["slow", "performance", "latency", "timeout", "memory leak"],
+            SignalType.PERF_REGRESSION: [
+                "slow",
+                "performance",
+                "latency",
+                "timeout",
+                "memory leak",
+            ],
             SignalType.API_CONTRACT_CHANGE: ["api", "endpoint", "breaking change", "deprecat"],
-            SignalType.AMBIGUOUS_REQUIREMENTS: ["unclear", "not sure", "maybe", "should i", "which approach"],
-            SignalType.MULTI_SERVICE: ["microservice", "service a", "service b", "cross-service", "distributed"],
+            SignalType.AMBIGUOUS_REQUIREMENTS: [
+                "unclear",
+                "not sure",
+                "maybe",
+                "should i",
+                "which approach",
+            ],
+            SignalType.MULTI_SERVICE: [
+                "microservice",
+                "service a",
+                "service b",
+                "cross-service",
+                "distributed",
+            ],
             SignalType.MIGRATION: ["migrate", "upgrade", "v2", "legacy", "deprecate"],
-            SignalType.DEPENDENCY_CONFLICT: ["dependency", "version conflict", "incompatible", "peer dep"],
-            SignalType.ENVIRONMENT_SPECIFIC: ["only in prod", "works locally", "docker", "kubernetes"],
-            SignalType.SECURITY_RELEVANT: ["security", "vulnerability", "auth", "injection", "xss", "csrf"],
+            SignalType.DEPENDENCY_CONFLICT: [
+                "dependency",
+                "version conflict",
+                "incompatible",
+                "peer dep",
+            ],
+            SignalType.ENVIRONMENT_SPECIFIC: [
+                "only in prod",
+                "works locally",
+                "docker",
+                "kubernetes",
+            ],
+            SignalType.SECURITY_RELEVANT: [
+                "security",
+                "vulnerability",
+                "auth",
+                "injection",
+                "xss",
+                "csrf",
+            ],
             SignalType.UI_ONLY: ["css", "layout", "style", "ui", "frontend", "display"],
             SignalType.DATA_INTEGRITY: ["data loss", "corrupt", "integrity", "consistency"],
         }
 
         for signal_type, patterns in signal_patterns.items():
             if any(p in combined for p in patterns):
-                signals.append(DetectedSignal(
-                    type=signal_type,
-                    evidence_refs=["query", "context"],
-                    notes="Detected from input patterns"
-                ))
+                signals.append(
+                    DetectedSignal(
+                        type=signal_type,
+                        evidence_refs=["query", "context"],
+                        notes="Detected from input patterns",
+                    )
+                )
 
         return signals
 
-    def _detect_task_type(
-        self,
-        query: str,
-        signals: List["DetectedSignal"]
-    ) -> "TaskType":
+    def _detect_task_type(self, query: str, signals: list["DetectedSignal"]) -> "TaskType":
         """Determine task type from query and signals."""
-        from ..schemas import TaskType, SignalType
+        from ..schemas import SignalType, TaskType
 
         query_lower = query.lower()
 
@@ -342,10 +415,7 @@ class StructuredBriefGenerator:
         return TaskType.IMPLEMENT
 
     def _assess_risk(
-        self,
-        query: str,
-        context: Optional[str],
-        signals: List["DetectedSignal"]
+        self, query: str, context: str | None, signals: list["DetectedSignal"]
     ) -> "RiskLevel":
         """Assess risk level of the task."""
         from ..schemas import RiskLevel, SignalType
@@ -368,9 +438,9 @@ class StructuredBriefGenerator:
 
         return RiskLevel.LOW
 
-    def _get_expected_outputs(self, role: "StageRole") -> List["OutputType"]:
+    def _get_expected_outputs(self, role: "StageRole") -> list["OutputType"]:
         """Get expected outputs for a stage role."""
-        from ..schemas import StageRole, OutputType
+        from ..schemas import OutputType, StageRole
 
         if role == StageRole.SCOUT:
             return [OutputType.FACTS, OutputType.ASSUMPTIONS, OutputType.OPEN_QUESTIONS]
@@ -380,10 +450,7 @@ class StructuredBriefGenerator:
             return [OutputType.PATCH_PLAN, OutputType.VERIFICATION_PLAN, OutputType.NEXT_ACTIONS]
 
     def _calculate_confidence(
-        self,
-        signals: List["DetectedSignal"],
-        framework_chain: List[str],
-        category: str
+        self, signals: list["DetectedSignal"], framework_chain: list[str], category: str
     ) -> float:
         """Calculate confidence score for the routing decision."""
         base = 0.5
@@ -404,13 +471,10 @@ class StructuredBriefGenerator:
         return min(base, 1.0)
 
     def _extract_facts(
-        self,
-        query: str,
-        context: Optional[str],
-        code_snippet: Optional[str]
-    ) -> List[str]:
+        self, query: str, context: str | None, code_snippet: str | None
+    ) -> list[str]:
         """Extract factual statements from input."""
-        facts = [f"User query: {query[:CONTENT.QUERY_LOG]}"]
+        facts = [f"User query: {query[: CONTENT.QUERY_LOG]}"]
 
         if context:
             facts.append(f"Context provided: {len(context)} chars")
@@ -419,7 +483,7 @@ class StructuredBriefGenerator:
 
         return facts
 
-    def _extract_assumptions(self, query: str, context: Optional[str]) -> List[str]:
+    def _extract_assumptions(self, query: str, context: str | None) -> list[str]:
         """Extract assumptions from input."""
         assumptions = []
 
@@ -431,11 +495,7 @@ class StructuredBriefGenerator:
 
         return assumptions if assumptions else ["Standard implementation approach is acceptable"]
 
-    def _generate_falsifiers(
-        self,
-        query: str,
-        signals: List["DetectedSignal"]
-    ) -> List[str]:
+    def _generate_falsifiers(self, query: str, signals: list["DetectedSignal"]) -> list[str]:
         """Generate conditions that would invalidate the approach."""
         falsifiers = [
             "If the root cause is in a different module than identified",
@@ -465,9 +525,9 @@ class StructuredBriefGenerator:
         }
 
         prefix = prefixes.get(task_type, "")
-        return f"{prefix}{query[:CONTENT.ERROR_PREVIEW]}"
+        return f"{prefix}{query[: CONTENT.ERROR_PREVIEW]}"
 
-    def _extract_constraints(self, query: str, context: Optional[str]) -> List[str]:
+    def _extract_constraints(self, query: str, context: str | None) -> list[str]:
         """Extract constraints from input."""
         constraints = []
         combined = f"{query} {context or ''}".lower()
@@ -481,7 +541,7 @@ class StructuredBriefGenerator:
 
         return constraints if constraints else ["Follow existing code conventions"]
 
-    def _extract_areas(self, query: str, context: Optional[str]) -> List[str]:
+    def _extract_areas(self, query: str, context: str | None) -> list[str]:
         """Extract code areas to focus on."""
         areas = []
         combined = f"{query} {context or ''}".lower()
@@ -501,11 +561,8 @@ class StructuredBriefGenerator:
         return areas[:5]
 
     def _generate_execution_plan(
-        self,
-        query: str,
-        framework_chain: List[str],
-        task_type: "TaskType"
-    ) -> List[str]:
+        self, query: str, framework_chain: list[str], task_type: "TaskType"
+    ) -> list[str]:
         """Generate step-by-step execution plan."""
         from ..schemas import TaskType
 
@@ -542,7 +599,7 @@ class StructuredBriefGenerator:
                 "Verify results",
             ]
 
-    def _suggest_verification_commands(self, task_type: "TaskType") -> List[str]:
+    def _suggest_verification_commands(self, task_type: "TaskType") -> list[str]:
         """Suggest verification commands based on task type."""
         from ..schemas import TaskType
 
@@ -557,7 +614,7 @@ class StructuredBriefGenerator:
 
         return base
 
-    def _generate_acceptance_criteria(self, query: str, task_type: "TaskType") -> List[str]:
+    def _generate_acceptance_criteria(self, query: str, task_type: "TaskType") -> list[str]:
         """Generate acceptance criteria."""
         from ..schemas import TaskType
 
@@ -573,11 +630,7 @@ class StructuredBriefGenerator:
         criteria.append("No new linting errors")
         return criteria[:4]
 
-    def _generate_open_questions(
-        self,
-        query: str,
-        signals: List["DetectedSignal"]
-    ) -> List[str]:
+    def _generate_open_questions(self, query: str, signals: list["DetectedSignal"]) -> list[str]:
         """Generate open questions that may need clarification."""
         questions = []
 
@@ -592,32 +645,29 @@ class StructuredBriefGenerator:
     def _enforce_token_budget(self, brief: "ClaudeCodeBrief") -> "ClaudeCodeBrief":
         """
         Log token usage for monitoring - NO content removal.
-        
+
         Claude gets ALL information. Efficiency comes from formatting.
         This just tracks usage for optimization insights.
         """
         token_count = brief.token_estimate()
-        
+
         if token_count > MAX_CLAUDE_TOKENS:
             logger.info(
                 "token_budget_exceeded",
                 tokens=token_count,
                 budget=MAX_CLAUDE_TOKENS,
                 overage=token_count - MAX_CLAUDE_TOKENS,
-                note="Content preserved - Claude gets full context"
+                note="Content preserved - Claude gets full context",
             )
         else:
-            logger.debug(
-                "token_budget_ok",
-                tokens=token_count,
-                budget=MAX_CLAUDE_TOKENS
-            )
-        
+            logger.debug("token_budget_ok", tokens=token_count, budget=MAX_CLAUDE_TOKENS)
+
         # Never trim - return as-is
         return brief
 
 
 # Type hint for router reference
 from typing import TYPE_CHECKING
+
 if TYPE_CHECKING:
     from ..router import HyperRouter

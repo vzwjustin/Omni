@@ -17,13 +17,11 @@ import structlog
 # CRITICAL: Configure ALL logging to stderr BEFORE any other imports
 # MCP uses stdio - stdout is for JSON-RPC, stderr for logs
 logging.basicConfig(
-    level=logging.INFO,
-    stream=sys.stderr,
-    format="%(levelname)s:%(name)s:%(message)s"
+    level=logging.INFO, stream=sys.stderr, format="%(levelname)s:%(name)s:%(message)s"
 )
 
 # Import correlation ID utilities
-from app.core.correlation import set_correlation_id, clear_correlation_id
+from app.core.correlation import clear_correlation_id, set_correlation_id
 from app.core.logging import add_correlation_id
 
 # Import settings early to determine logging mode
@@ -57,51 +55,52 @@ structlog.configure(
 
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
-from mcp.types import Tool, TextContent
+from mcp.types import TextContent, Tool
+
+from app.collection_manager import get_collection_manager
+
+# Import MCP sampling and settings
+from app.core.sampling import ClientSampler
+from app.core.settings import get_settings
+from app.core.vibe_dictionary import VIBE_DICTIONARY
 
 # Import from graph for orchestration
 from app.graph import FRAMEWORK_NODES, router
-from app.collection_manager import get_collection_manager
-from app.core.vibe_dictionary import VIBE_DICTIONARY
 
 # Import framework prompts
 from .framework_prompts import FRAMEWORKS
 
 # Import handlers
 from .handlers import (
+    handle_compress_content,
+    handle_compress_context,
+    handle_compress_prompt,
+    handle_context_cache_status,
+    handle_count_tokens,
+    handle_deserialize_from_toon,
+    handle_detect_truncation,
+    handle_execute_code,
+    handle_get_context,
+    handle_health,
+    handle_list_frameworks,
+    handle_manage_claude_md,
+    handle_prepare_context,
+    handle_prepare_context_streaming,
     handle_reason,
-    handle_think_framework,
-    handle_search_documentation,
-    handle_search_frameworks_by_name,
+    handle_recommend,
+    handle_save_context,
     handle_search_by_category,
-    handle_search_function,
     handle_search_class,
     handle_search_docs_only,
+    handle_search_documentation,
     handle_search_framework_category,
-    handle_list_frameworks,
-    handle_recommend,
-    handle_get_context,
-    handle_save_context,
-    handle_execute_code,
-    handle_health,
-    handle_prepare_context,
-    handle_count_tokens,
-    handle_compress_content,
-    handle_detect_truncation,
-    handle_manage_claude_md,
-    handle_prepare_context_streaming,
-    handle_context_cache_status,
+    handle_search_frameworks_by_name,
+    handle_search_function,
     # Token reduction tools
     handle_serialize_to_toon,
-    handle_deserialize_from_toon,
-    handle_compress_prompt,
-    handle_compress_context,
+    handle_think_framework,
     handle_token_reduction_compare,
 )
-
-# Import MCP sampling and settings
-from app.core.sampling import ClientSampler
-from app.core.settings import get_settings
 
 # LEAN_MODE: Only expose essential tools to reduce MCP token overhead
 LEAN_MODE = get_settings().lean_mode
@@ -123,67 +122,109 @@ def create_server() -> Server:
         if LEAN_MODE:
             # ULTRA-LEAN: 4 tools only - Claude talks to Gemini, Gemini does all preprocessing
             # All compression, token counting, TOON, etc. happens internally in prepare_context
-            tools.append(Tool(
-                name="prepare_context",
-                description="Gemini 3 Flash prepares rich, structured context for Claude. Analyzes query, discovers relevant files (with relevance scoring), fetches documentation, generates execution plan. All compression and token optimization happens internally. Returns organized brief so Claude can focus on deep reasoning.",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "query": {"type": "string", "description": "The task or problem to prepare context for"},
-                        "workspace_path": {"type": "string", "description": "Path to workspace/project directory"},
-                        "code_context": {"type": "string", "description": "Any code snippets to consider"},
-                        "file_list": {
-                            "type": "array",
-                            "items": {"type": "string"},
-                            "description": "Pre-specified files to analyze"
+            tools.append(
+                Tool(
+                    name="prepare_context",
+                    description="Gemini 3 Flash prepares rich, structured context for Claude. Analyzes query, discovers relevant files (with relevance scoring), fetches documentation, generates execution plan. All compression and token optimization happens internally. Returns organized brief so Claude can focus on deep reasoning.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "The task or problem to prepare context for",
+                            },
+                            "workspace_path": {
+                                "type": "string",
+                                "description": "Path to workspace/project directory",
+                            },
+                            "code_context": {
+                                "type": "string",
+                                "description": "Any code snippets to consider",
+                            },
+                            "file_list": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "Pre-specified files to analyze",
+                            },
+                            "search_docs": {
+                                "type": "boolean",
+                                "description": "Search web for documentation (default: true)",
+                            },
+                            "output_format": {
+                                "type": "string",
+                                "enum": ["prompt", "json"],
+                                "description": "Output format (default: prompt)",
+                            },
+                            "streaming": {
+                                "type": "boolean",
+                                "description": "Enable streaming progress (default: false)",
+                            },
                         },
-                        "search_docs": {"type": "boolean", "description": "Search web for documentation (default: true)"},
-                        "output_format": {"type": "string", "enum": ["prompt", "json"], "description": "Output format (default: prompt)"},
-                        "streaming": {"type": "boolean", "description": "Enable streaming progress (default: false)"}
+                        "required": ["query"],
                     },
-                    "required": ["query"]
-                }
-            ))
+                )
+            )
 
-            tools.append(Tool(
-                name="reason",
-                description="Execute reasoning with auto-selected framework. Set execute=true for Gemini to actually analyze code and return specific findings. Uses 62 thinking frameworks internally.",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "query": {"type": "string", "description": "Your task or question"},
-                        "context": {"type": "string", "description": "Context from prepare_context or code snippets"},
-                        "thread_id": {"type": "string", "description": "Thread ID for memory persistence"},
-                        "execute": {"type": "boolean", "description": "If true, Gemini executes actual analysis and returns specific findings. If false (default), returns framework template."},
-                        "workspace_path": {"type": "string", "description": "Path to workspace for file discovery (used with execute=true)"},
-                        "file_list": {
-                            "type": "array",
-                            "items": {"type": "string"},
-                            "description": "Specific files to analyze (optional, used with execute=true)"
-                        }
+            tools.append(
+                Tool(
+                    name="reason",
+                    description="Execute reasoning with auto-selected framework. Set execute=true for Gemini to actually analyze code and return specific findings. Uses 62 thinking frameworks internally.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "query": {"type": "string", "description": "Your task or question"},
+                            "context": {
+                                "type": "string",
+                                "description": "Context from prepare_context or code snippets",
+                            },
+                            "thread_id": {
+                                "type": "string",
+                                "description": "Thread ID for memory persistence",
+                            },
+                            "execute": {
+                                "type": "boolean",
+                                "description": "If true, Gemini executes actual analysis and returns specific findings. If false (default), returns framework template.",
+                            },
+                            "workspace_path": {
+                                "type": "string",
+                                "description": "Path to workspace for file discovery (used with execute=true)",
+                            },
+                            "file_list": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "Specific files to analyze (optional, used with execute=true)",
+                            },
+                        },
+                        "required": ["query"],
                     },
-                    "required": ["query"]
-                }
-            ))
+                )
+            )
 
-            tools.append(Tool(
-                name="execute_code",
-                description="Execute Python code in sandboxed environment. Use for testing and validation.",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "code": {"type": "string", "description": "Python code to execute"},
-                        "language": {"type": "string", "description": "Language (only 'python' supported)"}
+            tools.append(
+                Tool(
+                    name="execute_code",
+                    description="Execute Python code in sandboxed environment. Use for testing and validation.",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "code": {"type": "string", "description": "Python code to execute"},
+                            "language": {
+                                "type": "string",
+                                "description": "Language (only 'python' supported)",
+                            },
+                        },
+                        "required": ["code"],
                     },
-                    "required": ["code"]
-                }
-            ))
+                )
+            )
 
-            tools.append(Tool(
-                name="health",
-                description="Check server health, available frameworks, and capabilities",
-                inputSchema={"type": "object", "properties": {}}
-            ))
+            tools.append(
+                Tool(
+                    name="health",
+                    description="Check server health, available frameworks, and capabilities",
+                    inputSchema={"type": "object", "properties": {}},
+                )
+            )
 
             return tools
 
@@ -193,243 +234,352 @@ def create_server() -> Server:
             vibes = VIBE_DICTIONARY.get(name, [])[:4]
             vibe_str = f" Vibes: {', '.join(vibes)}" if vibes else ""
 
-            tools.append(Tool(
-                name=f"think_{name}",
-                description=f"[{fw['category'].upper()}] {fw['description']}. Best for: {', '.join(fw['best_for'])}.{vibe_str}",
+            tools.append(
+                Tool(
+                    name=f"think_{name}",
+                    description=f"[{fw['category'].upper()}] {fw['description']}. Best for: {', '.join(fw['best_for'])}.{vibe_str}",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "query": {"type": "string", "description": "Your task or problem"},
+                            "context": {
+                                "type": "string",
+                                "description": "Code snippet or additional context",
+                            },
+                            "thread_id": {
+                                "type": "string",
+                                "description": "Thread ID for memory persistence across turns",
+                            },
+                        },
+                        "required": ["query"],
+                    },
+                )
+            )
+
+        # Smart routing tool with execution mode
+        tools.append(
+            Tool(
+                name="reason",
+                description="Smart reasoning: auto-selects best framework. Set execute=true for Gemini to actually analyze code and return specific findings with file:line locations.",
                 inputSchema={
                     "type": "object",
                     "properties": {
-                        "query": {"type": "string", "description": "Your task or problem"},
-                        "context": {"type": "string", "description": "Code snippet or additional context"},
-                        "thread_id": {"type": "string", "description": "Thread ID for memory persistence across turns"}
+                        "query": {"type": "string", "description": "Your task or question"},
+                        "context": {"type": "string", "description": "Code or additional context"},
+                        "thread_id": {
+                            "type": "string",
+                            "description": "Thread ID for memory persistence",
+                        },
+                        "execute": {
+                            "type": "boolean",
+                            "description": "If true, Gemini executes actual code analysis. If false (default), returns framework guidance.",
+                        },
+                        "workspace_path": {
+                            "type": "string",
+                            "description": "Path to workspace for auto file discovery (used with execute=true)",
+                        },
+                        "file_list": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Specific files to analyze (optional, used with execute=true)",
+                        },
                     },
-                    "required": ["query"]
-                }
-            ))
-
-        # Smart routing tool with execution mode
-        tools.append(Tool(
-            name="reason",
-            description="Smart reasoning: auto-selects best framework. Set execute=true for Gemini to actually analyze code and return specific findings with file:line locations.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string", "description": "Your task or question"},
-                    "context": {"type": "string", "description": "Code or additional context"},
-                    "thread_id": {"type": "string", "description": "Thread ID for memory persistence"},
-                    "execute": {"type": "boolean", "description": "If true, Gemini executes actual code analysis. If false (default), returns framework guidance."},
-                    "workspace_path": {"type": "string", "description": "Path to workspace for auto file discovery (used with execute=true)"},
-                    "file_list": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "Specific files to analyze (optional, used with execute=true)"
-                    }
+                    "required": ["query"],
                 },
-                "required": ["query"]
-            }
-        ))
+            )
+        )
 
         # Framework discovery tools
-        tools.append(Tool(
-            name="list_frameworks",
-            description="List all 62 thinking frameworks by category",
-            inputSchema={"type": "object", "properties": {}}
-        ))
+        tools.append(
+            Tool(
+                name="list_frameworks",
+                description="List all 62 thinking frameworks by category",
+                inputSchema={"type": "object", "properties": {}},
+            )
+        )
 
-        tools.append(Tool(
-            name="recommend",
-            description="Get framework recommendation for your task",
-            inputSchema={
-                "type": "object",
-                "properties": {"task": {"type": "string"}},
-                "required": ["task"]
-            }
-        ))
+        tools.append(
+            Tool(
+                name="recommend",
+                description="Get framework recommendation for your task",
+                inputSchema={
+                    "type": "object",
+                    "properties": {"task": {"type": "string"}},
+                    "required": ["task"],
+                },
+            )
+        )
 
         # Memory tools
-        tools.append(Tool(
-            name="get_context",
-            description="Retrieve conversation history and framework usage for a thread",
-            inputSchema={
-                "type": "object",
-                "properties": {"thread_id": {"type": "string", "description": "Thread ID to get context for"}},
-                "required": ["thread_id"]
-            }
-        ))
-
-        tools.append(Tool(
-            name="save_context",
-            description="Save a query-answer exchange to memory",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "thread_id": {"type": "string"},
-                    "query": {"type": "string"},
-                    "answer": {"type": "string"},
-                    "framework": {"type": "string"}
+        tools.append(
+            Tool(
+                name="get_context",
+                description="Retrieve conversation history and framework usage for a thread",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "thread_id": {
+                            "type": "string",
+                            "description": "Thread ID to get context for",
+                        }
+                    },
+                    "required": ["thread_id"],
                 },
-                "required": ["thread_id", "query", "answer", "framework"]
-            }
-        ))
+            )
+        )
+
+        tools.append(
+            Tool(
+                name="save_context",
+                description="Save a query-answer exchange to memory",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "thread_id": {"type": "string"},
+                        "query": {"type": "string"},
+                        "answer": {"type": "string"},
+                        "framework": {"type": "string"},
+                    },
+                    "required": ["thread_id", "query", "answer", "framework"],
+                },
+            )
+        )
 
         # RAG/Search tools
-        tools.append(Tool(
-            name="search_documentation",
-            description="Search indexed documentation and code via vector store (RAG)",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string", "description": "Search query"},
-                    "k": {"type": "integer", "description": "Number of results (default: 5)"}
+        tools.append(
+            Tool(
+                name="search_documentation",
+                description="Search indexed documentation and code via vector store (RAG)",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "Search query"},
+                        "k": {"type": "integer", "description": "Number of results (default: 5)"},
+                    },
+                    "required": ["query"],
                 },
-                "required": ["query"]
-            }
-        ))
+            )
+        )
 
-        tools.append(Tool(
-            name="search_frameworks_by_name",
-            description="Search within a specific framework's implementation",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "framework_name": {"type": "string", "description": "Framework to search (e.g., 'active_inference')"},
-                    "query": {"type": "string"},
-                    "k": {"type": "integer", "description": "Number of results"}
+        tools.append(
+            Tool(
+                name="search_frameworks_by_name",
+                description="Search within a specific framework's implementation",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "framework_name": {
+                            "type": "string",
+                            "description": "Framework to search (e.g., 'active_inference')",
+                        },
+                        "query": {"type": "string"},
+                        "k": {"type": "integer", "description": "Number of results"},
+                    },
+                    "required": ["framework_name", "query"],
                 },
-                "required": ["framework_name", "query"]
-            }
-        ))
+            )
+        )
 
-        tools.append(Tool(
-            name="search_by_category",
-            description="Search within a code category: framework, documentation, config, utility, test, integration",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string"},
-                    "category": {"type": "string", "description": "One of: framework, documentation, config, utility, test, integration"},
-                    "k": {"type": "integer"}
+        tools.append(
+            Tool(
+                name="search_by_category",
+                description="Search within a code category: framework, documentation, config, utility, test, integration",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string"},
+                        "category": {
+                            "type": "string",
+                            "description": "One of: framework, documentation, config, utility, test, integration",
+                        },
+                        "k": {"type": "integer"},
+                    },
+                    "required": ["query", "category"],
                 },
-                "required": ["query", "category"]
-            }
-        ))
+            )
+        )
 
-        tools.append(Tool(
-            name="search_function",
-            description="Find specific function implementations by name",
-            inputSchema={
-                "type": "object",
-                "properties": {"function_name": {"type": "string"}, "k": {"type": "integer"}},
-                "required": ["function_name"]
-            }
-        ))
-
-        tools.append(Tool(
-            name="search_class",
-            description="Find specific class implementations by name",
-            inputSchema={
-                "type": "object",
-                "properties": {"class_name": {"type": "string"}, "k": {"type": "integer"}},
-                "required": ["class_name"]
-            }
-        ))
-
-        tools.append(Tool(
-            name="search_docs_only",
-            description="Search only markdown documentation files",
-            inputSchema={
-                "type": "object",
-                "properties": {"query": {"type": "string"}, "k": {"type": "integer"}},
-                "required": ["query"]
-            }
-        ))
-
-        tools.append(Tool(
-            name="search_framework_category",
-            description="Search within a framework category: strategy, search, iterative, code, context, fast",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string"},
-                    "framework_category": {"type": "string", "description": "One of: strategy, search, iterative, code, context, fast"},
-                    "k": {"type": "integer"}
+        tools.append(
+            Tool(
+                name="search_function",
+                description="Find specific function implementations by name",
+                inputSchema={
+                    "type": "object",
+                    "properties": {"function_name": {"type": "string"}, "k": {"type": "integer"}},
+                    "required": ["function_name"],
                 },
-                "required": ["query", "framework_category"]
-            }
-        ))
+            )
+        )
+
+        tools.append(
+            Tool(
+                name="search_class",
+                description="Find specific class implementations by name",
+                inputSchema={
+                    "type": "object",
+                    "properties": {"class_name": {"type": "string"}, "k": {"type": "integer"}},
+                    "required": ["class_name"],
+                },
+            )
+        )
+
+        tools.append(
+            Tool(
+                name="search_docs_only",
+                description="Search only markdown documentation files",
+                inputSchema={
+                    "type": "object",
+                    "properties": {"query": {"type": "string"}, "k": {"type": "integer"}},
+                    "required": ["query"],
+                },
+            )
+        )
+
+        tools.append(
+            Tool(
+                name="search_framework_category",
+                description="Search within a framework category: strategy, search, iterative, code, context, fast",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string"},
+                        "framework_category": {
+                            "type": "string",
+                            "description": "One of: strategy, search, iterative, code, context, fast",
+                        },
+                        "k": {"type": "integer"},
+                    },
+                    "required": ["query", "framework_category"],
+                },
+            )
+        )
 
         # Code execution tool
-        tools.append(Tool(
-            name="execute_code",
-            description="Execute Python code in a sandboxed environment",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "code": {"type": "string", "description": "Python code to execute"},
-                    "language": {"type": "string", "description": "Language (only 'python' supported)"}
+        tools.append(
+            Tool(
+                name="execute_code",
+                description="Execute Python code in a sandboxed environment",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "code": {"type": "string", "description": "Python code to execute"},
+                        "language": {
+                            "type": "string",
+                            "description": "Language (only 'python' supported)",
+                        },
+                    },
+                    "required": ["code"],
                 },
-                "required": ["code"]
-            }
-        ))
+            )
+        )
 
         # Health check
-        tools.append(Tool(
-            name="health",
-            description="Check server health and available capabilities",
-            inputSchema={"type": "object", "properties": {}}
-        ))
+        tools.append(
+            Tool(
+                name="health",
+                description="Check server health and available capabilities",
+                inputSchema={"type": "object", "properties": {}},
+            )
+        )
 
         # Context Gateway
-        tools.append(Tool(
-            name="prepare_context",
-            description="Gemini prepares rich, structured context for Claude. Does the heavy lifting: analyzes query, discovers relevant files, fetches documentation, ranks by relevance. Returns organized context packet so Claude can focus on deep reasoning instead of egg-hunting.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string", "description": "The task or problem to prepare context for"},
-                    "workspace_path": {"type": "string", "description": "Path to workspace/project directory"},
-                    "code_context": {"type": "string", "description": "Any code snippets to consider"},
-                    "file_list": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "Pre-specified files to analyze"
+        tools.append(
+            Tool(
+                name="prepare_context",
+                description="Gemini prepares rich, structured context for Claude. Does the heavy lifting: analyzes query, discovers relevant files, fetches documentation, ranks by relevance. Returns organized context packet so Claude can focus on deep reasoning instead of egg-hunting.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "The task or problem to prepare context for",
+                        },
+                        "workspace_path": {
+                            "type": "string",
+                            "description": "Path to workspace/project directory",
+                        },
+                        "code_context": {
+                            "type": "string",
+                            "description": "Any code snippets to consider",
+                        },
+                        "file_list": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Pre-specified files to analyze",
+                        },
+                        "search_docs": {
+                            "type": "boolean",
+                            "description": "Whether to search web for documentation (default: true)",
+                        },
+                        "output_format": {
+                            "type": "string",
+                            "enum": ["prompt", "json"],
+                            "description": "Output as Claude prompt or raw JSON (default: prompt)",
+                        },
+                        "enable_cache": {
+                            "type": "boolean",
+                            "description": "Enable intelligent caching (default: true)",
+                        },
+                        "enable_multi_repo": {
+                            "type": "boolean",
+                            "description": "Enable multi-repository discovery (default: true)",
+                        },
+                        "enable_source_attribution": {
+                            "type": "boolean",
+                            "description": "Include source attribution for docs (default: true)",
+                        },
                     },
-                    "search_docs": {"type": "boolean", "description": "Whether to search web for documentation (default: true)"},
-                    "output_format": {"type": "string", "enum": ["prompt", "json"], "description": "Output as Claude prompt or raw JSON (default: prompt)"},
-                    "enable_cache": {"type": "boolean", "description": "Enable intelligent caching (default: true)"},
-                    "enable_multi_repo": {"type": "boolean", "description": "Enable multi-repository discovery (default: true)"},
-                    "enable_source_attribution": {"type": "boolean", "description": "Include source attribution for docs (default: true)"}
+                    "required": ["query"],
                 },
-                "required": ["query"]
-            }
-        ))
+            )
+        )
 
-        tools.append(Tool(
-            name="prepare_context_streaming",
-            description="Gemini-powered context preparation with real-time streaming progress. Shows what's happening during file discovery, doc search, and analysis.",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string", "description": "The task or problem to prepare context for"},
-                    "workspace_path": {"type": "string", "description": "Path to workspace/project directory"},
-                    "code_context": {"type": "string", "description": "Any code snippets to consider"},
-                    "file_list": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "Pre-specified files to analyze"
+        tools.append(
+            Tool(
+                name="prepare_context_streaming",
+                description="Gemini-powered context preparation with real-time streaming progress. Shows what's happening during file discovery, doc search, and analysis.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "The task or problem to prepare context for",
+                        },
+                        "workspace_path": {
+                            "type": "string",
+                            "description": "Path to workspace/project directory",
+                        },
+                        "code_context": {
+                            "type": "string",
+                            "description": "Any code snippets to consider",
+                        },
+                        "file_list": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Pre-specified files to analyze",
+                        },
+                        "search_docs": {
+                            "type": "boolean",
+                            "description": "Whether to search web for documentation (default: true)",
+                        },
+                        "output_format": {
+                            "type": "string",
+                            "enum": ["prompt", "json"],
+                            "description": "Output as Claude prompt or raw JSON (default: prompt)",
+                        },
                     },
-                    "search_docs": {"type": "boolean", "description": "Whether to search web for documentation (default: true)"},
-                    "output_format": {"type": "string", "enum": ["prompt", "json"], "description": "Output as Claude prompt or raw JSON (default: prompt)"}
+                    "required": ["query"],
                 },
-                "required": ["query"]
-            }
-        ))
+            )
+        )
 
-        tools.append(Tool(
-            name="context_cache_status",
-            description="Get context cache status and statistics. Shows cache hit rates, token savings, and cache health.",
-            inputSchema={"type": "object", "properties": {}}
-        ))
+        tools.append(
+            Tool(
+                name="context_cache_status",
+                description="Get context cache status and statistics. Shows cache hit rates, token savings, and cache health.",
+                inputSchema={"type": "object", "properties": {}},
+            )
+        )
 
         return tools
 
@@ -437,6 +587,7 @@ def create_server() -> Server:
     async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         # Set a new correlation ID for this request
         import uuid
+
         correlation_id = str(uuid.uuid4())[:8]
         set_correlation_id(correlation_id)
 
@@ -445,13 +596,14 @@ def create_server() -> Server:
 
             # Rate limiting check
             from app.core.rate_limiter import get_rate_limiter
+
             rate_limiter = await get_rate_limiter()
-            
+
             allowed, error_msg = await rate_limiter.check_rate_limit(name)
             if not allowed:
                 logger.warning("rate_limit_rejected", tool=name, error=error_msg)
                 return [TextContent(type="text", text=f"Rate limit exceeded: {error_msg}")]
-            
+
             # Input size validation
             valid, size_error = rate_limiter.validate_input_size(arguments, name)
             if not valid:
@@ -590,9 +742,10 @@ def setup_signal_handlers(loop: asyncio.AbstractEventLoop, shutdown_event: async
         loop: The asyncio event loop
         shutdown_event: Event to signal when shutdown should begin
     """
+
     def handle_signal(sig: signal.Signals) -> None:
         """Handle shutdown signal."""
-        sig_name = sig.name if hasattr(sig, 'name') else str(sig)
+        sig_name = sig.name if hasattr(sig, "name") else str(sig)
         logger.info("signal_received", signal=sig_name, action="initiating_shutdown")
 
         # Create shutdown task if not already shutting down
@@ -600,15 +753,14 @@ def setup_signal_handlers(loop: asyncio.AbstractEventLoop, shutdown_event: async
             loop.create_task(graceful_shutdown(shutdown_event))
 
     # Unix-specific: use asyncio.add_signal_handler for proper async handling
-    if sys.platform != 'win32':
+    if sys.platform != "win32":
         for sig in (signal.SIGTERM, signal.SIGINT):
             try:
                 loop.add_signal_handler(sig, lambda s=sig: handle_signal(s))
                 logger.debug("signal_handler_registered", signal=sig.name)
             except (ValueError, OSError) as e:
                 # May fail if not in main thread or if signal is not valid
-                logger.warning("signal_handler_registration_failed",
-                              signal=sig.name, error=str(e))
+                logger.warning("signal_handler_registration_failed", signal=sig.name, error=str(e))
     else:
         # Windows: limited signal support, use signal.signal
         # Note: On Windows, only SIGINT (Ctrl+C) is reliably supported
@@ -660,8 +812,7 @@ async def main():
 
             # Wait for either server to exit or shutdown signal
             done, pending = await asyncio.wait(
-                [server_task, shutdown_task],
-                return_when=asyncio.FIRST_COMPLETED
+                [server_task, shutdown_task], return_when=asyncio.FIRST_COMPLETED
             )
 
             # Cancel pending tasks
@@ -685,6 +836,7 @@ async def main():
         if not shutdown_event.is_set():
             # If we haven't done graceful shutdown yet, do it now
             from app.graph import cleanup_checkpointer
+
             logger.info("shutting_down", action="cleanup_resources")
             try:
                 await asyncio.wait_for(cleanup_checkpointer(), timeout=10.0)

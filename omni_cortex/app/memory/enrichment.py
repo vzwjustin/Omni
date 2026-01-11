@@ -7,11 +7,11 @@ Moved from langchain_integration.py for better separation of concerns.
 
 import structlog
 
-from ..state import GraphState
-from ..core.settings import get_settings
-from ..core.correlation import get_correlation_id
 from ..core.constants import CONTENT
+from ..core.correlation import get_correlation_id
 from ..core.errors import RAGError
+from ..core.settings import get_settings
+from ..state import GraphState
 from .manager import get_memory
 
 logger = structlog.get_logger("memory.enrichment")
@@ -24,9 +24,9 @@ def _format_rag_context(rag_context: list) -> str:
 
     parts = ["## Relevant Context from Codebase\n"]
     for item in rag_context:
-        source = item.get('source', 'unknown')
-        item_type = item.get('type', 'unknown')
-        content = item.get('content', '')
+        source = item.get("source", "unknown")
+        item_type = item.get("type", "unknown")
+        content = item.get("content", "")
         parts.append(f"### {source} ({item_type})")
         parts.append(f"```\n{content}\n```\n")
 
@@ -65,6 +65,7 @@ async def enhance_state_with_langchain(state: GraphState, thread_id: str) -> Gra
             rag_available = True
         else:
             from langchain_huggingface import HuggingFaceEmbeddings
+
             rag_available = True
     except ImportError as e:
         logger.debug("rag_embedding_check_failed", error=str(e))
@@ -80,73 +81,75 @@ async def enhance_state_with_langchain(state: GraphState, thread_id: str) -> Gra
     if query:
         try:
             from ..collection_manager import get_collection_manager
+
             manager = get_collection_manager()
 
             query_docs = manager.search(
-                query,
-                collection_names=["frameworks", "documentation", "utilities"],
-                k=3
+                query, collection_names=["frameworks", "documentation", "utilities"], k=3
             )
             for doc in query_docs:
                 meta = doc.metadata or {}
-                rag_context.append({
-                    "source": meta.get("path", "unknown"),
-                    "type": meta.get("chunk_type", "unknown"),
-                    "content": doc.page_content[:CONTENT.SNIPPET_EXTENDED],
-                    "relevance": "query_match"
-                })
+                rag_context.append(
+                    {
+                        "source": meta.get("path", "unknown"),
+                        "type": meta.get("chunk_type", "unknown"),
+                        "content": doc.page_content[: CONTENT.SNIPPET_EXTENDED],
+                        "relevance": "query_match",
+                    }
+                )
             logger.info("rag_prefetch_query", docs_found=len(query_docs))
         except RAGError as e:
             logger.warning(
                 "rag_prefetch_query_failed",
                 error=str(e),
                 error_type="RAGError",
-                correlation_id=get_correlation_id()
+                correlation_id=get_correlation_id(),
             )
         except Exception as e:
             logger.warning(
                 "rag_prefetch_query_failed",
                 error=str(e),
                 error_type=type(e).__name__,
-                correlation_id=get_correlation_id()
+                correlation_id=get_correlation_id(),
             )
 
     # Search with code context if provided
     if code_snippet and len(code_snippet) > 50:
         try:
             from ..collection_manager import get_collection_manager
+
             manager = get_collection_manager()
 
-            code_query = code_snippet[:CONTENT.SNIPPET_SHORT]
+            code_query = code_snippet[: CONTENT.SNIPPET_SHORT]
             code_docs = manager.search(
-                code_query,
-                collection_names=["frameworks", "utilities"],
-                k=2
+                code_query, collection_names=["frameworks", "utilities"], k=2
             )
             for doc in code_docs:
                 meta = doc.metadata or {}
                 source = meta.get("path", "unknown")
                 if not any(r["source"] == source for r in rag_context):
-                    rag_context.append({
-                        "source": source,
-                        "type": meta.get("chunk_type", "unknown"),
-                        "content": doc.page_content[:CONTENT.SNIPPET_STANDARD],
-                        "relevance": "code_match"
-                    })
+                    rag_context.append(
+                        {
+                            "source": source,
+                            "type": meta.get("chunk_type", "unknown"),
+                            "content": doc.page_content[: CONTENT.SNIPPET_STANDARD],
+                            "relevance": "code_match",
+                        }
+                    )
             logger.info("rag_prefetch_code", docs_found=len(code_docs))
         except RAGError as e:
             logger.warning(
                 "rag_prefetch_code_failed",
                 error=str(e),
                 error_type="RAGError",
-                correlation_id=get_correlation_id()
+                correlation_id=get_correlation_id(),
             )
         except Exception as e:
             logger.warning(
                 "rag_prefetch_code_failed",
                 error=str(e),
                 error_type=type(e).__name__,
-                correlation_id=get_correlation_id()
+                correlation_id=get_correlation_id(),
             )
 
     # Store RAG context for frameworks to use
@@ -158,18 +161,13 @@ async def enhance_state_with_langchain(state: GraphState, thread_id: str) -> Gra
         "state_enriched",
         thread_id=thread_id,
         chat_messages=len(context["chat_history"]),
-        rag_docs=len(rag_context)
+        rag_docs=len(rag_context),
     )
 
     return state
 
 
-async def save_to_langchain_memory(
-    thread_id: str,
-    query: str,
-    answer: str,
-    framework: str
-) -> None:
+async def save_to_langchain_memory(thread_id: str, query: str, answer: str, framework: str) -> None:
     """Save interaction to LangChain memory."""
     memory = await get_memory(thread_id)
     memory.add_exchange(query, answer, framework)

@@ -5,10 +5,10 @@ Contains the full prompt templates for each reasoning framework.
 These are the actual prompts sent to the LLM when a framework tool is called.
 """
 
-from typing import Dict, Any
+from typing import Any
 
 # Framework definitions - what the LLM gets when it calls the tool
-FRAMEWORKS: Dict[str, Dict[str, Any]] = {
+FRAMEWORKS: dict[str, dict[str, Any]] = {
     "reason_flux": {
         "category": "strategy",
         "description": "Hierarchical planning: Template -> Expand -> Refine",
@@ -20,7 +20,7 @@ CONTEXT: {context}
 
 PHASE 1 - TEMPLATE: Create high-level structure with 3-5 major components
 PHASE 2 - EXPAND: Detail each component (classes, functions, interfaces)
-PHASE 3 - REFINE: Integrate into final plan with code skeleton"""
+PHASE 3 - REFINE: Integrate into final plan with code skeleton""",
     },
     "self_discover": {
         "category": "strategy",
@@ -34,7 +34,7 @@ CONTEXT: {context}
 1. SELECT: Which patterns apply? (decomposition, analogy, abstraction, constraints)
 2. ADAPT: Customize patterns for this specific task
 3. IMPLEMENT: Apply your customized approach
-4. VERIFY: Check completeness"""
+4. VERIFY: Check completeness""",
     },
     "buffer_of_thoughts": {
         "category": "strategy",
@@ -50,7 +50,7 @@ Build your thought buffer:
 - ADD: Problem analysis
 - ADD: Possible approaches
 - ADD: Decision and reasoning
-- OUTPUT: Synthesize final solution"""
+- OUTPUT: Synthesize final solution""",
     },
     "coala": {
         "category": "strategy",
@@ -65,7 +65,7 @@ CONTEXT: {context}
 2. MEMORY: Relevant knowledge and patterns
 3. REASONING: Analyze and plan
 4. ACTION: Execute plan
-5. LEARNING: What worked? What to improve?"""
+5. LEARNING: What worked? What to improve?""",
     },
     "mcts_rstar": {
         "category": "search",
@@ -81,7 +81,7 @@ CONTEXT: {context}
 3. SIMULATE: Trace consequences of each path
 4. EVALUATE: Score each path (0-1)
 5. BACKPROPAGATE: Update parent scores
-6. ITERATE: Repeat until confidence threshold or max depth"""
+6. ITERATE: Repeat until confidence threshold or max depth""",
     },
     "tree_of_thoughts": {
         "category": "search",
@@ -95,7 +95,7 @@ CONTEXT: {context}
 1. GENERATE: Create 3 distinct approaches with pros/cons
 2. EVALUATE: Score each (feasibility, effectiveness, simplicity)
 3. EXPAND: Develop the best approach fully
-4. SYNTHESIZE: Final solution with reasoning"""
+4. SYNTHESIZE: Final solution with reasoning""",
     },
     "graph_of_thoughts": {
         "category": "search",
@@ -109,7 +109,7 @@ CONTEXT: {context}
 1. NODES: Identify key concepts/components
 2. EDGES: Map relationships between them
 3. TRAVERSE: Find the solution path through the graph
-4. SYNTHESIZE: Combine insights into solution"""
+4. SYNTHESIZE: Combine insights into solution""",
     },
     "everything_of_thought": {
         "category": "search",
@@ -123,7 +123,7 @@ CONTEXT: {context}
 1. MULTI-APPROACH: Apply analytical, creative, critical, practical thinking
 2. CROSS-POLLINATE: Find synergies between approaches
 3. SYNTHESIZE: Create unified solution
-4. VALIDATE: Check against all perspectives"""
+4. VALIDATE: Check against all perspectives""",
     },
     "active_inference": {
         "category": "iterative",
@@ -138,7 +138,7 @@ CONTEXT: {context}
 2. PREDICT: What should we expect if hypothesis is true?
 3. TEST: Gather evidence, update beliefs
 4. ACT: Implement fix based on best hypothesis
-5. VERIFY: Confirm the fix worked"""
+5. VERIFY: Confirm the fix worked""",
     },
     "multi_agent_debate": {
         "category": "iterative",
@@ -155,7 +155,7 @@ Argue from these perspectives:
 - SECURITY: What are the risks?
 - PERFORMANCE: What's most efficient?
 
-DEBATE the trade-offs, then SYNTHESIZE a balanced solution."""
+DEBATE the trade-offs, then SYNTHESIZE a balanced solution.""",
     },
     "adaptive_injection": {
         "category": "iterative",
@@ -172,7 +172,7 @@ As you work, inject strategies when needed:
 - If uncertain -> explore alternatives
 - If risky -> add verification steps
 
-Continue until complete."""
+Continue until complete.""",
     },
     "re2": {
         "category": "iterative",
@@ -187,7 +187,7 @@ CONTEXT: {context}
 2. EXECUTE: Implement, referencing each requirement
 3. EVALUATE: Check against requirements, fix gaps
 
-Repeat until all requirements are satisfied."""
+Repeat until all requirements are satisfied.""",
     },
     "program_of_thoughts": {
         "category": "code",
@@ -202,7 +202,7 @@ CONTEXT: {context}
 2. DECOMPOSE: Break into computational steps
 3. CODE: Write each step with clear comments
 4. TRACE: Walk through with sample input
-5. OUTPUT: Complete solution"""
+5. OUTPUT: Complete solution""",
     },
     "chain_of_verification": {
         "category": "code",
@@ -216,7 +216,7 @@ CONTEXT: {context}
 1. DRAFT: Create initial solution
 2. VERIFY: Check for security issues, bugs, best practice violations
 3. PATCH: Fix all identified issues
-4. VALIDATE: Confirm fixes, no regressions"""
+4. VALIDATE: Confirm fixes, no regressions""",
     },
     "critic": {
         "category": "code",
@@ -230,7 +230,7 @@ CONTEXT: {context}
 1. GENERATE: Create initial solution
 2. CRITIQUE: What works? What's missing? What could break?
 3. REVISE: Address each criticism
-4. FINAL CHECK: Verify improvements"""
+4. FINAL CHECK: Verify improvements""",
     },
     "chain_of_note": {
         "category": "context",
@@ -244,7 +244,7 @@ CONTEXT: {context}
 NOTE 1 - Observations: What do you see?
 NOTE 2 - Connections: How do pieces relate?
 NOTE 3 - Inferences: What can you conclude?
-NOTE 4 - Synthesis: Complete answer"""
+NOTE 4 - Synthesis: Complete answer""",
     },
     "step_back": {
         "category": "context",
@@ -258,7 +258,7 @@ CONTEXT: {context}
 1. STEP BACK: What category is this? What principles apply?
 2. ABSTRACT: Key constraints, trade-offs, proven approaches
 3. APPLY: Map abstract principles to concrete solution
-4. VERIFY: Solution follows identified principles"""
+4. VERIFY: Solution follows identified principles""",
     },
     "analogical": {
         "category": "context",
@@ -272,7 +272,7 @@ CONTEXT: {context}
 1. FIND ANALOGIES: What similar problems have been solved? (2-3)
 2. MAP: How does the best analogy map to this problem?
 3. ADAPT: What transfers? What's different?
-4. IMPLEMENT: Build solution using adapted approach"""
+4. IMPLEMENT: Build solution using adapted approach""",
     },
     "skeleton_of_thought": {
         "category": "fast",
@@ -285,7 +285,7 @@ CONTEXT: {context}
 
 1. SKELETON: High-level structure (components, interfaces)
 2. FLESH OUT: Add implementation details
-3. CONNECT: Handle integration and edge cases"""
+3. CONNECT: Handle integration and edge cases""",
     },
     "system1": {
         "category": "fast",
@@ -295,7 +295,7 @@ CONTEXT: {context}
 
 Context: {context}
 
-Provide a direct, efficient answer. Focus on the most likely correct solution."""
+Provide a direct, efficient answer. Focus on the most likely correct solution.""",
     },
     # 2026 Edition frameworks
     "chain_of_code": {
@@ -311,7 +311,7 @@ CONTEXT: {context}
 2. TRACE: Walk through execution step by step
 3. IDENTIFY: Pinpoint where logic diverges from intent
 4. FIX: Apply targeted corrections with explanation
-5. VERIFY: Trace corrected code to confirm fix"""
+5. VERIFY: Trace corrected code to confirm fix""",
     },
     "self_debugging": {
         "category": "code",
@@ -326,7 +326,7 @@ CONTEXT: {context}
 2. TRACE: Mentally execute with sample inputs
 3. EDGES: Test boundary conditions (0, 1, empty, null, max)
 4. CATCH: Identify potential bugs before presenting
-5. FIX: Present corrected code with trace verification"""
+5. FIX: Present corrected code with trace verification""",
     },
     "tdd_prompting": {
         "category": "code",
@@ -343,7 +343,7 @@ CONTEXT: {context}
    - Error conditions
 2. IMPLEMENT: Write minimal code to pass tests
 3. REFACTOR: Clean up while keeping tests green
-4. VERIFY: All tests pass with clean implementation"""
+4. VERIFY: All tests pass with clean implementation""",
     },
     "reverse_cot": {
         "category": "code",
@@ -358,7 +358,7 @@ CONTEXT: {context}
 2. ACTUAL: What is it actually producing?
 3. DELTA: What's the difference?
 4. BACKTRACK: Work backward from the delta to find the cause
-5. FIX: Apply correction and verify expected output"""
+5. FIX: Apply correction and verify expected output""",
     },
     "rubber_duck": {
         "category": "iterative",
@@ -376,7 +376,7 @@ Guide through questions:
 4. What assumptions are you making?
 5. What haven't you checked yet?
 
-Lead to insight through questioning."""
+Lead to insight through questioning.""",
     },
     "react": {
         "category": "iterative",
@@ -392,7 +392,7 @@ THOUGHT: What do I need to figure out next?
 ACTION: What tool/search/command would help?
 OBSERVATION: What did I learn?
 
-Continue until solution is found. Show your reasoning chain."""
+Continue until solution is found. Show your reasoning chain.""",
     },
     "reflexion": {
         "category": "iterative",
@@ -407,7 +407,7 @@ CONTEXT: {context}
 2. EVALUATE: Did it work? What went wrong?
 3. REFLECT: What lessons to remember?
 4. RETRY: Apply lessons to improved attempt
-5. CONVERGE: Iterate until successful"""
+5. CONVERGE: Iterate until successful""",
     },
     "self_refine": {
         "category": "iterative",
@@ -422,7 +422,7 @@ CONTEXT: {context}
 2. CRITIQUE: What could be better? (readability, efficiency, edge cases)
 3. REFINE: Address each critique point
 4. REPEAT: Continue until no more improvements
-5. FINALIZE: Present polished solution"""
+5. FINALIZE: Present polished solution""",
     },
     "least_to_most": {
         "category": "strategy",
@@ -437,7 +437,7 @@ CONTEXT: {context}
 2. ORDER: Sort by dependency (least dependent first)
 3. SOLVE: Build solutions bottom-up
 4. COMPOSE: Combine into full solution
-5. VERIFY: Check all pieces integrate correctly"""
+5. VERIFY: Check all pieces integrate correctly""",
     },
     "comparative_arch": {
         "category": "strategy",
@@ -454,7 +454,7 @@ Generate THREE approaches:
 3. FAST: Optimize for speed/time
 
 For each: show code, pros, cons, big-O analysis.
-RECOMMEND: Which approach and why."""
+RECOMMEND: Which approach and why.""",
     },
     "plan_and_solve": {
         "category": "strategy",
@@ -473,7 +473,7 @@ PHASE 1 - PLAN:
 PHASE 2 - SOLVE:
 - Implement according to plan
 - Note any deviations and why
-- Verify against plan"""
+- Verify against plan""",
     },
     "red_team": {
         "category": "context",
@@ -492,7 +492,7 @@ Analyze using STRIDE:
 - DENIAL OF SERVICE: Availability issues?
 - ELEVATION OF PRIVILEGE: Access control issues?
 
-OWASP Top 10 check. Provide fixes for each finding."""
+OWASP Top 10 check. Provide fixes for each finding.""",
     },
     "state_machine": {
         "category": "context",
@@ -507,7 +507,7 @@ CONTEXT: {context}
 2. TRANSITIONS: What triggers state changes?
 3. GUARDS: What conditions must be met?
 4. ACTIONS: What happens on transition?
-5. IMPLEMENT: Code the state machine with clear structure"""
+5. IMPLEMENT: Code the state machine with clear structure""",
     },
     "chain_of_thought": {
         "category": "context",
@@ -525,7 +525,7 @@ STEP 3: [Continue reasoning]
 ...
 CONCLUSION: [Final answer based on chain]
 
-Show your complete reasoning process."""
+Show your complete reasoning process.""",
     },
     "alphacodium": {
         "category": "code",
@@ -550,7 +550,7 @@ STAGE 3 - ITERATIVE CODE:
 - Generate solution
 - Test against cases
 - Fix failures
-- Repeat until all pass"""
+- Repeat until all pass""",
     },
     "codechain": {
         "category": "code",
@@ -565,7 +565,7 @@ CONTEXT: {context}
 2. GENERATE: Create each module with clear interface
 3. INTEGRATE: Connect modules together
 4. REVISE: Self-critique each module, improve
-5. VALIDATE: Test integrated solution"""
+5. VALIDATE: Test integrated solution""",
     },
     "evol_instruct": {
         "category": "code",
@@ -582,7 +582,7 @@ CONTEXT: {context}
    - Performance constraints
    - Edge case handling
 3. SOLVE EVOLVED: Handle new complexity
-4. REPEAT: Continue evolving until robust"""
+4. REPEAT: Continue evolving until robust""",
     },
     "llmloop": {
         "category": "code",
@@ -600,7 +600,7 @@ LOOP:
 4. FIX: Apply corrections
 5. ITERATE: Until all quality checks pass
 
-Quality checks: correctness, edge cases, readability, efficiency."""
+Quality checks: correctness, edge cases, readability, efficiency.""",
     },
     "procoder": {
         "category": "code",
@@ -615,7 +615,7 @@ CONTEXT: {context}
 2. GENERATE: Create type-safe code using project patterns
 3. COMPILE: Check for type errors, import issues
 4. FIX: Address any compiler/linter feedback
-5. INTEGRATE: Ensure clean integration with existing code"""
+5. INTEGRATE: Ensure clean integration with existing code""",
     },
     "recode": {
         "category": "code",
@@ -633,7 +633,7 @@ CONTEXT: {context}
    - Correctness
    - Robustness
    - Clarity
-5. FINALIZE: Present winning candidate with confidence assessment"""
+5. FINALIZE: Present winning candidate with confidence assessment""",
     },
     # Verification frameworks
     "self_consistency": {
@@ -649,7 +649,7 @@ CONTEXT: {context}
 2. NORMALIZE: Structure as (hypothesis -> fix -> expected evidence)
 3. SCORE: Rate consistency, constraint fit, simplicity, testability
 4. SELECT: Choose winner; keep runner-up if high risk
-5. OUTPUT: Final solution + why it won + validation checks"""
+5. OUTPUT: Final solution + why it won + validation checks""",
     },
     "self_ask": {
         "category": "verification",
@@ -664,7 +664,7 @@ CONTEXT: {context}
 2. CLASSIFY: Mark each as must-know vs nice-to-know
 3. ANSWER: Address must-know using context, tools, or docs
 4. RECOMPOSE: Build final solution with stated assumptions
-5. VALIDATE: Check against acceptance criteria"""
+5. VALIDATE: Check against acceptance criteria""",
     },
     "rar": {
         "category": "verification",
@@ -678,7 +678,7 @@ CONTEXT: {context}
 1. REPHRASE: Write precise task spec (objective, constraints, acceptance criteria)
 2. CONFIRM: Check for internal consistency
 3. SOLVE: Implement strictly against rephrased spec
-4. VERIFY: Map results to acceptance criteria"""
+4. VERIFY: Map results to acceptance criteria""",
     },
     "verify_and_edit": {
         "category": "verification",
@@ -693,7 +693,7 @@ CONTEXT: {context}
 2. EXTRACT: Identify verifiable claims and risky assertions
 3. VERIFY: Check each via context, tests, docs (mark assumptions)
 4. EDIT: Fix ONLY failing sections; preserve good sections
-5. FINALIZE: Produce verification ledger"""
+5. FINALIZE: Produce verification ledger""",
     },
     "rarr": {
         "category": "verification",
@@ -708,7 +708,7 @@ CONTEXT: {context}
 2. GENERATE: Create 3-8 targeted evidence queries
 3. RETRIEVE: Gather relevant evidence
 4. REVISE: Update to align with evidence; remove unsupported claims
-5. CITE: Provide anchors (file:line when possible)"""
+5. CITE: Provide anchors (file:line when possible)""",
     },
     "selfcheckgpt": {
         "category": "verification",
@@ -723,7 +723,7 @@ CONTEXT: {context}
 2. SAMPLE: Generate multiple re-answers focusing on risky claims
 3. CHECK: Compare answers; flag disagreement hotspots
 4. REPLACE: Disputed content with verified evidence or explicit uncertainty
-5. OUTPUT: Final result + risk register"""
+5. OUTPUT: Final result + risk register""",
     },
     "metaqa": {
         "category": "verification",
@@ -738,7 +738,7 @@ CONTEXT: {context}
 2. GENERATE: 3-10 transformed variants (rewording, constraint tweaks)
 3. SOLVE: Answer each variant
 4. CHECK: Identify contradictions between answers
-5. PATCH: Fix solution to satisfy invariants across variants"""
+5. PATCH: Fix solution to satisfy invariants across variants""",
     },
     "ragas": {
         "category": "verification",
@@ -754,7 +754,7 @@ Evaluate across dimensions:
 2. FAITHFULNESS: Does answer stick to sources?
 3. COMPLETENESS: All aspects covered?
 4. NOISE: Any irrelevant/misleading content?
-5. DIAGNOSE: Failure modes + corrective actions"""
+5. DIAGNOSE: Failure modes + corrective actions""",
     },
     # Agent frameworks
     "rewoo": {
@@ -770,7 +770,7 @@ CONTEXT: {context}
 2. SCHEDULE: Convert to tool call schedule (what, when, why)
 3. EXECUTE: Run tools in batches; collect observations
 4. REVISE: Update plan only if observations contradict
-5. FINALIZE: Result + checks + next actions"""
+5. FINALIZE: Result + checks + next actions""",
     },
     "lats": {
         "category": "agent",
@@ -785,7 +785,7 @@ CONTEXT: {context}
 2. EXPAND: Generate multiple action sequence branches
 3. SCORE: Rate by likelihood, risk, effort, rollback ease
 4. EXECUTE: Run best branch; backtrack if fails
-5. FINALIZE: Chosen path + alternatives considered"""
+5. FINALIZE: Chosen path + alternatives considered""",
     },
     "mrkl": {
         "category": "agent",
@@ -800,7 +800,7 @@ CONTEXT: {context}
 2. ROUTE: Specify input/output/validation for each module
 3. EXECUTE: Run modules with clear interfaces
 4. RECONCILE: Resolve conflicting outputs
-5. SYNTHESIZE: Combine into final decision + verification plan"""
+5. SYNTHESIZE: Combine into final decision + verification plan""",
     },
     "swe_agent": {
         "category": "agent",
@@ -815,7 +815,7 @@ CONTEXT: {context}
 2. IDENTIFY: Minimal change set
 3. PATCH: Apply changes in small increments
 4. VERIFY: Run tests/lint/typecheck
-5. ITERATE: Until green, then summarize + remaining risks"""
+5. ITERATE: Until green, then summarize + remaining risks""",
     },
     "toolformer": {
         "category": "agent",
@@ -830,7 +830,7 @@ CONTEXT: {context}
 2. JUSTIFY: Does tool call materially reduce uncertainty?
 3. OPTIMIZE: Specify tight inputs + expected outputs
 4. INTEGRATE: Parse results, update confidence
-5. DOCUMENT: Tool decision rationale"""
+5. DOCUMENT: Tool decision rationale""",
     },
     # RAG frameworks
     "self_rag": {
@@ -846,7 +846,7 @@ CONTEXT: {context}
 2. IDENTIFY: Gaps in LOW-confidence segments
 3. RETRIEVE: Fetch evidence only for uncertain parts
 4. UPDATE: Revise only uncertain segments
-5. CRITIQUE: Confirm groundedness; remove unsupported claims"""
+5. CRITIQUE: Confirm groundedness; remove unsupported claims""",
     },
     "hyde": {
         "category": "rag",
@@ -861,7 +861,7 @@ CONTEXT: {context}
 2. EXTRACT: Convert to strong retrieval queries
 3. RETRIEVE: Find real documents/snippets
 4. GROUND: Answer based on retrieved evidence
-5. CITE: Evidence anchors for claims"""
+5. CITE: Evidence anchors for claims""",
     },
     "rag_fusion": {
         "category": "rag",
@@ -876,7 +876,7 @@ CONTEXT: {context}
 2. RETRIEVE: Top-K per query
 3. FUSE: Dedupe + reciprocal rank merge
 4. SYNTHESIZE: Answer using fused evidence
-5. COVERAGE: Ensure all query facets addressed"""
+5. COVERAGE: Ensure all query facets addressed""",
     },
     "raptor": {
         "category": "rag",
@@ -891,7 +891,7 @@ CONTEXT: {context}
 2. RETRIEVE TOP-DOWN: High-level first, then drill down
 3. GATHER: Supporting details from lower levels
 4. SYNTHESIZE: Combine abstraction with specifics
-5. ANCHOR: Both overview context and specific citations"""
+5. ANCHOR: Both overview context and specific citations""",
     },
     "graphrag": {
         "category": "rag",
@@ -906,7 +906,7 @@ CONTEXT: {context}
 2. MAP: Relations (calls, reads/writes, owns, triggers)
 3. GRAPH: Build conceptual relation map
 4. QUERY: Trace paths, find blast radius, identify dependencies
-5. CITE: Show relationship chains supporting claims"""
+5. CITE: Show relationship chains supporting claims""",
     },
     # Additional code frameworks
     "pal": {
@@ -922,7 +922,7 @@ CONTEXT: {context}
 2. PSEUDOCODE: Start with pseudocode if unsure
 3. IMPLEMENT: Write executable code
 4. VALIDATE: Test with examples (normal + edge cases)
-5. CONVERT: Translate verified code to final solution"""
+5. CONVERT: Translate verified code to final solution""",
     },
     "scratchpads": {
         "category": "code",
@@ -940,7 +940,7 @@ Maintain structured scratchpad:
 - RISKS: Potential issues + mitigations
 - CHECKS: Verification steps
 
-Update as you work; present final with scratchpad summary."""
+Update as you work; present final with scratchpad summary.""",
     },
     "parsel": {
         "category": "code",
@@ -956,7 +956,7 @@ CONTEXT: {context}
 2. GRAPH: Build dependency order (no cycles)
 3. BASE: Generate leaf functions first (no dependencies)
 4. COMPOSE: Build dependent functions using generated ones
-5. INTEGRATE: Combine into cohesive module with entry point"""
+5. INTEGRATE: Combine into cohesive module with entry point""",
     },
     "docprompting": {
         "category": "code",
@@ -971,7 +971,7 @@ CONTEXT: {context}
 2. RETRIEVE: Find relevant documentation + examples
 3. EXTRACT: Note function signatures, usage patterns, idioms
 4. GENERATE: Write code following doc patterns
-5. VERIFY: Cross-check against doc for correct params, types, error handling"""
+5. VERIFY: Cross-check against doc for correct params, types, error handling""",
     },
 }
 

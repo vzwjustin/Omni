@@ -14,18 +14,21 @@ import difflib
 import functools
 import re
 import warnings
+from collections.abc import Callable
+from typing import Any
+
 import structlog
-from typing import Callable, Optional, Any
-from ..core.settings import get_settings
-from ..core.constants import CONTENT, FRAMEWORK
+
+from ..core.constants import CONTENT
+from ..core.context_gateway import get_context_gateway
 from ..core.errors import LLMError, ProviderNotConfiguredError
-from ..core.context_gateway import get_context_gateway, StructuredContext
-from ..state import GraphState
+from ..core.settings import get_settings
 from ..nodes.langchain_tools import (
     call_langchain_tool,
-    get_available_tools_for_framework,
     format_tool_descriptions,
+    get_available_tools_for_framework,
 )
+from ..state import GraphState
 
 logger = structlog.get_logger("common")
 
@@ -41,14 +44,14 @@ DEFAULT_OPTIMIZATION_TOKENS = 2000
 DEFAULT_OPTIMIZATION_TEMP = 0.3
 
 # Granular token limits for specific use cases
-TOKENS_SCORE_PARSING = 32       # Parse numerical scores (0.0-1.0)
-TOKENS_SHORT_RESPONSE = 64       # Very short responses (satisfaction, quality)
-TOKENS_QUESTION = 256            # Generate questions or critiques
-TOKENS_ANALYSIS = 512            # Quick analysis or evaluation
-TOKENS_DETAILED = 768            # Detailed solutions or reasoning
-TOKENS_COMPREHENSIVE = 1024      # Comprehensive analysis
-TOKENS_EXTENDED = 1536           # Extended reasoning
-TOKENS_FULL = 2048               # Full synthesis or final answers
+TOKENS_SCORE_PARSING = 32  # Parse numerical scores (0.0-1.0)
+TOKENS_SHORT_RESPONSE = 64  # Very short responses (satisfaction, quality)
+TOKENS_QUESTION = 256  # Generate questions or critiques
+TOKENS_ANALYSIS = 512  # Quick analysis or evaluation
+TOKENS_DETAILED = 768  # Detailed solutions or reasoning
+TOKENS_COMPREHENSIVE = 1024  # Comprehensive analysis
+TOKENS_EXTENDED = 1536  # Extended reasoning
+TOKENS_FULL = 2048  # Full synthesis or final answers
 
 # Memory bounding configuration moved to state_utils.py
 
@@ -56,6 +59,7 @@ TOKENS_FULL = 2048               # Full synthesis or final answers
 # =============================================================================
 # Quiet-STaR Decorator
 # =============================================================================
+
 
 def quiet_star(func: Callable) -> Callable:
     """
@@ -69,6 +73,7 @@ def quiet_star(func: Callable) -> Callable:
         async def my_framework_node(state: GraphState) -> GraphState:
             ...
     """
+
     @functools.wraps(func)
     async def wrapper(state: GraphState, *args, **kwargs) -> GraphState:
         # Add quiet thought instruction to the system context
@@ -119,11 +124,9 @@ def extract_quiet_thought(response: str) -> tuple[str, str]:
 # Process Reward Model (PRM)
 # =============================================================================
 
+
 async def process_reward_model(
-    step: str,
-    context: str,
-    goal: str,
-    previous_steps: Optional[list[str]] = None
+    step: str, context: str, goal: str, previous_steps: list[str] | None = None
 ) -> float:
     """
     Process Reward Model: Score a reasoning step on 0-1 scale.
@@ -145,7 +148,7 @@ async def process_reward_model(
 
     previous_context = ""
     if previous_steps:
-        previous_context = "\n".join(f"Step {i+1}: {s}" for i, s in enumerate(previous_steps))
+        previous_context = "\n".join(f"Step {i + 1}: {s}" for i, s in enumerate(previous_steps))
 
     prompt = f"""You are a Process Reward Model evaluating reasoning steps.
 
@@ -175,21 +178,27 @@ Respond with ONLY a single decimal number between 0.0 and 1.0."""
             prompt=prompt,
             state=None,  # PRM doesn't need state context
             max_tokens=DEFAULT_PRM_TOKENS,
-            temperature=DEFAULT_PRM_TEMP
+            temperature=DEFAULT_PRM_TEMP,
         )
 
         # Parse the score - extract first decimal number from response
         # Handles cases like "0.8", "0.8 because...", "I rate this 0.75", etc.
-        match = re.search(r'(\d+\.?\d*)', response.strip())
+        match = re.search(r"(\d+\.?\d*)", response.strip())
         if match:
             score = float(match.group(1))
             return max(0.0, min(1.0, score))
         else:
-            logger.warning("prm_score_no_number", response=response[:CONTENT.QUERY_LOG] if response else "")
+            logger.warning(
+                "prm_score_no_number", response=response[: CONTENT.QUERY_LOG] if response else ""
+            )
             return 0.5
     except ValueError as e:
         # Failed to parse float from response
-        logger.warning("prm_score_parsing_failed", response=response[:CONTENT.QUERY_LOG] if response else "", error=str(e))
+        logger.warning(
+            "prm_score_parsing_failed",
+            response=response[: CONTENT.QUERY_LOG] if response else "",
+            error=str(e),
+        )
         return 0.5
     except (LLMError, ProviderNotConfiguredError) as e:
         # LLM provider error - log and return default
@@ -203,16 +212,9 @@ Respond with ONLY a single decimal number between 0.0 and 1.0."""
         raise LLMError(f"PRM scoring failed: {e}") from e
 
 
-async def batch_score_steps(
-    steps: list[str],
-    context: str,
-    goal: str
-) -> list[float]:
+async def batch_score_steps(steps: list[str], context: str, goal: str) -> list[float]:
     """Score multiple steps in parallel for efficiency."""
-    tasks = [
-        process_reward_model(step, context, goal)
-        for step in steps
-    ]
+    tasks = [process_reward_model(step, context, goal) for step in steps]
     return await asyncio.gather(*tasks)
 
 
@@ -220,10 +222,9 @@ async def batch_score_steps(
 # DSPy-Style Prompt Optimization
 # =============================================================================
 
+
 async def optimize_prompt(
-    task_description: str,
-    base_prompt: str,
-    examples: Optional[list[dict]] = None
+    task_description: str, base_prompt: str, examples: list[dict] | None = None
 ) -> str:
     """
     DSPy-style prompt optimization.
@@ -246,7 +247,7 @@ async def optimize_prompt(
     if examples:
         examples_text = "\n\nEXAMPLES:\n"
         for i, ex in enumerate(examples):
-            examples_text += f"Example {i+1}:\n"
+            examples_text += f"Example {i + 1}:\n"
             examples_text += f"  Input: {ex.get('input', 'N/A')}\n"
             examples_text += f"  Output: {ex.get('output', 'N/A')}\n"
 
@@ -274,18 +275,28 @@ Return ONLY the optimized prompt, no explanations."""
             prompt=optimization_prompt,
             state=None,
             max_tokens=DEFAULT_OPTIMIZATION_TOKENS,
-            temperature=DEFAULT_OPTIMIZATION_TEMP
+            temperature=DEFAULT_OPTIMIZATION_TEMP,
         )
         return optimized.strip()
     except (LLMError, ProviderNotConfiguredError) as e:
         # LLM provider error during optimization; fall back to original
-        logger.warning("prompt_optimization_failed", error=str(e), error_type=type(e).__name__, task=task_description[:CONTENT.QUERY_PREVIEW])
+        logger.warning(
+            "prompt_optimization_failed",
+            error=str(e),
+            error_type=type(e).__name__,
+            task=task_description[: CONTENT.QUERY_PREVIEW],
+        )
         return base_prompt
     except Exception as e:
         # Broad catch intentional: LLM calls can fail with unpredictable errors
         # (network issues, provider-specific exceptions, serialization errors, etc.)
         # Optimization failure is non-critical - we gracefully fall back to base_prompt.
-        logger.warning("prompt_optimization_failed", error=str(e), error_type=type(e).__name__, task=task_description[:CONTENT.QUERY_PREVIEW])
+        logger.warning(
+            "prompt_optimization_failed",
+            error=str(e),
+            error_type=type(e).__name__,
+            task=task_description[: CONTENT.QUERY_PREVIEW],
+        )
         return base_prompt
 
 
@@ -293,18 +304,20 @@ Return ONLY the optimized prompt, no explanations."""
 # LLM Client Wrappers
 # =============================================================================
 
+
 def _create_google_client(settings, model_name: str, temperature: float, max_tokens: int) -> Any:
     if not settings.google_api_key:
         raise ProviderNotConfiguredError(
             "LLM_PROVIDER=google but GOOGLE_API_KEY is not set",
-            details={"provider": "google", "env_var": "GOOGLE_API_KEY"}
+            details={"provider": "google", "env_var": "GOOGLE_API_KEY"},
         )
     from langchain_google_genai import ChatGoogleGenerativeAI
+
     return ChatGoogleGenerativeAI(
         model=model_name,
         google_api_key=settings.google_api_key,
         temperature=temperature,
-        max_output_tokens=max_tokens
+        max_output_tokens=max_tokens,
     )
 
 
@@ -312,14 +325,15 @@ def _create_anthropic_client(settings, model_name: str, temperature: float, max_
     if not settings.anthropic_api_key:
         raise ProviderNotConfiguredError(
             "LLM_PROVIDER=anthropic but ANTHROPIC_API_KEY is not set",
-            details={"provider": "anthropic", "env_var": "ANTHROPIC_API_KEY"}
+            details={"provider": "anthropic", "env_var": "ANTHROPIC_API_KEY"},
         )
     from langchain_anthropic import ChatAnthropic
+
     return ChatAnthropic(
         model=model_name,
         api_key=settings.anthropic_api_key,
         temperature=temperature,
-        max_tokens=max_tokens
+        max_tokens=max_tokens,
     )
 
 
@@ -327,30 +341,34 @@ def _create_openai_client(settings, model_name: str, temperature: float, max_tok
     if not settings.openai_api_key:
         raise ProviderNotConfiguredError(
             "LLM_PROVIDER=openai but OPENAI_API_KEY is not set",
-            details={"provider": "openai", "env_var": "OPENAI_API_KEY"}
+            details={"provider": "openai", "env_var": "OPENAI_API_KEY"},
         )
     from langchain_openai import ChatOpenAI
+
     return ChatOpenAI(
         model=model_name,
         api_key=settings.openai_api_key,
         temperature=temperature,
-        max_tokens=max_tokens
+        max_tokens=max_tokens,
     )
 
 
-def _create_openrouter_client(settings, model_name: str, temperature: float, max_tokens: int) -> Any:
+def _create_openrouter_client(
+    settings, model_name: str, temperature: float, max_tokens: int
+) -> Any:
     if not settings.openrouter_api_key:
         raise ProviderNotConfiguredError(
             "LLM_PROVIDER=openrouter but OPENROUTER_API_KEY is not set",
-            details={"provider": "openrouter", "env_var": "OPENROUTER_API_KEY"}
+            details={"provider": "openrouter", "env_var": "OPENROUTER_API_KEY"},
         )
     from langchain_openai import ChatOpenAI
+
     return ChatOpenAI(
         model=model_name,
         api_key=settings.openrouter_api_key,
         base_url=settings.openrouter_base_url,
         temperature=temperature,
-        max_tokens=max_tokens
+        max_tokens=max_tokens,
     )
 
 
@@ -363,11 +381,7 @@ PROVIDER_FACTORIES = {
 }
 
 
-def _get_llm_client(
-    model_type: str,
-    temperature: float,
-    max_tokens: int
-) -> Any:
+def _get_llm_client(model_type: str, temperature: float, max_tokens: int) -> Any:
     """
     Create and return an LLM client based on provider configuration.
 
@@ -393,7 +407,7 @@ def _get_llm_client(
             "Pass-through mode is configured (LLM_PROVIDER=pass-through). "
             "Internal LLM calls are disabled. Set LLM_PROVIDER to 'anthropic', 'openai', or 'openrouter' "
             "and provide the corresponding API key to enable internal reasoning.",
-            details={"provider": "pass-through", "mode": "disabled"}
+            details={"provider": "pass-through", "mode": "disabled"},
         )
 
     # Determine effective provider: explicit setting takes priority, then auto-detect
@@ -412,14 +426,13 @@ def _get_llm_client(
         raise ProviderNotConfiguredError(
             "No LLM provider configured. Set LLM_PROVIDER to 'google', 'anthropic', 'openai', or 'openrouter' "
             "with the corresponding API key, or provide any API key for auto-detection.",
-            details={"provider": "none", "hint": "Set LLM_PROVIDER and corresponding API key"}
+            details={"provider": "none", "hint": "Set LLM_PROVIDER and corresponding API key"},
         )
 
     factory = PROVIDER_FACTORIES.get(effective_provider)
     if not factory:
         raise ProviderNotConfiguredError(
-            f"Unknown provider: {effective_provider}",
-            details={"provider": effective_provider}
+            f"Unknown provider: {effective_provider}", details={"provider": effective_provider}
         )
 
     # Select the appropriate model name based on type
@@ -463,9 +476,9 @@ def _estimate_tokens(text: str) -> int:
 async def call_deep_reasoner(
     prompt: str,
     state: GraphState,
-    system: Optional[str] = None,
+    system: str | None = None,
     max_tokens: int = DEFAULT_DEEP_REASONING_TOKENS,
-    temperature: float = DEFAULT_DEEP_REASONING_TEMP
+    temperature: float = DEFAULT_DEEP_REASONING_TEMP,
 ) -> tuple[str, int]:
     """
     Wrapper for deep reasoning model (Claude 4.5 Sonnet).
@@ -473,13 +486,15 @@ async def call_deep_reasoner(
     Handles Quiet-STaR integration and token tracking.
     """
     callback = state.get("working_memory", {}).get("langchain_callback") if state else None
-    if callback and hasattr(callback, 'on_llm_start'):
+    if callback and hasattr(callback, "on_llm_start"):
         try:
             callback.on_llm_start({"name": "call_deep_reasoner"}, [prompt])
         except Exception as e:
             # Broad catch intentional: Callback failures should not crash the LLM call.
             # Third-party callbacks may raise any exception; we log and continue.
-            logger.warning("callback_on_llm_start_failed", error=str(e), error_type=type(e).__name__)
+            logger.warning(
+                "callback_on_llm_start_failed", error=str(e), error_type=type(e).__name__
+            )
 
     # Check if Quiet-STaR is enabled
     if state and state.get("working_memory", {}).get("quiet_star_enabled"):
@@ -491,21 +506,18 @@ async def call_deep_reasoner(
 
     # Get the LLM client using the centralized helper
     client = _get_llm_client(
-        model_type="deep_reasoning",
-        temperature=temperature,
-        max_tokens=max_tokens
+        model_type="deep_reasoning", temperature=temperature, max_tokens=max_tokens
     )
 
     # Make the LLM call
     lc_response = await asyncio.to_thread(
-        client.invoke,
-        prompt if not system else f"{system}\n\n{prompt}"
+        client.invoke, prompt if not system else f"{system}\n\n{prompt}"
     )
     # Handle different response formats (Google AI returns list, others return string)
     content = lc_response.content if hasattr(lc_response, "content") else str(lc_response)
     if isinstance(content, list):
         # Google AI format: [{'type': 'text', 'text': '...'}]
-        text = content[0].get('text', str(content)) if content else ""
+        text = content[0].get("text", str(content)) if content else ""
     else:
         text = content
     tokens = _estimate_tokens(text)
@@ -521,7 +533,7 @@ async def call_deep_reasoner(
             text = actual_response
         state["tokens_used"] = state.get("tokens_used", 0) + tokens
 
-    if callback and hasattr(callback, 'on_llm_end'):
+    if callback and hasattr(callback, "on_llm_end"):
         try:
             callback.on_llm_end({"llm_output": {"token_usage": {"total_tokens": tokens}}})
         except Exception as e:
@@ -534,10 +546,10 @@ async def call_deep_reasoner(
 
 async def call_fast_synthesizer(
     prompt: str,
-    state: Optional[GraphState] = None,
-    system: Optional[str] = None,
+    state: GraphState | None = None,
+    system: str | None = None,
     max_tokens: int = DEFAULT_FAST_SYNTHESIS_TOKENS,
-    temperature: float = DEFAULT_FAST_SYNTHESIS_TEMP
+    temperature: float = DEFAULT_FAST_SYNTHESIS_TEMP,
 ) -> tuple[str, int]:
     """
     Wrapper for fast synthesis model.
@@ -547,38 +559,37 @@ async def call_fast_synthesizer(
     callback = None
     if state:
         callback = state.get("working_memory", {}).get("langchain_callback")
-        if callback and hasattr(callback, 'on_llm_start'):
+        if callback and hasattr(callback, "on_llm_start"):
             try:
                 callback.on_llm_start({"name": "call_fast_synthesizer"}, [prompt])
             except Exception as e:
                 # Broad catch intentional: Callback failures should not crash the LLM call.
                 # Third-party callbacks may raise any exception; we log and continue.
-                logger.warning("callback_on_llm_start_failed", error=str(e), error_type=type(e).__name__)
+                logger.warning(
+                    "callback_on_llm_start_failed", error=str(e), error_type=type(e).__name__
+                )
 
     # Get the LLM client using the centralized helper
     client = _get_llm_client(
-        model_type="fast_synthesis",
-        temperature=temperature,
-        max_tokens=max_tokens
+        model_type="fast_synthesis", temperature=temperature, max_tokens=max_tokens
     )
 
     # Make the LLM call
     lc_response = await asyncio.to_thread(
-        client.invoke,
-        prompt if not system else f"{system}\n\n{prompt}"
+        client.invoke, prompt if not system else f"{system}\n\n{prompt}"
     )
     # Handle different response formats (Google AI returns list, others return string)
     content = lc_response.content if hasattr(lc_response, "content") else str(lc_response)
     if isinstance(content, list):
         # Google AI format: [{'type': 'text', 'text': '...'}]
-        text = content[0].get('text', str(content)) if content else ""
+        text = content[0].get("text", str(content)) if content else ""
     else:
         text = content
     tokens = _estimate_tokens(text)
 
     if state:
         state["tokens_used"] = state.get("tokens_used", 0) + tokens
-    if callback and hasattr(callback, 'on_llm_end'):
+    if callback and hasattr(callback, "on_llm_end"):
         try:
             callback.on_llm_end({"llm_output": {"token_usage": {"total_tokens": tokens}}})
         except Exception as e:
@@ -593,13 +604,14 @@ async def call_fast_synthesizer(
 # Utility Functions
 # =============================================================================
 
+
 def add_reasoning_step(
     state: GraphState,
     framework: str,
     thought: str,
-    action: Optional[str] = None,
-    observation: Optional[str] = None,
-    score: Optional[float] = None
+    action: str | None = None,
+    observation: str | None = None,
+    score: float | None = None,
 ) -> None:
     """
     Add a reasoning step to the state trace with memory bounding.
@@ -623,7 +635,7 @@ def add_reasoning_step(
         "thought": thought,
         "action": action,
         "observation": observation,
-        "score": score
+        "score": score,
     }
 
     state["reasoning_steps"].append(new_step)
@@ -635,19 +647,22 @@ def add_reasoning_step(
     memory_bound = settings.reasoning_memory_bound
     if len(state["reasoning_steps"]) > memory_bound:
         initial_context = state["reasoning_steps"][:5]
-        recent_memory = state["reasoning_steps"][-(memory_bound - 5):]
+        recent_memory = state["reasoning_steps"][-(memory_bound - 5) :]
 
         state["reasoning_steps"] = initial_context + recent_memory
 
         # Insert truncation marker
-        state["reasoning_steps"].insert(5, {
-            "step_number": -1,
-            "framework_node": "system",
-            "thought": f"... {step_num - memory_bound} intermediate steps truncated for memory efficiency ...",
-            "action": "truncate_memory",
-            "observation": None,
-            "score": None
-        })
+        state["reasoning_steps"].insert(
+            5,
+            {
+                "step_number": -1,
+                "framework_node": "system",
+                "thought": f"... {step_num - memory_bound} intermediate steps truncated for memory efficiency ...",
+                "action": "truncate_memory",
+                "observation": None,
+                "score": None,
+            },
+        )
 
 
 def extract_code_blocks(text: str) -> list[str]:
@@ -661,13 +676,10 @@ def extract_code_blocks(text: str) -> list[str]:
 CODE_BLOCK_PATTERN = r"```(?:\w+)?\n(.*?)```"
 
 
-async def prepare_context_with_gemini(
-    query: str,
-    state: GraphState
-) -> str:
+async def prepare_context_with_gemini(query: str, state: GraphState) -> str:
     """
     Use Gemini (via ContextGateway) to preprocess and structure context for Claude.
-    
+
     This is the proper Gemini→Claude flow:
     1. Gemini analyzes query, discovers files, fetches docs
     2. Returns StructuredContext with rich preprocessing
@@ -682,18 +694,18 @@ async def prepare_context_with_gemini(
         code_context=state.get("code_snippet"),
         file_list=state.get("file_list"),
         search_docs=True,
-        max_files=15
+        max_files=15,
     )
-    
+
     # Convert to Claude-ready prompt
     return structured_context.to_claude_prompt()
 
 
 def format_code_context(
-    code_snippet: Optional[str],
-    file_list: Optional[list[str]],
-    ide_context: Optional[str],
-    state: Optional[GraphState] = None
+    code_snippet: str | None,
+    file_list: list[str] | None,
+    ide_context: str | None,
+    state: GraphState | None = None,
 ) -> str:
     """
     DEPRECATED: Use prepare_context_with_gemini() instead for proper Gemini→Claude flow.
@@ -706,7 +718,7 @@ def format_code_context(
     warnings.warn(
         "format_code_context is deprecated, use prepare_context_with_gemini() instead",
         DeprecationWarning,
-        stacklevel=2
+        stacklevel=2,
     )
     parts = []
 
@@ -724,7 +736,9 @@ def format_code_context(
                 # Ensure memory is a dict (robustness)
                 if isinstance(memory, dict):
                     learnings_text += f"\n{i}. **{memory.get('framework', 'Unknown Framework')}**: {memory.get('problem', 'No problem description')}\n"
-                    learnings_text += f"   Solution: {memory.get('solution', 'No solution provided')[:300]}...\n"
+                    learnings_text += (
+                        f"   Solution: {memory.get('solution', 'No solution provided')[:300]}...\n"
+                    )
             parts.append(learnings_text)
 
     if code_snippet:
@@ -746,17 +760,14 @@ def get_rag_context(state: GraphState) -> str:
 
 def generate_code_diff(original_code: str, updated_code: str) -> str:
     """Generate a unified diff between original and updated code."""
-    diff = difflib.unified_diff(
-        original_code.splitlines(),
-        updated_code.splitlines(),
-        lineterm=""
-    )
+    diff = difflib.unified_diff(original_code.splitlines(), updated_code.splitlines(), lineterm="")
     return "\n".join(diff)
 
 
 # =============================================================================
 # Tool Helpers
 # =============================================================================
+
 
 async def run_tool(tool_name: str, tool_input: Any, state: GraphState) -> Any:
     """Proxy to LangChain tool execution for framework nodes."""

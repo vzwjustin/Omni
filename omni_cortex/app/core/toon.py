@@ -28,7 +28,7 @@ References:
 """
 
 import json
-from typing import Any, Dict, List, Union
+from typing import Any
 
 from .context_utils import count_tokens
 
@@ -36,12 +36,7 @@ from .context_utils import count_tokens
 class TOONEncoder:
     """Encoder for converting JSON/Python objects to TOON format."""
 
-    def __init__(
-        self,
-        delimiter: str = "|",
-        threshold: int = 2,
-        compact_primitives: bool = True
-    ):
+    def __init__(self, delimiter: str = "|", threshold: int = 2, compact_primitives: bool = True):
         """
         Initialize TOON encoder.
 
@@ -86,7 +81,7 @@ class TOONEncoder:
             # Fallback to JSON for unsupported types
             return json.dumps(value)
 
-    def _encode_array(self, arr: List[Any], indent: int = 0) -> str:
+    def _encode_array(self, arr: list[Any], indent: int = 0) -> str:
         """Encode array, using tabular format for uniform objects."""
         if not arr:
             return "[]"
@@ -99,7 +94,9 @@ class TOONEncoder:
 
         # Standard array encoding
         items = [self._encode_value(item, indent + 1) for item in arr]
-        if self.compact_primitives and all(isinstance(x, (int, float, str, bool, type(None))) for x in arr):
+        if self.compact_primitives and all(
+            isinstance(x, (int, float, str, bool, type(None))) for x in arr
+        ):
             # Compact: [1,2,3]
             return f"[{','.join(items)}]"
         else:
@@ -108,7 +105,7 @@ class TOONEncoder:
             formatted_items = [f"{spacing}{item}" for item in items]
             return "[\n" + ",\n".join(formatted_items) + f"\n{'  ' * indent}]"
 
-    def _encode_tabular_array(self, arr: List[Dict], indent: int = 0) -> str:
+    def _encode_tabular_array(self, arr: list[dict], indent: int = 0) -> str:
         """Encode array of uniform objects as tabular TOON format."""
         if not arr:
             return "[]"
@@ -127,7 +124,9 @@ class TOONEncoder:
                 val = obj.get(key)
                 if isinstance(val, str):
                     # Escape delimiter and newlines in cell values
-                    escaped = val.replace(self.delimiter, f"\\{self.delimiter}").replace("\n", "\\n")
+                    escaped = val.replace(self.delimiter, f"\\{self.delimiter}").replace(
+                        "\n", "\\n"
+                    )
                     row_values.append(escaped)
                 elif val is None:
                     row_values.append("null")
@@ -143,7 +142,7 @@ class TOONEncoder:
 
         return result
 
-    def _encode_object(self, obj: Dict[str, Any], indent: int = 0) -> str:
+    def _encode_object(self, obj: dict[str, Any], indent: int = 0) -> str:
         """Encode dictionary object."""
         if not obj:
             return "{}"
@@ -191,7 +190,7 @@ class TOONDecoder:
         # Otherwise, try JSON-like decoding
         return self._decode_value(toon_str.strip())
 
-    def _decode_tabular_array(self, lines: List[str]) -> List[Dict[str, Any]]:
+    def _decode_tabular_array(self, lines: list[str]) -> list[dict[str, Any]]:
         """Decode tabular TOON array to list of dictionaries."""
         if not lines:
             return []
@@ -221,7 +220,7 @@ class TOONDecoder:
 
         return result
 
-    def _split_row(self, row: str) -> List[str]:
+    def _split_row(self, row: str) -> list[str]:
         """Split row by delimiter, respecting escaped delimiters."""
         parts = []
         current = []
@@ -322,7 +321,7 @@ def get_compression_ratio(json_str: str, toon_str: str) -> float:
     return compressed_tokens / original_tokens if original_tokens > 0 else 1.0
 
 
-def get_token_savings(json_str: str, toon_str: str) -> Dict[str, Union[int, float]]:
+def get_token_savings(json_str: str, toon_str: str) -> dict[str, int | float]:
     """
     Calculate token savings statistics.
 
@@ -352,5 +351,5 @@ def get_token_savings(json_str: str, toon_str: str) -> Dict[str, Union[int, floa
         "compressed_tokens": compressed_tokens,
         "saved_tokens": saved_tokens,
         "compression_ratio": ratio,
-        "reduction_percent": (1 - ratio) * 100
+        "reduction_percent": (1 - ratio) * 100,
     }

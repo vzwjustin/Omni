@@ -9,17 +9,15 @@ Flow engineering for code generation:
 5. Fix failing tests iteratively
 """
 
-import asyncio
 import structlog
 
 from ...state import GraphState
 from ..common import (
-    quiet_star,
+    add_reasoning_step,
     call_deep_reasoner,
     call_fast_synthesizer,
-    add_reasoning_step,
-    format_code_context,
     prepare_context_with_gemini,
+    quiet_star,
 )
 
 logger = structlog.get_logger("alphacodium")
@@ -31,14 +29,8 @@ async def alphacodium_node(state: GraphState) -> GraphState:
     query = state.get("query", "")
     # Use Gemini to preprocess context via ContextGateway
 
-    context = await prepare_context_with_gemini(
+    context = await prepare_context_with_gemini(query=query, state=state)
 
-        query=query,
-
-        state=state
-
-    )
-    
     # Problem reflection
     reflect_prompt = f"""Reflect on this coding problem.
 
@@ -49,16 +41,16 @@ What are the key challenges? What edge cases exist?
 
 REFLECTION:
 """
-    
+
     reflection, _ = await call_fast_synthesizer(reflect_prompt, state, max_tokens=512)
-    
+
     add_reasoning_step(
         state=state,
         framework="alphacodium",
         thought="Problem reflection complete",
-        action="reflect"
+        action="reflect",
     )
-    
+
     # Generate solution
     solution_prompt = f"""Generate code solution.
 
@@ -68,9 +60,9 @@ REFLECTION: {reflection}
 
 CODE:
 """
-    
+
     solution, _ = await call_deep_reasoner(solution_prompt, state, max_tokens=2048)
-    
+
     state["final_answer"] = f"""# AlphaCodium Solution
 
 ## Problem Reflection

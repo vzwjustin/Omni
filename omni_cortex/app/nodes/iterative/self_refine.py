@@ -10,20 +10,18 @@ Implements genuine iterative self-improvement:
 This is a framework with actual refinement loops, not a prompt template.
 """
 
-import asyncio
 import re
-import structlog
 from dataclasses import dataclass
+
+import structlog
 
 from ...state import GraphState
 from ..common import (
-    quiet_star,
+    add_reasoning_step,
     call_deep_reasoner,
     call_fast_synthesizer,
-    process_reward_model,
-    add_reasoning_step,
-    format_code_context,
     prepare_context_with_gemini,
+    quiet_star,
 )
 
 logger = structlog.get_logger("self_refine")
@@ -36,6 +34,7 @@ MIN_IMPROVEMENT = 0.05
 @dataclass
 class Refinement:
     """A refinement iteration."""
+
     version: int
     solution: str
     critique: str
@@ -43,13 +42,9 @@ class Refinement:
     improvements: list[str]
 
 
-async def _generate_initial_solution(
-    query: str,
-    code_context: str,
-    state: GraphState
-) -> str:
+async def _generate_initial_solution(query: str, code_context: str, state: GraphState) -> str:
     """Generate the first attempt at solving the problem."""
-    
+
     prompt = f"""Provide a complete solution to this problem.
 
 PROBLEM:
@@ -70,14 +65,10 @@ Provide a thorough, complete solution. Include:
 
 
 async def _critique_solution(
-    solution: str,
-    query: str,
-    code_context: str,
-    iteration: int,
-    state: GraphState
+    solution: str, query: str, code_context: str, iteration: int, state: GraphState
 ) -> tuple[str, list[str], float]:
     """Critique the current solution and identify improvements."""
-    
+
     prompt = f"""Critically evaluate this solution. Be thorough and find ALL issues.
 
 ORIGINAL PROBLEM:
@@ -113,12 +104,12 @@ QUALITY_SCORE: [0.0-1.0 rating of current solution]
 """
 
     response, _ = await call_fast_synthesizer(prompt, state, max_tokens=1024)
-    
+
     # Parse response
     critique = ""
     improvements = []
     score = 0.5
-    
+
     current_section = None
     for line in response.split("\n"):
         line = line.strip()
@@ -131,7 +122,7 @@ QUALITY_SCORE: [0.0-1.0 rating of current solution]
             current_section = "improvements"
         elif line.startswith("QUALITY_SCORE:"):
             try:
-                match = re.search(r'(\d+\.?\d*)', line)
+                match = re.search(r"(\d+\.?\d*)", line)
                 if match:
                     score = max(0.0, min(1.0, float(match.group(1))))
             except ValueError:
@@ -140,10 +131,10 @@ QUALITY_SCORE: [0.0-1.0 rating of current solution]
             content = line[2:].strip()
             if content and current_section == "improvements":
                 improvements.append(content)
-    
+
     if not critique:
         critique = response[:200]
-    
+
     return critique, improvements, score
 
 
@@ -154,12 +145,12 @@ async def _refine_solution(
     query: str,
     code_context: str,
     iteration: int,
-    state: GraphState
+    state: GraphState,
 ) -> str:
     """Refine the solution based on critique."""
-    
+
     improvements_text = "\n".join([f"- {imp}" for imp in improvements])
-    
+
     prompt = f"""Improve this solution based on the critique.
 
 ORIGINAL PROBLEM:
@@ -192,13 +183,10 @@ Provide the complete improved solution:
 
 
 async def _final_verification(
-    solution: str,
-    query: str,
-    code_context: str,
-    state: GraphState
+    solution: str, query: str, code_context: str, state: GraphState
 ) -> tuple[str, float]:
     """Final verification of the refined solution."""
-    
+
     prompt = f"""Perform final verification of this solution.
 
 PROBLEM:
@@ -222,15 +210,15 @@ NOTES: [Any final observations]
 """
 
     response, _ = await call_fast_synthesizer(prompt, state, max_tokens=512)
-    
+
     score = 0.7
-    match = re.search(r'FINAL_SCORE:\s*(\d+\.?\d*)', response)
+    match = re.search(r"FINAL_SCORE:\s*(\d+\.?\d*)", response)
     if match:
         try:
             score = max(0.0, min(1.0, float(match.group(1))))
         except ValueError as e:
             logger.debug("score_parsing_failed", line=match.group(1) if match else "", error=str(e))
-    
+
     return response, score
 
 
@@ -238,7 +226,7 @@ NOTES: [Any final observations]
 async def self_refine_node(state: GraphState) -> GraphState:
     """
     Self-Refine Framework - REAL IMPLEMENTATION
-    
+
     Executes genuine iterative refinement:
     - Generates initial solution
     - Critiques to find weaknesses
@@ -248,68 +236,60 @@ async def self_refine_node(state: GraphState) -> GraphState:
     query = state.get("query", "")
     # Use Gemini to preprocess context via ContextGateway
 
-    code_context = await prepare_context_with_gemini(
+    code_context = await prepare_context_with_gemini(query=query, state=state)
 
-        query=query,
-
-        state=state
-
-    )
-    
     logger.info("self_refine_start", query_preview=query[:50])
-    
+
     refinements: list[Refinement] = []
-    
+
     # Step 1: Generate initial solution
     current_solution = await _generate_initial_solution(query, code_context, state)
-    
+
     add_reasoning_step(
         state=state,
         framework="self_refine",
         thought="Generated initial solution",
         action="generate",
-        observation=f"Solution length: {len(current_solution)} chars"
+        observation=f"Solution length: {len(current_solution)} chars",
     )
-    
+
     # Step 2: Iterative refinement loop
     for iteration in range(MAX_ITERATIONS):
         logger.info("self_refine_iteration", iteration=iteration + 1)
-        
+
         # Critique current solution
         critique, improvements, score = await _critique_solution(
             current_solution, query, code_context, iteration + 1, state
         )
-        
-        refinements.append(Refinement(
-            version=iteration + 1,
-            solution=current_solution,
-            critique=critique,
-            score=score,
-            improvements=improvements
-        ))
-        
+
+        refinements.append(
+            Refinement(
+                version=iteration + 1,
+                solution=current_solution,
+                critique=critique,
+                score=score,
+                improvements=improvements,
+            )
+        )
+
         add_reasoning_step(
             state=state,
             framework="self_refine",
             thought=f"v{iteration + 1} critique: {critique[:100]}...",
             action="critique",
-            score=score
+            score=score,
         )
-        
+
         # Check if quality is good enough
         if score >= QUALITY_THRESHOLD:
-            logger.info(
-                "self_refine_threshold_reached",
-                iteration=iteration + 1,
-                score=score
-            )
+            logger.info("self_refine_threshold_reached", iteration=iteration + 1, score=score)
             break
-        
+
         # Check if improvements are available
         if not improvements:
             logger.info("self_refine_no_improvements", iteration=iteration + 1)
             break
-        
+
         # Check for diminishing returns
         if len(refinements) >= 2:
             prev_score = refinements[-2].score
@@ -317,43 +297,44 @@ async def self_refine_node(state: GraphState) -> GraphState:
                 logger.info(
                     "self_refine_diminishing_returns",
                     iteration=iteration + 1,
-                    improvement=score - prev_score
+                    improvement=score - prev_score,
                 )
                 break
-        
+
         # Refine the solution
         current_solution = await _refine_solution(
-            current_solution, critique, improvements,
-            query, code_context, iteration + 1, state
+            current_solution, critique, improvements, query, code_context, iteration + 1, state
         )
-        
+
         add_reasoning_step(
             state=state,
             framework="self_refine",
             thought=f"Refined solution (v{iteration + 2})",
             action="refine",
-            observation=f"Applied {len(improvements)} improvements"
+            observation=f"Applied {len(improvements)} improvements",
         )
-    
+
     # Step 3: Final verification
     verification, final_score = await _final_verification(
         current_solution, query, code_context, state
     )
-    
+
     # Format refinement history
-    history = "\n\n".join([
-        f"### Version {r.version}\n"
-        f"**Score**: {r.score:.2f}\n"
-        f"**Critique**: {r.critique}\n"
-        f"**Improvements applied**: {len(r.improvements)}"
-        for r in refinements
-    ])
-    
+    history = "\n\n".join(
+        [
+            f"### Version {r.version}\n"
+            f"**Score**: {r.score:.2f}\n"
+            f"**Critique**: {r.critique}\n"
+            f"**Improvements applied**: {len(r.improvements)}"
+            for r in refinements
+        ]
+    )
+
     improvement_summary = ""
     if len(refinements) > 1:
         initial_score = refinements[0].score
         improvement_summary = f"\n**Total improvement**: {initial_score:.2f} → {final_score:.2f} (+{final_score - initial_score:.2f})"
-    
+
     final_answer = f"""# Self-Refine Analysis
 
 ## Refinement History
@@ -372,11 +353,7 @@ async def self_refine_node(state: GraphState) -> GraphState:
 
     state["final_answer"] = final_answer
     state["confidence_score"] = final_score
-    
-    logger.info(
-        "self_refine_complete",
-        iterations=len(refinements),
-        final_score=final_score
-    )
-    
+
+    logger.info("self_refine_complete", iterations=len(refinements), final_score=final_score)
+
     return state

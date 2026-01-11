@@ -5,16 +5,16 @@ Provides embeddings, vector store, and search functionality.
 """
 
 from .embeddings import get_embeddings
-from .vectorstore import (
-    get_vectorstore,
-    add_documents,
-    add_documents_with_metadata,
-    get_vectorstore_by_collection,
-)
 from .search import (
+    VectorstoreSearchError,
     search_vectorstore,
     search_vectorstore_async,
-    VectorstoreSearchError,
+)
+from .vectorstore import (
+    add_documents,
+    add_documents_with_metadata,
+    get_vectorstore,
+    get_vectorstore_by_collection,
 )
 
 __all__ = [

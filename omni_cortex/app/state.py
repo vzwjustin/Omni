@@ -5,91 +5,95 @@ Defines the state structure that flows through reasoning frameworks.
 Refactored to use composition and strictly typed sub-states.
 """
 
-from typing import TypedDict, Optional, Any, List, Dict
 from dataclasses import dataclass, field
+from typing import Any, TypedDict
 
 
 class InputState(TypedDict, total=False):
     """Immutable input parameters."""
+
     query: str
-    code_snippet: Optional[str]
-    file_list: List[str]
-    ide_context: Optional[str]
-    preferred_framework: Optional[str]
+    code_snippet: str | None
+    file_list: list[str]
+    ide_context: str | None
+    preferred_framework: str | None
     max_iterations: int
 
 
 class ReasoningState(TypedDict, total=False):
     """Internal working state for the reasoning engine."""
+
     selected_framework: str
-    framework_chain: List[str]
+    framework_chain: list[str]
     routing_category: str
     task_type: str
     complexity_estimate: float
-    working_memory: Dict[str, Any]
-    reasoning_steps: List[Dict[str, Any]]
+    working_memory: dict[str, Any]
+    reasoning_steps: list[dict[str, Any]]
     step_counter: int
     tokens_used: int
-    quiet_thoughts: List[str]
-    episodic_memory: List[Dict[str, Any]]
+    quiet_thoughts: list[str]
+    episodic_memory: list[dict[str, Any]]
 
 
 class OutputState(TypedDict, total=False):
     """Final results."""
-    final_code: Optional[str]
-    final_answer: Optional[str]
+
+    final_code: str | None
+    final_answer: str | None
     confidence_score: float
-    error: Optional[str]
+    error: str | None
 
 
 class GraphState(TypedDict, total=False):
     """
     Central state object passed through LangGraph nodes.
-    
+
     Refactored to flatten the structure for backward compatibility with existing nodes,
     while internally supporting the composed types if needed in future refactors.
-    
+
     Currently flattened to maintain compatibility with existing
     node implementations like `state['query']` or `state['working_memory']`.
     """
+
     # Input fields
     query: str
-    code_snippet: Optional[str]
-    file_list: List[str]
-    ide_context: Optional[str]
-    preferred_framework: Optional[str]
+    code_snippet: str | None
+    file_list: list[str]
+    ide_context: str | None
+    preferred_framework: str | None
     max_iterations: int
 
     # Routing & Framework Selection
     selected_framework: str
-    framework_chain: List[str]
+    framework_chain: list[str]
     routing_category: str
     task_type: str
     complexity_estimate: float
 
     # Working Memory
-    working_memory: Dict[str, Any]
-    reasoning_steps: List[Dict[str, Any]]
+    working_memory: dict[str, Any]
+    reasoning_steps: list[dict[str, Any]]
     step_counter: int
 
     # Episodic Memory
-    episodic_memory: List[Dict[str, Any]]
+    episodic_memory: list[dict[str, Any]]
 
     # Output fields
-    final_code: Optional[str]
-    final_answer: Optional[str]
+    final_code: str | None
+    final_answer: str | None
     confidence_score: float
     tokens_used: int
 
     # Quiet-STaR internal thoughts
-    quiet_thoughts: List[str]
+    quiet_thoughts: list[str]
 
     # Error handling
-    error: Optional[str]
+    error: str | None
 
     # Retry state (used by graph retry logic)
     retry_count: int
-    last_error: Optional[str]
+    last_error: str | None
 
 
 @dataclass
@@ -130,10 +134,7 @@ class MemoryStore:
             self.thought_templates = self.thought_templates[-500:]
 
     def find_similar_templates(
-        self,
-        task_type: str,
-        keywords: list[str],
-        limit: int = 5
+        self, task_type: str, keywords: list[str], limit: int = 5
     ) -> list[dict[str, Any]]:
         """Find similar thought templates from the buffer."""
         matches = []
@@ -170,11 +171,11 @@ class MemoryStore:
 
 def create_initial_state(
     query: str,
-    code_snippet: Optional[str] = None,
-    file_list: Optional[list[str]] = None,
-    ide_context: Optional[str] = None,
-    preferred_framework: Optional[str] = None,
-    max_iterations: int = 5
+    code_snippet: str | None = None,
+    file_list: list[str] | None = None,
+    ide_context: str | None = None,
+    preferred_framework: str | None = None,
+    max_iterations: int = 5,
 ) -> GraphState:
     """Create a fresh state for a new reasoning request."""
     return GraphState(
@@ -185,34 +186,27 @@ def create_initial_state(
         ide_context=ide_context,
         preferred_framework=preferred_framework,
         max_iterations=max_iterations,
-
         # Routing
         selected_framework="",
         framework_chain=[],
         routing_category="unknown",
         task_type="unknown",
         complexity_estimate=0.5,
-
         # Working memory
         working_memory={},
         reasoning_steps=[],
         step_counter=0,
-
         # Episodic memory
         episodic_memory=[],
-
         # Output
         final_code=None,
         final_answer=None,
         confidence_score=0.5,
         tokens_used=0,
-
         # Quiet-STaR
         quiet_thoughts=[],
-
         # Error handling
         error=None,
-
         # Retry state
         retry_count=0,
         last_error=None,

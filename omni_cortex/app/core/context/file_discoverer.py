@@ -11,25 +11,27 @@ Refactored to offload blocking I/O to thread pool and use scandir for performanc
 
 import asyncio
 import json
-import structlog
 import os
 from pathlib import Path
-from typing import List, Optional
 
-from ..settings import get_settings
-from ..constants import CONTENT, WORKSPACE
-from ..errors import LLMError, ProviderNotConfiguredError, OmniCortexError, ContextRetrievalError
+import structlog
+
+from ..constants import WORKSPACE
 from ..correlation import get_correlation_id
+from ..errors import ContextRetrievalError, LLMError, ProviderNotConfiguredError
+from ..settings import get_settings
 
 # Try to import Google AI (new package with thinking mode)
 try:
     from google import genai
     from google.genai import types
+
     GOOGLE_AI_AVAILABLE = True
 except ImportError:
     # Fallback to deprecated package
     try:
         import google.generativeai as genai
+
         types = None
         GOOGLE_AI_AVAILABLE = True
     except ImportError:
@@ -47,10 +49,11 @@ from dataclasses import dataclass, field
 @dataclass
 class FileContext:
     """Context about a discovered file."""
+
     path: str
     relevance_score: float  # 0-1
     summary: str  # Gemini-generated summary
-    key_elements: List[str] = field(default_factory=list)  # functions, classes, etc.
+    key_elements: list[str] = field(default_factory=list)  # functions, classes, etc.
     line_count: int = 0
     size_kb: float = 0
 
@@ -75,14 +78,14 @@ class FileDiscoverer:
             if not GOOGLE_AI_AVAILABLE:
                 raise ProviderNotConfiguredError(
                     "google-genai not installed",
-                    details={"provider": "google", "package": "google-genai"}
+                    details={"provider": "google", "package": "google-genai"},
                 )
 
             api_key = self.settings.google_api_key
             if not api_key:
                 raise ProviderNotConfiguredError(
                     "GOOGLE_API_KEY not configured",
-                    details={"provider": "google", "env_var": "GOOGLE_API_KEY"}
+                    details={"provider": "google", "env_var": "GOOGLE_API_KEY"},
                 )
 
             self._model = genai.Client(api_key=api_key)
@@ -91,10 +94,10 @@ class FileDiscoverer:
     async def discover(
         self,
         query: str,
-        workspace_path: Optional[str] = None,
-        file_list: Optional[List[str]] = None,
-        max_files: int = 15
-    ) -> List[FileContext]:
+        workspace_path: str | None = None,
+        file_list: list[str] | None = None,
+        max_files: int = 15,
+    ) -> list[FileContext]:
         """
         Discover and rank relevant files.
 
@@ -116,7 +119,7 @@ class FileDiscoverer:
         # Get file listing
         files_to_analyze = []
         if file_list:
-            files_to_analyze = file_list[:WORKSPACE.MAX_FILES_LIST]
+            files_to_analyze = file_list[: WORKSPACE.MAX_FILES_LIST]
         elif workspace_path:
             files_to_analyze = await self._list_workspace_files(workspace_path)
 
@@ -124,7 +127,7 @@ class FileDiscoverer:
             return []
 
         # Have Gemini score relevance
-        file_listing = "\n".join(files_to_analyze[:WORKSPACE.MAX_FILES_ANALYZE])
+        file_listing = "\n".join(files_to_analyze[: WORKSPACE.MAX_FILES_ANALYZE])
 
         prompt = f"""Given this query and file listing, identify the most relevant files.
 
@@ -153,14 +156,13 @@ Maximum {max_files} files."""
                 model=model_name,
                 contents=prompt,
                 config=types.GenerateContentConfig(
-                    temperature=0.2,
-                    response_mime_type="application/json"
-                )
+                    temperature=0.2, response_mime_type="application/json"
+                ),
             )
 
             # With JSON mode, response.text should be valid JSON
             files_data = json.loads(response.text)
-            
+
             # Ensure it's a list (handle case where model might wrap in object)
             if isinstance(files_data, dict) and "files" in files_data:
                 files_data = files_data["files"]
@@ -170,7 +172,7 @@ Maximum {max_files} files."""
                     if isinstance(val, list):
                         files_data = val
                         break
-            
+
             if not isinstance(files_data, list):
                 logger.warning("file_discovery_invalid_format", format=type(files_data))
                 return []
@@ -187,7 +189,7 @@ Maximum {max_files} files."""
             logger.debug(
                 "file_discovery_complete",
                 files_found=len(result),
-                top_file=result[0].path if result else None
+                top_file=result[0].path if result else None,
             )
             return result
         except (LLMError, ProviderNotConfiguredError):
@@ -200,11 +202,11 @@ Maximum {max_files} files."""
                 "file_discovery_failed",
                 error=str(e),
                 error_type=type(e).__name__,
-                correlation_id=get_correlation_id()
+                correlation_id=get_correlation_id(),
             )
             raise LLMError(f"File discovery failed: {e}") from e
 
-    async def _list_workspace_files(self, workspace_path: str) -> List[str]:
+    async def _list_workspace_files(self, workspace_path: str) -> list[str]:
         """
         List relevant files in workspace asynchronously.
         Offloads blocking I/O to a thread to prevent event loop starvation.
@@ -217,12 +219,12 @@ Maximum {max_files} files."""
                 "workspace_listing_failed",
                 error=str(e),
                 error_type=type(e).__name__,
-                correlation_id=get_correlation_id()
+                correlation_id=get_correlation_id(),
             )
             # Raise structured error for retry/handling logic upstream
             raise ContextRetrievalError(f"Failed to access workspace: {e}") from e
 
-    def _sync_list_files(self, workspace_path: str) -> List[str]:
+    def _sync_list_files(self, workspace_path: str) -> list[str]:
         """
         Synchronous implementation of file listing using os.scandir for performance.
         Strictly separated for thread safety.
@@ -253,12 +255,16 @@ Maximum {max_files} files."""
             for root, dirs, filenames in os.walk(str(workspace_path_resolved), topdown=True):
                 # Modify dirs in-place to skip excluded directories
                 # This prevents descending into excluded directories entirely
-                dirs[:] = [d for d in dirs if d not in exclude_patterns and not any(ex in d for ex in exclude_patterns)]
+                dirs[:] = [
+                    d
+                    for d in dirs
+                    if d not in exclude_patterns and not any(ex in d for ex in exclude_patterns)
+                ]
 
                 for filename in filenames:
                     # Check extensions or special names
                     ext = os.path.splitext(filename)[1].lower()
-                    if (ext in include_extensions or filename.lower() in special_filenames):
+                    if ext in include_extensions or filename.lower() in special_filenames:
                         full_path = Path(root) / filename
 
                         # Security: Validate file is within workspace (prevent symlink attacks)
@@ -270,11 +276,13 @@ Maximum {max_files} files."""
                             logger.debug(
                                 "skipping_file_outside_workspace",
                                 file=str(full_path),
-                                workspace=str(workspace_path_resolved)
+                                workspace=str(workspace_path_resolved),
                             )
                             continue
 
-                        rel_path = os.path.relpath(str(full_path_resolved), str(workspace_path_resolved))
+                        rel_path = os.path.relpath(
+                            str(full_path_resolved), str(workspace_path_resolved)
+                        )
                         files.append(rel_path)
 
                         if len(files) >= WORKSPACE.MAX_FILES_SCAN:

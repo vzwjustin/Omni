@@ -6,8 +6,7 @@ data in logs and error messages.
 """
 
 import re
-from typing import Any, Dict, Union
-
+from typing import Any
 
 # Patterns for detecting sensitive data
 API_KEY_PATTERNS = [
@@ -20,10 +19,10 @@ API_KEY_PATTERNS = [
 
 # Environment variable patterns
 ENV_VAR_PATTERNS = [
-    r'(OPENAI_API_KEY)',
-    r'(ANTHROPIC_API_KEY)',
-    r'(GOOGLE_API_KEY)',
-    r'(OPENROUTER_API_KEY)',
+    r"(OPENAI_API_KEY)",
+    r"(ANTHROPIC_API_KEY)",
+    r"(GOOGLE_API_KEY)",
+    r"(OPENROUTER_API_KEY)",
 ]
 
 
@@ -43,9 +42,9 @@ def sanitize_api_keys(text: str) -> str:
     for pattern in API_KEY_PATTERNS:
         sanitized = re.sub(
             pattern,
-            lambda m: m.group(0).replace(m.group(1), '[REDACTED]'),
+            lambda m: m.group(0).replace(m.group(1), "[REDACTED]"),
             sanitized,
-            flags=re.IGNORECASE
+            flags=re.IGNORECASE,
         )
 
     return sanitized
@@ -66,9 +65,7 @@ def sanitize_env_vars(text: str) -> str:
     for pattern in ENV_VAR_PATTERNS:
         # Match the env var name followed by its value
         sanitized = re.sub(
-            rf'{pattern}\s*=\s*["\']?([^"\'\s]+)',
-            lambda m: f'{m.group(1)}="[REDACTED]"',
-            sanitized
+            rf'{pattern}\s*=\s*["\']?([^"\'\s]+)', lambda m: f'{m.group(1)}="[REDACTED]"', sanitized
         )
 
     return sanitized
@@ -99,7 +96,7 @@ def sanitize_error(error: Exception) -> str:
     return error_msg
 
 
-def sanitize_dict(data: Dict[str, Any], redact_keys: list = None) -> Dict[str, Any]:
+def sanitize_dict(data: dict[str, Any], redact_keys: list = None) -> dict[str, Any]:
     """
     Sanitize dictionary by redacting sensitive keys.
 
@@ -112,10 +109,17 @@ def sanitize_dict(data: Dict[str, Any], redact_keys: list = None) -> Dict[str, A
     """
     # Default sensitive keys
     sensitive_keys = {
-        'api_key', 'apikey', 'api-key',
-        'token', 'auth_token', 'access_token',
-        'secret', 'password', 'pwd',
-        'authorization', 'auth',
+        "api_key",
+        "apikey",
+        "api-key",
+        "token",
+        "auth_token",
+        "access_token",
+        "secret",
+        "password",
+        "pwd",
+        "authorization",
+        "auth",
     }
 
     # Add custom keys
@@ -130,9 +134,9 @@ def sanitize_dict(data: Dict[str, Any], redact_keys: list = None) -> Dict[str, A
         if any(sensitive in key_lower for sensitive in sensitive_keys):
             # Redact but show first few chars
             if isinstance(value, str) and len(value) > 4:
-                sanitized[key] = value[:4] + '...[REDACTED]'
+                sanitized[key] = value[:4] + "...[REDACTED]"
             else:
-                sanitized[key] = '[REDACTED]'
+                sanitized[key] = "[REDACTED]"
         # Recursively sanitize nested dicts
         elif isinstance(value, dict):
             sanitized[key] = sanitize_dict(value, redact_keys)
@@ -177,7 +181,7 @@ def safe_repr(obj: Any, max_length: int = 500) -> str:
         return f"<{type(obj).__name__} [repr failed: {str(e)[:100]}]>"
 
 
-def sanitize_log_record(record: Dict[str, Any]) -> Dict[str, Any]:
+def sanitize_log_record(record: dict[str, Any]) -> dict[str, Any]:
     """
     Sanitize a structured log record.
 
@@ -190,8 +194,8 @@ def sanitize_log_record(record: Dict[str, Any]) -> Dict[str, Any]:
     sanitized = record.copy()
 
     # Sanitize message
-    if 'message' in sanitized:
-        sanitized['message'] = sanitize_api_keys(str(sanitized['message']))
+    if "message" in sanitized:
+        sanitized["message"] = sanitize_api_keys(str(sanitized["message"]))
 
     # Sanitize any dict fields
     for key, value in list(sanitized.items()):
@@ -203,7 +207,7 @@ def sanitize_log_record(record: Dict[str, Any]) -> Dict[str, Any]:
     return sanitized
 
 
-def create_safe_error_details(error: Exception) -> Dict[str, Any]:
+def create_safe_error_details(error: Exception) -> dict[str, Any]:
     """
     Create safe error details dict for logging.
 
@@ -214,12 +218,12 @@ def create_safe_error_details(error: Exception) -> Dict[str, Any]:
         Dictionary with safe error details
     """
     details = {
-        'type': type(error).__name__,
-        'message': sanitize_error(error),
+        "type": type(error).__name__,
+        "message": sanitize_error(error),
     }
 
     # Add details from OmniCortexError if available
-    if hasattr(error, 'details'):
-        details['details'] = sanitize_dict(error.details)
+    if hasattr(error, "details"):
+        details["details"] = sanitize_dict(error.details)
 
     return details

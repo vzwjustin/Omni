@@ -12,13 +12,13 @@ Usage:
     result = await node(state)
 """
 
-import importlib
-import structlog
-from typing import Callable, Dict, Optional
+from collections.abc import Callable
 
-from ..state import GraphState
+import structlog
+
 from ..frameworks import FRAMEWORKS, FrameworkDefinition
-from .common import quiet_star, format_code_context, add_reasoning_step
+from ..state import GraphState
+from .common import add_reasoning_step, format_code_context, quiet_star
 
 logger = structlog.get_logger(__name__)
 
@@ -57,6 +57,7 @@ Please execute the reasoning steps for **{display_name}**:
 # Example Search Helpers
 # =============================================================================
 
+
 def _search_examples(query: str, example_type: str) -> str:
     """Search for relevant examples based on example type."""
     if not example_type:
@@ -64,9 +65,9 @@ def _search_examples(query: str, example_type: str) -> str:
 
     try:
         from .example_utilities import (
+            search_code_examples,
             search_debugging_examples,
             search_reasoning_examples,
-            search_code_examples,
         )
 
         if example_type == "debugging":
@@ -84,7 +85,12 @@ def _search_examples(query: str, example_type: str) -> str:
     except Exception as e:
         # Graceful degradation: example search failures should not block framework execution.
         # Examples are optional enhancements; the framework can proceed without them.
-        logger.debug("example_search_failed", error=str(e), error_type=type(e).__name__, example_type=example_type)
+        logger.debug(
+            "example_search_failed",
+            error=str(e),
+            error_type=type(e).__name__,
+            example_type=example_type,
+        )
 
     return ""
 
@@ -92,6 +98,7 @@ def _search_examples(query: str, example_type: str) -> str:
 # =============================================================================
 # Node Generator
 # =============================================================================
+
 
 def create_framework_node(definition: FrameworkDefinition) -> Callable:
     """
@@ -106,12 +113,12 @@ def create_framework_node(definition: FrameworkDefinition) -> Callable:
 
     # Pre-format steps for this framework
     if definition.steps:
-        formatted_steps = "\n".join(
-            f"{i+1}. {step}" for i, step in enumerate(definition.steps)
-        )
+        formatted_steps = "\n".join(f"{i + 1}. {step}" for i, step in enumerate(definition.steps))
     else:
         # Fallback for frameworks without steps defined yet
-        formatted_steps = "1. Analyze the problem\n2. Apply framework principles\n3. Generate solution"
+        formatted_steps = (
+            "1. Analyze the problem\n2. Apply framework principles\n3. Generate solution"
+        )
 
     # Determine use case text
     use_case = definition.use_case or ", ".join(definition.best_for[:3])
@@ -121,10 +128,7 @@ def create_framework_node(definition: FrameworkDefinition) -> Callable:
         # Docstring is set dynamically after function creation (see line 170)
         query = state.get("query", "")
         code_context = format_code_context(
-            state.get("code_snippet"),
-            state.get("file_list"),
-            state.get("ide_context"),
-            state=state
+            state.get("code_snippet"), state.get("file_list"), state.get("ide_context"), state=state
         )
 
         # Search for examples if configured
@@ -160,7 +164,7 @@ def create_framework_node(definition: FrameworkDefinition) -> Callable:
             framework=definition.name,
             thought=f"Generated {definition.display_name} protocol for client execution",
             action="handoff",
-            observation="Prompt generated"
+            observation="Prompt generated",
         )
 
         return state
@@ -177,16 +181,14 @@ def create_framework_node(definition: FrameworkDefinition) -> Callable:
 # =============================================================================
 
 # ALL 62 frameworks now have REAL implementations with multi-turn LLM calls
-SPECIAL_NODES: Dict[str, str] = {
+SPECIAL_NODES: dict[str, str] = {
     # Iterative frameworks
     "active_inference": "app.nodes.iterative.active_inference",
     "self_refine": "app.nodes.iterative.self_refine",
     "reflexion": "app.nodes.iterative.reflexion",
-    
     # Search frameworks
     "tree_of_thoughts": "app.nodes.search.tree_of_thoughts",
     "mcts_rstar": "app.nodes.search.mcts",
-    
     # Strategy frameworks (multi-agent)
     "multi_agent_debate": "app.nodes.strategy.debate",
     "step_back": "app.nodes.strategy.step_back",
@@ -197,14 +199,12 @@ SPECIAL_NODES: Dict[str, str] = {
     "self_ask": "app.nodes.strategy.socratic",
     "system1": "app.nodes.strategy.society_of_mind",
     "comparative_arch": "app.nodes.strategy.multi_persona",
-    
     # Verification frameworks
     "chain_of_verification": "app.nodes.verification.chain_of_verification",
     "self_debugging": "app.nodes.verification.self_debugging",
     "verify_and_edit": "app.nodes.verification.verify_and_edit",
     "red_team": "app.nodes.verification.red_team",
     "selfcheckgpt": "app.nodes.verification.selfcheckgpt",
-    
     # Code frameworks
     "program_of_thoughts": "app.nodes.code.pot",
     "chain_of_code": "app.nodes.code.chain_of_code",
@@ -215,7 +215,6 @@ SPECIAL_NODES: Dict[str, str] = {
     "parsel": "app.nodes.code.parsel",
     "procoder": "app.nodes.code.procoder",
     "recode": "app.nodes.code.recode",
-    
     # Context/RAG frameworks
     "rag_fusion": "app.nodes.context.rag_fusion",
     "self_rag": "app.nodes.context.self_rag",
@@ -225,7 +224,6 @@ SPECIAL_NODES: Dict[str, str] = {
     "rarr": "app.nodes.context.rarr",
     "ragas": "app.nodes.context.ragas",
     "raptor": "app.nodes.context.raptor",
-    
     # Fast/reasoning frameworks
     "react": "app.nodes.fast.react",
     "chain_of_thought": "app.nodes.fast.chain_of_thought",
@@ -256,10 +254,11 @@ SPECIAL_NODES: Dict[str, str] = {
 }
 
 
-def _load_special_node(name: str, module_path: str) -> Optional[Callable]:
+def _load_special_node(name: str, module_path: str) -> Callable | None:
     """Dynamically load a special node from its module."""
     try:
         import importlib
+
         module = importlib.import_module(module_path)
         node_name = f"{name}_node"
         return getattr(module, node_name, None)
@@ -267,7 +266,9 @@ def _load_special_node(name: str, module_path: str) -> Optional[Callable]:
         # Graceful degradation: if a special node fails to load, return None so the caller
         # can fall back to a generated node. This ensures the system remains functional
         # even when optional custom node implementations are unavailable.
-        logger.warning("special_node_load_failed", name=name, error=str(e), error_type=type(e).__name__)
+        logger.warning(
+            "special_node_load_failed", name=name, error=str(e), error_type=type(e).__name__
+        )
         return None
 
 
@@ -275,7 +276,8 @@ def _load_special_node(name: str, module_path: str) -> Optional[Callable]:
 # Generated Nodes Registry
 # =============================================================================
 
-def generate_all_nodes() -> Dict[str, Callable]:
+
+def generate_all_nodes() -> dict[str, Callable]:
     """
     Generate all framework nodes from the registry.
 
@@ -307,13 +309,13 @@ def generate_all_nodes() -> Dict[str, Callable]:
 # Lazy-loaded Nodes Registry (improves cold start performance)
 # =============================================================================
 
-_GENERATED_NODES: Optional[Dict[str, Callable]] = None
+_GENERATED_NODES: dict[str, Callable] | None = None
 
 
-def get_generated_nodes() -> Dict[str, Callable]:
+def get_generated_nodes() -> dict[str, Callable]:
     """
     Get all framework nodes with lazy initialization.
-    
+
     Nodes are generated on first access rather than at import time,
     improving cold start performance for the MCP server.
     """
@@ -332,7 +334,7 @@ def _get_nodes_proxy():
 
 # For backward compatibility, we generate on import as before
 # but only when this file is actually accessed (Python's module system)
-GENERATED_NODES: Dict[str, Callable] = {}  # Placeholder, populated lazily
+GENERATED_NODES: dict[str, Callable] = {}  # Placeholder, populated lazily
 
 
 def __getattr__(name: str):
@@ -346,7 +348,8 @@ def __getattr__(name: str):
 # Convenience Accessors
 # =============================================================================
 
-def get_node(name: str) -> Optional[Callable]:
+
+def get_node(name: str) -> Callable | None:
     """Get a framework node by name."""
     return get_generated_nodes().get(name)
 
@@ -354,4 +357,3 @@ def get_node(name: str) -> Optional[Callable]:
 def list_nodes() -> list[str]:
     """List all available framework node names."""
     return list(get_generated_nodes().keys())
-

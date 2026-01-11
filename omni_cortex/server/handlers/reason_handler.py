@@ -15,14 +15,15 @@ import traceback
 import structlog
 from mcp.types import TextContent
 
+from app.core.analysis_executor import execute_code_analysis
 from app.core.audit import log_tool_call
 from app.core.context_gateway import get_context_gateway
-from app.core.analysis_executor import execute_code_analysis, AnalysisResult
+
 from ..framework_prompts import FRAMEWORKS
 from .validation import (
     ValidationError,
-    validate_query,
     validate_context,
+    validate_query,
     validate_thread_id,
 )
 
@@ -57,8 +58,18 @@ async def handle_reason(
         # Auto-detect execution mode based on query patterns
         # Code analysis queries should use Gemini to actually analyze code
         analysis_keywords = [
-            "analyze", "audit", "review", "stability", "issues", "problems",
-            "bugs", "errors", "security", "performance", "refactor", "improve"
+            "analyze",
+            "audit",
+            "review",
+            "stability",
+            "issues",
+            "problems",
+            "bugs",
+            "errors",
+            "security",
+            "performance",
+            "refactor",
+            "improve",
         ]
         query_lower = query.lower() if query else ""
         is_analysis_query = any(kw in query_lower for kw in analysis_keywords)
@@ -72,12 +83,7 @@ async def handle_reason(
             query_preview=query[:50] if query else "",
         )
     except ValidationError as e:
-        log_tool_call(
-            tool_name="reason",
-            arguments=arguments,
-            success=False,
-            error=str(e)
-        )
+        log_tool_call(tool_name="reason", arguments=arguments, success=False, error=str(e))
         return [TextContent(type="text", text=f"Validation error: {str(e)}")]
 
     # EXECUTION MODE: Actually analyze code with Gemini
@@ -109,11 +115,7 @@ async def handle_reason(
             logger.info("auto_context_prepared", query_preview=query[:50])
         except Exception as e:
             # Graceful degradation: proceed without auto-context if gateway fails
-            logger.warning(
-                "auto_context_failed",
-                error=str(e),
-                error_type=type(e).__name__
-            )
+            logger.warning("auto_context_failed", error=str(e), error_type=type(e).__name__)
             context = None
 
     # Generate structured brief using the new protocol
@@ -123,13 +125,9 @@ async def handle_reason(
     try:
         router_output = await asyncio.wait_for(
             router.generate_structured_brief(
-                query=query,
-                context=context,
-                code_snippet=None,
-                ide_context=None,
-                file_list=None
+                query=query, context=context, code_snippet=None, ide_context=None, file_list=None
             ),
-            timeout=BRIEF_TIMEOUT_SECONDS
+            timeout=BRIEF_TIMEOUT_SECONDS,
         )
 
         # Build output with pipeline metadata + Claude brief
@@ -140,7 +138,11 @@ async def handle_reason(
 
         # Compact header - single line metadata
         stages = "→".join([s.framework_id for s in pipeline.stages])
-        signals = ",".join([s.type.value for s in router_output.detected_signals[:3]]) if router_output.detected_signals else ""
+        signals = (
+            ",".join([s.type.value for s in router_output.detected_signals[:3]])
+            if router_output.detected_signals
+            else ""
+        )
 
         output = f"[{stages}] conf={gate.confidence.score:.0%} risk={router_output.task_profile.risk_level.value}"
         if signals:
@@ -155,12 +157,7 @@ async def handle_reason(
             output += f"\n\n⚠️ {gate.recommendation.action.value}: {gate.recommendation.notes}"
 
         # Audit log successful call
-        log_tool_call(
-            tool_name="reason",
-            arguments=arguments,
-            thread_id=thread_id,
-            success=True
-        )
+        log_tool_call(tool_name="reason", arguments=arguments, thread_id=thread_id, success=True)
 
     except asyncio.TimeoutError:
         # Graceful degradation: structured brief generation timed out (likely LLM hang).
@@ -169,7 +166,7 @@ async def handle_reason(
             "structured_brief_timeout",
             timeout_seconds=BRIEF_TIMEOUT_SECONDS,
             query_preview=query[:50] if query else "",
-            hint="LLM call timed out, falling back to simple template mode"
+            hint="LLM call timed out, falling back to simple template mode",
         )
 
         # Use the same fallback logic as generic exception handler below
@@ -180,13 +177,18 @@ async def handle_reason(
             selected = "self_discover"
 
         fw_info = router.get_framework_info(selected)
-        complexity = router.estimate_complexity(query, context if context != "None provided" else None)
+        complexity = router.estimate_complexity(
+            query, context if context != "None provided" else None
+        )
 
-        fw = FRAMEWORKS.get(selected, {
-            "category": "unknown",
-            "best_for": [],
-            "prompt": "Apply your best reasoning to: {query}\n\nContext: {context}"
-        })
+        fw = FRAMEWORKS.get(
+            selected,
+            {
+                "category": "unknown",
+                "best_for": [],
+                "prompt": "Apply your best reasoning to: {query}\n\nContext: {context}",
+            },
+        )
         prompt = fw["prompt"].format(query=query, context=context or "None provided")
 
         output = f"# Framework: {selected}\n"
@@ -201,7 +203,7 @@ async def handle_reason(
             arguments=arguments,
             thread_id=thread_id,
             success=True,
-            error=f"timeout_fallback: {BRIEF_TIMEOUT_SECONDS}s"
+            error=f"timeout_fallback: {BRIEF_TIMEOUT_SECONDS}s",
         )
 
     except Exception as e:
@@ -225,13 +227,18 @@ async def handle_reason(
             selected = "self_discover"
 
         fw_info = router.get_framework_info(selected)
-        complexity = router.estimate_complexity(query, context if context != "None provided" else None)
+        complexity = router.estimate_complexity(
+            query, context if context != "None provided" else None
+        )
 
-        fw = FRAMEWORKS.get(selected, {
-            "category": "unknown",
-            "best_for": [],
-            "prompt": "Apply your best reasoning to: {query}\n\nContext: {context}"
-        })
+        fw = FRAMEWORKS.get(
+            selected,
+            {
+                "category": "unknown",
+                "best_for": [],
+                "prompt": "Apply your best reasoning to: {query}\n\nContext: {context}",
+            },
+        )
         prompt = fw["prompt"].format(query=query, context=context or "None provided")
 
         output = f"# Framework: {selected}\n"
@@ -246,7 +253,7 @@ async def handle_reason(
             arguments=arguments,
             thread_id=thread_id,
             success=True,
-            error=f"fallback_mode: {type(e).__name__}"
+            error=f"fallback_mode: {type(e).__name__}",
         )
 
     return [TextContent(type="text", text=output)]
@@ -291,9 +298,7 @@ async def _handle_execute_mode(
         # Determine framework to use for analysis
         framework = "chain_of_verification"  # Default for stability analysis
         try:
-            chain, reasoning, category = await router.select_framework_chain(
-                query, None, None
-            )
+            chain, reasoning, category = await router.select_framework_chain(query, None, None)
             if chain:
                 framework = chain[0]
         except Exception as e:
@@ -350,7 +355,9 @@ async def _handle_execute_mode(
             error=str(e),
         )
 
-        return [TextContent(
-            type="text",
-            text=f"Analysis execution failed: {e}\n\nFallback to template mode - set execute=false to get framework guidance."
-        )]
+        return [
+            TextContent(
+                type="text",
+                text=f"Analysis execution failed: {e}\n\nFallback to template mode - set execute=false to get framework guidance.",
+            )
+        ]

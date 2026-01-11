@@ -11,11 +11,12 @@ Thinking mode is a Gemini feature that enables deeper reasoning at the cost of
 additional tokens. This optimizer ensures thinking mode is used effectively.
 """
 
-import structlog
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional, Dict, Any, List
 from enum import Enum
+from typing import Any
+
+import structlog
 
 from ..settings import get_settings
 
@@ -24,15 +25,17 @@ logger = structlog.get_logger("context.thinking_mode_optimizer")
 
 class ThinkingLevel(Enum):
     """Thinking mode levels supported by Gemini."""
-    NONE = "none"          # No thinking mode
-    LOW = "LOW"            # Basic reasoning
-    MEDIUM = "MEDIUM"      # Moderate reasoning
-    HIGH = "HIGH"          # Deep reasoning
+
+    NONE = "none"  # No thinking mode
+    LOW = "LOW"  # Basic reasoning
+    MEDIUM = "MEDIUM"  # Moderate reasoning
+    HIGH = "HIGH"  # Deep reasoning
 
 
 @dataclass
 class ThinkingModeMetrics:
     """Metrics for thinking mode usage and quality."""
+
     thinking_level: ThinkingLevel
     tokens_used: int
     reasoning_quality_score: float  # 0.0 to 1.0
@@ -41,13 +44,14 @@ class ThinkingModeMetrics:
     budget_available: int
     budget_sufficient: bool
     fallback_used: bool = False
-    fallback_reason: Optional[str] = None
+    fallback_reason: str | None = None
     timestamp: datetime = field(default_factory=datetime.now)
 
 
 @dataclass
 class ThinkingModeDecision:
     """Decision about thinking mode usage."""
+
     use_thinking_mode: bool
     thinking_level: ThinkingLevel
     reason: str
@@ -59,10 +63,10 @@ class ThinkingModeDecision:
 class ThinkingModeOptimizer:
     """
     Optimizes Gemini thinking mode usage based on complexity and budget.
-    
+
     Thinking mode provides deeper reasoning but costs more tokens. This optimizer
     ensures thinking mode is used when it provides the most value.
-    
+
     Decision Logic:
     1. Check if thinking mode is enabled in settings
     2. Detect query complexity
@@ -70,11 +74,11 @@ class ThinkingModeOptimizer:
     4. Decide on thinking level (NONE, LOW, MEDIUM, HIGH)
     5. Track quality metrics for continuous improvement
     """
-    
+
     def __init__(self):
         self.settings = get_settings()
-        self._metrics_history: List[ThinkingModeMetrics] = []
-        
+        self._metrics_history: list[ThinkingModeMetrics] = []
+
         # Complexity thresholds for thinking mode activation
         self._complexity_thresholds = {
             "low": ThinkingLevel.NONE,
@@ -82,7 +86,7 @@ class ThinkingModeOptimizer:
             "high": ThinkingLevel.MEDIUM,
             "very_high": ThinkingLevel.HIGH,
         }
-        
+
         # Token cost multipliers for thinking levels
         self._token_multipliers = {
             ThinkingLevel.NONE: 1.0,
@@ -90,23 +94,23 @@ class ThinkingModeOptimizer:
             ThinkingLevel.MEDIUM: 1.6,
             ThinkingLevel.HIGH: 2.0,
         }
-    
+
     def decide_thinking_mode(
         self,
         query: str,
         complexity: str,
         available_budget: int,
-        task_type: Optional[str] = None,
+        task_type: str | None = None,
     ) -> ThinkingModeDecision:
         """
         Decide whether to use thinking mode and at what level.
-        
+
         Args:
             query: The user's query
             complexity: Detected complexity (low, medium, high, very_high)
             available_budget: Available token budget
             task_type: Optional task type for additional context
-            
+
         Returns:
             ThinkingModeDecision with recommendation
         """
@@ -120,10 +124,10 @@ class ThinkingModeOptimizer:
                 complexity=complexity,
                 budget_available=available_budget,
             )
-        
+
         # Get complexity threshold from settings
         threshold_complexity = self.settings.thinking_mode_complexity_threshold
-        
+
         # Check if complexity meets threshold
         complexity_order = ["low", "medium", "high", "very_high"]
         if complexity_order.index(complexity) < complexity_order.index(threshold_complexity):
@@ -135,14 +139,14 @@ class ThinkingModeOptimizer:
                 complexity=complexity,
                 budget_available=available_budget,
             )
-        
+
         # Determine thinking level based on complexity
         recommended_level = self._complexity_thresholds.get(complexity, ThinkingLevel.NONE)
-        
+
         # Estimate token cost
         base_tokens = len(query.split()) * 1.3  # Rough estimate
         estimated_cost = int(base_tokens * self._token_multipliers[recommended_level])
-        
+
         # Check if budget is sufficient
         token_threshold = self.settings.thinking_mode_token_threshold
         if available_budget < token_threshold:
@@ -169,7 +173,7 @@ class ThinkingModeOptimizer:
                     complexity=complexity,
                     budget_available=available_budget,
                 )
-        
+
         # Check for task types that benefit most from thinking mode
         high_value_tasks = ["debug", "architect", "refactor", "optimize"]
         if task_type in high_value_tasks and recommended_level == ThinkingLevel.LOW:
@@ -179,7 +183,7 @@ class ThinkingModeOptimizer:
             reason = f"Upgraded to {recommended_level.value} for high-value task '{task_type}'"
         else:
             reason = f"Complexity '{complexity}' recommends {recommended_level.value}"
-        
+
         return ThinkingModeDecision(
             use_thinking_mode=recommended_level != ThinkingLevel.NONE,
             thinking_level=recommended_level,
@@ -188,7 +192,7 @@ class ThinkingModeOptimizer:
             complexity=complexity,
             budget_available=available_budget,
         )
-    
+
     def _downgrade_thinking_level(self, level: ThinkingLevel) -> ThinkingLevel:
         """Downgrade thinking level by one step."""
         downgrade_map = {
@@ -198,7 +202,7 @@ class ThinkingModeOptimizer:
             ThinkingLevel.NONE: ThinkingLevel.NONE,
         }
         return downgrade_map.get(level, ThinkingLevel.NONE)
-    
+
     def record_metrics(
         self,
         thinking_level: ThinkingLevel,
@@ -208,11 +212,11 @@ class ThinkingModeOptimizer:
         budget_available: int,
         reasoning_quality_score: float = 0.5,
         fallback_used: bool = False,
-        fallback_reason: Optional[str] = None,
+        fallback_reason: str | None = None,
     ) -> ThinkingModeMetrics:
         """
         Record metrics for a thinking mode execution.
-        
+
         Args:
             thinking_level: The thinking level used
             tokens_used: Actual tokens consumed
@@ -222,7 +226,7 @@ class ThinkingModeOptimizer:
             reasoning_quality_score: Quality score (0.0 to 1.0)
             fallback_used: Whether fallback was used
             fallback_reason: Reason for fallback if used
-            
+
         Returns:
             ThinkingModeMetrics object
         """
@@ -237,12 +241,12 @@ class ThinkingModeOptimizer:
             fallback_used=fallback_used,
             fallback_reason=fallback_reason,
         )
-        
+
         # Store in history (keep last 100)
         self._metrics_history.append(metrics)
         if len(self._metrics_history) > 100:
             self._metrics_history.pop(0)
-        
+
         logger.info(
             "thinking_mode_metrics_recorded",
             level=thinking_level.value,
@@ -251,13 +255,13 @@ class ThinkingModeOptimizer:
             complexity=complexity,
             fallback=fallback_used,
         )
-        
+
         return metrics
-    
-    def get_quality_statistics(self) -> Dict[str, Any]:
+
+    def get_quality_statistics(self) -> dict[str, Any]:
         """
         Get quality statistics from metrics history.
-        
+
         Returns:
             Dictionary with quality statistics
         """
@@ -268,13 +272,13 @@ class ThinkingModeOptimizer:
                 "avg_tokens_used": 0,
                 "fallback_rate": 0.0,
             }
-        
+
         total = len(self._metrics_history)
         avg_quality = sum(m.reasoning_quality_score for m in self._metrics_history) / total
         avg_tokens = sum(m.tokens_used for m in self._metrics_history) / total
         fallback_count = sum(1 for m in self._metrics_history if m.fallback_used)
         fallback_rate = fallback_count / total
-        
+
         # Quality by thinking level
         quality_by_level = {}
         for level in ThinkingLevel:
@@ -282,10 +286,11 @@ class ThinkingModeOptimizer:
             if level_metrics:
                 quality_by_level[level.value] = {
                     "count": len(level_metrics),
-                    "avg_quality": sum(m.reasoning_quality_score for m in level_metrics) / len(level_metrics),
+                    "avg_quality": sum(m.reasoning_quality_score for m in level_metrics)
+                    / len(level_metrics),
                     "avg_tokens": sum(m.tokens_used for m in level_metrics) / len(level_metrics),
                 }
-        
+
         return {
             "total_executions": total,
             "avg_quality_score": avg_quality,
@@ -293,30 +298,30 @@ class ThinkingModeOptimizer:
             "fallback_rate": fallback_rate,
             "quality_by_level": quality_by_level,
         }
-    
+
     def should_use_thinking_for_model(self, model_name: str) -> bool:
         """
         Check if a model supports thinking mode.
-        
+
         Args:
             model_name: The model name
-            
+
         Returns:
             True if model supports thinking mode
         """
         # Models with "thinking" in name (legacy experimental)
         if "thinking" in model_name.lower():
             return True
-        
+
         # Gemini 3 models all support thinking mode
         if "gemini-3" in model_name.lower() or "gemini-2.0" in model_name.lower():
             return True
-        
+
         return False
 
 
 # Global singleton
-_optimizer: Optional[ThinkingModeOptimizer] = None
+_optimizer: ThinkingModeOptimizer | None = None
 
 
 def get_thinking_mode_optimizer() -> ThinkingModeOptimizer:

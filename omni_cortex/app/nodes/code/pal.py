@@ -9,18 +9,17 @@ Generate and reason with code:
 5. Generate final code solution
 """
 
-import asyncio
-import structlog
 from dataclasses import dataclass
+
+import structlog
 
 from ...state import GraphState
 from ..common import (
-    quiet_star,
+    add_reasoning_step,
     call_deep_reasoner,
     call_fast_synthesizer,
-    add_reasoning_step,
-    format_code_context,
     prepare_context_with_gemini,
+    quiet_star,
 )
 
 logger = structlog.get_logger("pal")
@@ -29,6 +28,7 @@ logger = structlog.get_logger("pal")
 @dataclass
 class ComputationalStep:
     """A computational step."""
+
     step_num: int
     description: str
     code: str
@@ -50,24 +50,26 @@ STEP_2: [Second step]
 STEP_3: [Third step]
 STEP_4: [Fourth step]
 """
-    
+
     response, _ = await call_fast_synthesizer(prompt, state, max_tokens=512)
-    
+
     steps = []
     for line in response.split("\n"):
         if line.startswith("STEP_"):
             step = line.split(":", 1)[-1].strip()
             if step:
                 steps.append(step)
-    
+
     return steps
 
 
-async def _generate_code_for_step(step_desc: str, step_num: int, previous: list[ComputationalStep], query: str, state: GraphState) -> str:
+async def _generate_code_for_step(
+    step_desc: str, step_num: int, previous: list[ComputationalStep], query: str, state: GraphState
+) -> str:
     """Generate Python code for a computational step."""
-    
+
     prev_code = "\n".join(f"# Step {p.step_num}: {p.description}\n{p.code}" for p in previous)
-    
+
     prompt = f"""Generate Python code for this computational step.
 
 PROBLEM: {query}
@@ -75,21 +77,21 @@ PROBLEM: {query}
 CURRENT STEP: {step_desc}
 
 PREVIOUS CODE:
-{prev_code if prev_code else '# No previous code'}
+{prev_code if prev_code else "# No previous code"}
 
 Write concise Python code for this step:
 
 ```python
 """
-    
+
     response, _ = await call_fast_synthesizer(prompt, state, max_tokens=384)
-    
+
     # Extract code
     if "```" in response:
         code = response.split("```")[0].strip()
     else:
         code = response.strip()
-    
+
     return code
 
 
@@ -108,12 +110,14 @@ What would be the result/output?
 
 RESULT:
 """
-    
+
     response, _ = await call_fast_synthesizer(prompt, state, max_tokens=256)
     return response.strip()
 
 
-async def _reason_with_result(step_desc: str, code: str, result: str, query: str, state: GraphState) -> str:
+async def _reason_with_result(
+    step_desc: str, code: str, result: str, query: str, state: GraphState
+) -> str:
     """Reason about the computational result."""
     prompt = f"""Reason about this computational result.
 
@@ -130,19 +134,23 @@ What does this tell us? How does it help solve the problem?
 
 REASONING:
 """
-    
+
     response, _ = await call_fast_synthesizer(prompt, state, max_tokens=384)
     return response.strip()
 
 
-async def _synthesize_final_solution(steps: list[ComputationalStep], query: str, code_context: str, state: GraphState) -> str:
+async def _synthesize_final_solution(
+    steps: list[ComputationalStep], query: str, code_context: str, state: GraphState
+) -> str:
     """Synthesize final code solution."""
-    
-    all_code = "\n\n".join([
-        f"# Step {s.step_num}: {s.description}\n{s.code}\n# Result: {s.simulated_result}"
-        for s in steps
-    ])
-    
+
+    all_code = "\n\n".join(
+        [
+            f"# Step {s.step_num}: {s.description}\n{s.code}\n# Result: {s.simulated_result}"
+            for s in steps
+        ]
+    )
+
     prompt = f"""Create final integrated code solution.
 
 PROBLEM: {query}
@@ -156,7 +164,7 @@ Provide final, complete, runnable code:
 
 ```python
 """
-    
+
     response, _ = await call_deep_reasoner(prompt, state, max_tokens=1024)
     return response
 
@@ -165,7 +173,7 @@ Provide final, complete, runnable code:
 async def pal_node(state: GraphState) -> GraphState:
     """
     PAL (Program-Aided Language) - REAL IMPLEMENTATION
-    
+
     Code-aided reasoning:
     - Decomposes into computational steps
     - Generates code for each step
@@ -176,82 +184,77 @@ async def pal_node(state: GraphState) -> GraphState:
     query = state.get("query", "")
     # Use Gemini to preprocess context via ContextGateway
 
-    code_context = await prepare_context_with_gemini(
+    code_context = await prepare_context_with_gemini(query=query, state=state)
 
-        query=query,
-
-        state=state
-
-    )
-    
     logger.info("pal_start", query_preview=query[:50])
-    
+
     # Decompose
     step_descriptions = await _decompose_into_steps(query, code_context, state)
-    
+
     add_reasoning_step(
         state=state,
         framework="pal",
         thought=f"Decomposed into {len(step_descriptions)} computational steps",
-        action="decompose"
+        action="decompose",
     )
-    
+
     # Execute each step
     computational_steps = []
-    
+
     for i, step_desc in enumerate(step_descriptions, 1):
         logger.info("pal_step", step=i, description=step_desc[:50])
-        
+
         # Generate code
         code = await _generate_code_for_step(step_desc, i, computational_steps, query, state)
-        
+
         add_reasoning_step(
             state=state,
             framework="pal",
             thought=f"Generated code for step {i}",
-            action="generate_code"
+            action="generate_code",
         )
-        
+
         # Simulate execution
         result = await _simulate_execution(code, step_desc, state)
-        
+
         add_reasoning_step(
             state=state,
             framework="pal",
             thought=f"Simulated execution: {result[:50]}...",
-            action="execute"
+            action="execute",
         )
-        
+
         # Reason with result
         reasoning = await _reason_with_result(step_desc, code, result, query, state)
-        
-        computational_steps.append(ComputationalStep(
-            step_num=i,
-            description=step_desc,
-            code=code,
-            simulated_result=result,
-            reasoning=reasoning
-        ))
-    
+
+        computational_steps.append(
+            ComputationalStep(
+                step_num=i,
+                description=step_desc,
+                code=code,
+                simulated_result=result,
+                reasoning=reasoning,
+            )
+        )
+
     # Synthesize final solution
     final_code = await _synthesize_final_solution(computational_steps, query, code_context, state)
-    
+
     add_reasoning_step(
-        state=state,
-        framework="pal",
-        thought="Synthesized final code solution",
-        action="synthesize"
+        state=state, framework="pal", thought="Synthesized final code solution", action="synthesize"
     )
-    
+
     # Format output
-    steps_viz = "\n\n".join([
-        f"### Step {s.step_num}: {s.description}\n\n"
-        f"**Code**:\n```python\n{s.code}\n```\n\n"
-        f"**Simulated Result**: {s.simulated_result}\n\n"
-        f"**Reasoning**: {s.reasoning}"
-        for s in computational_steps
-    ])
-    
+    steps_viz = "\n\n".join(
+        [
+            f"### Step {s.step_num}: {s.description}\n\n"
+            f"**Code**:\n```python\n{s.code}\n```\n\n"
+            f"**Simulated Result**: {s.simulated_result}\n\n"
+            f"**Reasoning**: {s.reasoning}"
+            for s in computational_steps
+        ]
+    )
+
     final_answer = f"""# PAL (Program-Aided Language) Analysis
 
 ## Computational Steps
@@ -269,7 +272,7 @@ async def pal_node(state: GraphState) -> GraphState:
 
     state["final_answer"] = final_answer
     state["confidence_score"] = 0.85
-    
+
     logger.info("pal_complete", steps=len(computational_steps))
-    
+
     return state

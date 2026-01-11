@@ -4,12 +4,13 @@ Iterative Framework Orchestrators
 Frameworks that use loops, refinement, and progressive improvement.
 """
 
-from typing import Dict, Any
-from ..core.sampling import ClientSampler
+from typing import Any
+
 from ..core.constants import CONTENT
+from ..core.sampling import ClientSampler
 
 
-async def active_inference(sampler: ClientSampler, query: str, context: str) -> Dict[str, Any]:
+async def active_inference(sampler: ClientSampler, query: str, context: str) -> dict[str, Any]:
     """
     Active Inference: Hypothesis testing loop (Observe → Predict → Test → Act)
     """
@@ -39,7 +40,7 @@ What could be causing this? Generate 3 hypotheses ranked by likelihood."""
 What evidence would support/refute the top hypothesis?"""
 
         prediction = await sampler.request_sample(predict_prompt, temperature=0.6)
-        iterations.append((f"PREDICT_{i+1}", prediction))
+        iterations.append((f"PREDICT_{i + 1}", prediction))
 
         # Step 3: Test and gather evidence
         test_prompt = f"""TEST: Gather evidence
@@ -53,7 +54,7 @@ What evidence would support/refute the top hypothesis?"""
 What evidence can we find? Does it support or refute the hypothesis?"""
 
         evidence = await sampler.request_sample(test_prompt, temperature=0.5)
-        iterations.append((f"TEST_{i+1}", evidence))
+        iterations.append((f"TEST_{i + 1}", evidence))
 
         # Check if we have enough confidence
         confidence_prompt = f"""Based on this evidence, do we have enough confidence to act?
@@ -75,13 +76,13 @@ Answer YES or NO with brief explanation."""
 Revise hypotheses for next iteration."""
 
         hypotheses = await sampler.request_sample(update_prompt, temperature=0.6)
-        iterations.append((f"UPDATE_{i+1}", hypotheses))
+        iterations.append((f"UPDATE_{i + 1}", hypotheses))
 
     # Step 4: Act based on best hypothesis
     act_prompt = f"""ACT: Implement fix based on evidence
 
 ## Evidence Chain
-{chr(10).join(f'{label}: {text[:CONTENT.QUERY_LOG]}...' for label, text in iterations[-3:])}
+{chr(10).join(f"{label}: {text[: CONTENT.QUERY_LOG]}..." for label, text in iterations[-3:])}
 
 ## Original Problem
 {query}
@@ -95,12 +96,12 @@ Provide the solution with verification steps."""
         "metadata": {
             "framework": "active_inference",
             "iterations": len(iterations),
-            "reasoning_trace": [label for label, _ in iterations]
-        }
+            "reasoning_trace": [label for label, _ in iterations],
+        },
     }
 
 
-async def multi_agent_debate(sampler: ClientSampler, query: str, context: str) -> Dict[str, Any]:
+async def multi_agent_debate(sampler: ClientSampler, query: str, context: str) -> dict[str, Any]:
     """
     Multi-Agent Debate: Multiple perspectives debate trade-offs
     """
@@ -116,9 +117,9 @@ async def multi_agent_debate(sampler: ClientSampler, query: str, context: str) -
 Context: {context}
 
 Focus on: Getting it done quickly, minimal complexity, practical trade-offs.""",
-        temperature=0.6
+        temperature=0.6,
     )
-    perspectives['pragmatist'] = pragmatist
+    perspectives["pragmatist"] = pragmatist
 
     # Architect perspective
     architect = await sampler.request_sample(
@@ -129,9 +130,9 @@ Focus on: Getting it done quickly, minimal complexity, practical trade-offs.""",
 Context: {context}
 
 Focus on: Long-term maintainability, clean abstractions, extensibility.""",
-        temperature=0.6
+        temperature=0.6,
     )
-    perspectives['architect'] = architect
+    perspectives["architect"] = architect
 
     # Security perspective
     security = await sampler.request_sample(
@@ -142,9 +143,9 @@ Focus on: Long-term maintainability, clean abstractions, extensibility.""",
 Context: {context}
 
 Focus on: Vulnerabilities, attack vectors, secure coding practices.""",
-        temperature=0.6
+        temperature=0.6,
     )
-    perspectives['security'] = security
+    perspectives["security"] = security
 
     # Performance perspective
     performance = await sampler.request_sample(
@@ -155,9 +156,9 @@ Focus on: Vulnerabilities, attack vectors, secure coding practices.""",
 Context: {context}
 
 Focus on: Speed, resource usage, algorithmic efficiency.""",
-        temperature=0.6
+        temperature=0.6,
     )
-    perspectives['performance'] = performance
+    perspectives["performance"] = performance
 
     # Debate and synthesize
     debate_prompt = f"""Four experts have debated this problem:
@@ -186,12 +187,12 @@ What trade-offs are acceptable? Provide final solution."""
         "final_answer": balanced_solution,
         "metadata": {
             "framework": "multi_agent_debate",
-            "perspectives": ["pragmatist", "architect", "security", "performance"]
-        }
+            "perspectives": ["pragmatist", "architect", "security", "performance"],
+        },
     }
 
 
-async def adaptive_injection(sampler: ClientSampler, query: str, context: str) -> Dict[str, Any]:
+async def adaptive_injection(sampler: ClientSampler, query: str, context: str) -> dict[str, Any]:
     """
     Adaptive Injection: Inject strategies dynamically as needed
     """
@@ -262,12 +263,12 @@ Apply the strategy and continue."""
         "metadata": {
             "framework": "adaptive_injection",
             "injections": len(injections),
-            "strategies_used": injections
-        }
+            "strategies_used": injections,
+        },
     }
 
 
-async def re2(sampler: ClientSampler, query: str, context: str) -> Dict[str, Any]:
+async def re2(sampler: ClientSampler, query: str, context: str) -> dict[str, Any]:
     """
     RE2: Read-Execute-Evaluate loop
     """
@@ -323,8 +324,8 @@ List any gaps."""
                 "metadata": {
                     "framework": "re2",
                     "iterations": iteration + 1,
-                    "requirements": requirements[:CONTENT.ERROR_PREVIEW] + "..."
-                }
+                    "requirements": requirements[: CONTENT.ERROR_PREVIEW] + "...",
+                },
             }
 
         # Fix gaps for next iteration
@@ -342,12 +343,12 @@ Update implementation to satisfy all requirements."""
         "metadata": {
             "framework": "re2",
             "iterations": max_iterations,
-            "final_evaluation": evaluation[:CONTENT.ERROR_PREVIEW] + "..."
-        }
+            "final_evaluation": evaluation[: CONTENT.ERROR_PREVIEW] + "...",
+        },
     }
 
 
-async def rubber_duck(sampler: ClientSampler, query: str, context: str) -> Dict[str, Any]:
+async def rubber_duck(sampler: ClientSampler, query: str, context: str) -> dict[str, Any]:
     """
     Rubber Duck: Socratic questioning for self-discovery
     """
@@ -364,7 +365,7 @@ async def rubber_duck(sampler: ClientSampler, query: str, context: str) -> Dict[
     questions_and_answers.append((q2, a2))
 
     # Question 3: What happened vs expected?
-    q3 = f"What happened versus what you expected? Where's the disconnect?"
+    q3 = "What happened versus what you expected? Where's the disconnect?"
     a3 = await sampler.request_sample(f"{a2[:150]}...\n\n{q3}", temperature=0.6)
     questions_and_answers.append((q3, a3))
 
@@ -381,7 +382,7 @@ async def rubber_duck(sampler: ClientSampler, query: str, context: str) -> Dict[
     # Insight synthesis
     insight_prompt = f"""Based on this Socratic dialogue:
 
-{chr(10).join(f"Q: {q} " + chr(10) + f"A: {a[:CONTENT.QUERY_LOG]}..." for q, a in questions_and_answers)}
+{chr(10).join(f"Q: {q} " + chr(10) + f"A: {a[: CONTENT.QUERY_LOG]}..." for q, a in questions_and_answers)}
 
 ## Original Problem
 {query}
@@ -392,14 +393,11 @@ What insight did you discover? Provide the solution."""
 
     return {
         "final_answer": solution,
-        "metadata": {
-            "framework": "rubber_duck",
-            "questions_asked": len(questions_and_answers)
-        }
+        "metadata": {"framework": "rubber_duck", "questions_asked": len(questions_and_answers)},
     }
 
 
-async def react(sampler: ClientSampler, query: str, context: str) -> Dict[str, Any]:
+async def react(sampler: ClientSampler, query: str, context: str) -> dict[str, Any]:
     """
     ReAct: Reasoning + Acting loop
     """
@@ -417,7 +415,7 @@ async def react(sampler: ClientSampler, query: str, context: str) -> Dict[str, A
 {context}
 
 ## Previous Steps
-{chr(10).join(f'{step["type"]}: {step["content"][:80]}...' for step in chain[-3:]) if chain else 'None'}
+{chr(10).join(f"{step["type"]}: {step["content"][:80]}..." for step in chain[-3:]) if chain else "None"}
 
 What's the next logical step in reasoning?"""
 
@@ -463,7 +461,7 @@ Answer YES or NO with brief explanation."""
     # Final answer based on chain
     final_prompt = f"""Provide final solution based on reasoning chain:
 
-{chr(10).join(f'{step["type"]}: {step["content"][:CONTENT.QUERY_LOG]}...' for step in chain)}
+{chr(10).join(f"{step["type"]}: {step["content"][: CONTENT.QUERY_LOG]}..." for step in chain)}
 
 Original problem: {query}
 
@@ -476,12 +474,12 @@ Complete solution:"""
         "metadata": {
             "framework": "react",
             "iterations": len([s for s in chain if s["type"] == "THOUGHT"]),
-            "chain_length": len(chain)
-        }
+            "chain_length": len(chain),
+        },
     }
 
 
-async def reflexion(sampler: ClientSampler, query: str, context: str) -> Dict[str, Any]:
+async def reflexion(sampler: ClientSampler, query: str, context: str) -> dict[str, Any]:
     """
     Reflexion: Self-evaluation with memory-based learning
     """
@@ -496,7 +494,7 @@ async def reflexion(sampler: ClientSampler, query: str, context: str) -> Dict[st
 
 Context: {context}
 
-{f'Previous learnings: {chr(10).join(a["reflection"][:CONTENT.QUERY_LOG] + "..." for a in attempts)}' if attempts else 'First attempt - do your best.'}
+{f"Previous learnings: {chr(10).join(a["reflection"][: CONTENT.QUERY_LOG] + "..." for a in attempts)}" if attempts else "First attempt - do your best."}
 
 Provide solution:"""
 
@@ -520,12 +518,14 @@ Key lessons to remember for next attempt?"""
 
         reflection = await sampler.request_sample(reflect_prompt, temperature=0.6)
 
-        attempts.append({
-            "attempt_num": attempt_num + 1,
-            "solution": solution,
-            "evaluation": evaluation,
-            "reflection": reflection
-        })
+        attempts.append(
+            {
+                "attempt_num": attempt_num + 1,
+                "solution": solution,
+                "evaluation": evaluation,
+                "reflection": reflection,
+            }
+        )
 
         # Check if successful
         if any(word in evaluation.lower() for word in ["success", "works", "correct", "good"]):
@@ -538,12 +538,12 @@ Key lessons to remember for next attempt?"""
         "metadata": {
             "framework": "reflexion",
             "attempts": len(attempts),
-            "learnings": [a["reflection"][:CONTENT.QUERY_LOG] + "..." for a in attempts]
-        }
+            "learnings": [a["reflection"][: CONTENT.QUERY_LOG] + "..." for a in attempts],
+        },
     }
 
 
-async def self_refine(sampler: ClientSampler, query: str, context: str) -> Dict[str, Any]:
+async def self_refine(sampler: ClientSampler, query: str, context: str) -> dict[str, Any]:
     """
     Self-Refine: Iterative self-critique and improvement
     """
@@ -579,7 +579,10 @@ List specific improvements needed."""
         critiques.append(critique)
 
         # Check if no more improvements
-        if any(phrase in critique.lower() for phrase in ["no improvements", "looks good", "well done", "no issues"]):
+        if any(
+            phrase in critique.lower()
+            for phrase in ["no improvements", "looks good", "well done", "no issues"]
+        ):
             break
 
         # Refine
@@ -599,6 +602,6 @@ Provide improved version:"""
         "metadata": {
             "framework": "self_refine",
             "refinement_iterations": len(critiques),
-            "critiques": [c[:CONTENT.QUERY_LOG] + "..." for c in critiques]
-        }
+            "critiques": [c[: CONTENT.QUERY_LOG] + "..." for c in critiques],
+        },
     }

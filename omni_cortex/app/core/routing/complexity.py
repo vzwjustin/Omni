@@ -6,26 +6,22 @@ Used to determine routing strategy and model selection.
 """
 
 import re
-from typing import Optional, List
 
 
 class ComplexityEstimator:
     """Service for estimating task complexity."""
 
     def estimate(
-        self,
-        query: str,
-        code_snippet: Optional[str] = None,
-        file_list: Optional[List[str]] = None
+        self, query: str, code_snippet: str | None = None, file_list: list[str] | None = None
     ) -> float:
         """
         Estimate task complexity on 0-1 scale.
-        
+
         Args:
             query: The user's query
             code_snippet: Optional code context
             file_list: Optional list of files involved
-            
+
         Returns:
             Float between 0.0 and 1.0 representing complexity
         """
@@ -40,7 +36,7 @@ class ComplexityEstimator:
 
         # Factor 2: Code context size
         if code_snippet:
-            lines = code_snippet.count('\n') + 1
+            lines = code_snippet.count("\n") + 1
             if lines > 50:
                 complexity += 0.1
             if lines > 200:
@@ -52,11 +48,17 @@ class ComplexityEstimator:
 
         # Factor 4: Keyword indicators
         indicators = [
-            r"complex", r"difficult", r"tricky", 
-            r"interdependent", r"legacy", r"distributed",
-            r"architecture", r"refactor", r"rewrite"
+            r"complex",
+            r"difficult",
+            r"tricky",
+            r"interdependent",
+            r"legacy",
+            r"distributed",
+            r"architecture",
+            r"refactor",
+            r"rewrite",
         ]
-        
+
         for ind in indicators:
             if re.search(ind, query, re.IGNORECASE):
                 complexity += 0.05
