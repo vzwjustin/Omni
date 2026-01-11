@@ -384,7 +384,8 @@ Focus on ACTIONABLE findings. Skip obvious or nitpick issues.
             prompt_parts.append("IMPORTANT: Only report findings for files in the above list.\n")
             for path, content in file_contents.items():
                 # Truncate large files but keep enough for analysis
-                truncated = content[:8000] if len(content) > 8000 else content
+                # 15000 chars (~4k tokens) per file - enough for most files while staying under limits
+                truncated = content[:15000] if len(content) > 15000 else content
                 prompt_parts.append(f"\n### {path}\n```\n{truncated}\n```\n")
         else:
             prompt_parts.append("\n## NO FILES PROVIDED\nNo files were provided for analysis. Return empty findings list.\n")
