@@ -3,6 +3,8 @@ Multi-Collection Manager for Specialized Retrieval
 
 Manages multiple Chroma collections for different content types,
 enabling precise retrieval based on context.
+
+All search operations are protected by circuit breakers for fault tolerance.
 """
 
 import os
@@ -13,8 +15,14 @@ import structlog
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
 
+from .core.context.circuit_breaker import get_circuit_breaker
 from .core.correlation import get_correlation_id
-from .core.errors import CollectionNotFoundError, EmbeddingError, RAGError
+from .core.errors import (
+    CircuitBreakerOpenError,
+    CollectionNotFoundError,
+    EmbeddingError,
+    RAGError,
+)
 from .core.settings import get_settings
 
 logger = structlog.get_logger("collection-manager")
@@ -178,6 +186,7 @@ class CollectionManager:
                 continue
 
             try:
+                # ChromaDB search (circuit breaker protection at handler level)
                 if filter_dict:
                     results = collection.similarity_search(query, k=k, filter=filter_dict)
                 else:

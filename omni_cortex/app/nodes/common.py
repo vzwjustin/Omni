@@ -3,6 +3,8 @@ Common Utilities for Reasoning Frameworks
 
 Shared components used across all framework nodes:
 - @quiet_star decorator: Forces internal thought prefix
+- @with_rate_limit decorator: Rate limiting for framework nodes
+- @with_circuit_breaker decorator: Circuit breaker for external calls
 - process_reward_model: PRM scoring for search algorithms
 - optimize_prompt: DSPy-style prompt optimization
 - LLM client wrappers
@@ -21,7 +23,13 @@ import structlog
 
 from ..core.constants import CONTENT
 from ..core.context_gateway import get_context_gateway
-from ..core.errors import LLMError, ProviderNotConfiguredError
+from ..core.errors import (
+    CircuitBreakerOpenError,
+    LLMError,
+    ProviderNotConfiguredError,
+    RateLimitError,
+)
+from ..core.rate_limiter import get_rate_limiter
 from ..core.settings import get_settings
 from ..nodes.langchain_tools import (
     call_langchain_tool,
@@ -118,6 +126,111 @@ def extract_quiet_thought(response: str) -> tuple[str, str]:
         return quiet_thought, actual_response
 
     return "", response
+
+
+# =============================================================================
+# Rate Limiting Decorator
+# =============================================================================
+
+
+def with_rate_limit(tool_name: str | None = None) -> Callable:
+    """
+    Rate limiting decorator for framework nodes and operations.
+
+    Checks rate limits before executing the wrapped function.
+    Uses tool_name for rate limit categorization (llm, search, memory, utility).
+
+    Usage:
+        @with_rate_limit("think_chain_of_thought")
+        async def chain_of_thought_node(state: GraphState) -> GraphState:
+            ...
+
+    Args:
+        tool_name: Name of the tool for rate limit tracking. If None, derives from function name.
+    """
+
+    def decorator(func: Callable) -> Callable:
+        @functools.wraps(func)
+        async def wrapper(state: GraphState, *args, **kwargs) -> GraphState:
+            # Determine tool name
+            effective_tool_name = tool_name or func.__name__.replace("_node", "")
+
+            # Check rate limit
+            rate_limiter = await get_rate_limiter()
+            allowed, error_msg = await rate_limiter.check_rate_limit(effective_tool_name)
+
+            if not allowed:
+                logger.warning(
+                    "rate_limit_blocked",
+                    tool=effective_tool_name,
+                    function=func.__name__,
+                    error=error_msg,
+                )
+                # Store error in state instead of raising (graceful degradation)
+                state["routing_error"] = error_msg
+                state["confidence_score"] = 0.0
+                return state
+
+            # Execute the wrapped function
+            result = await func(state, *args, **kwargs)
+            return result
+
+        return wrapper
+
+    return decorator
+
+
+# =============================================================================
+# Circuit Breaker Decorator
+# =============================================================================
+
+
+def with_circuit_breaker(operation_name: str, fallback_value: Any = None) -> Callable:
+    """
+    Circuit breaker decorator for external operations (LLM calls, embeddings, DB).
+
+    Protects against cascade failures by failing fast when operations are unhealthy.
+    Uses the circuit breaker from app/core/context/circuit_breaker.py.
+
+    Usage:
+        @with_circuit_breaker("openai_api", fallback_value="API unavailable")
+        async def call_openai(prompt: str) -> str:
+            ...
+
+    Args:
+        operation_name: Name of the operation for circuit breaker tracking
+        fallback_value: Value to return when circuit is open (if None, raises error)
+    """
+
+    def decorator(func: Callable) -> Callable:
+        @functools.wraps(func)
+        async def wrapper(*args, **kwargs):
+            from ..core.context.circuit_breaker import CircuitBreaker, get_circuit_breaker
+
+            breaker = get_circuit_breaker(operation_name)
+
+            try:
+                result = await breaker.call(func, *args, **kwargs)
+                return result
+            except CircuitBreakerOpenError as e:
+                logger.error(
+                    "circuit_breaker_open",
+                    operation=operation_name,
+                    function=func.__name__,
+                    error=str(e),
+                )
+                if fallback_value is not None:
+                    logger.info(
+                        "circuit_breaker_fallback",
+                        operation=operation_name,
+                        fallback=str(fallback_value)[:100],
+                    )
+                    return fallback_value
+                raise
+
+        return wrapper
+
+    return decorator
 
 
 # =============================================================================
@@ -473,6 +586,12 @@ def _estimate_tokens(text: str) -> int:
     return len(text) // 4
 
 
+@with_circuit_breaker("llm_deep_reasoning", fallback_value=("LLM service unavailable", 0))
+async def _invoke_deep_reasoner(client: Any, message: str) -> Any:
+    """Circuit-breaker protected LLM invocation for deep reasoning."""
+    return await asyncio.to_thread(client.invoke, message)
+
+
 async def call_deep_reasoner(
     prompt: str,
     state: GraphState,
@@ -484,6 +603,7 @@ async def call_deep_reasoner(
     Wrapper for deep reasoning model (Claude 4.5 Sonnet).
 
     Handles Quiet-STaR integration and token tracking.
+    Protected by circuit breaker for fault tolerance.
     """
     callback = state.get("working_memory", {}).get("langchain_callback") if state else None
     if callback and hasattr(callback, "on_llm_start"):
@@ -506,10 +626,13 @@ async def call_deep_reasoner(
         model_type="deep_reasoning", temperature=temperature, max_tokens=max_tokens
     )
 
-    # Make the LLM call
-    lc_response = await asyncio.to_thread(
-        client.invoke, prompt if not system else f"{system}\n\n{prompt}"
-    )
+    # Make the LLM call (circuit breaker protected)
+    message = prompt if not system else f"{system}\n\n{prompt}"
+    try:
+        lc_response = await _invoke_deep_reasoner(client, message)
+    except CircuitBreakerOpenError:
+        logger.error("deep_reasoner_circuit_open", prompt_preview=prompt[:100])
+        return "LLM service temporarily unavailable due to repeated failures", 0
     # Handle different response formats (Google AI returns list, others return string)
     content = lc_response.content if hasattr(lc_response, "content") else str(lc_response)
     if isinstance(content, list):
@@ -541,6 +664,12 @@ async def call_deep_reasoner(
     return text, tokens
 
 
+@with_circuit_breaker("llm_fast_synthesis", fallback_value=("LLM service unavailable", 0))
+async def _invoke_fast_synthesizer(client: Any, message: str) -> Any:
+    """Circuit-breaker protected LLM invocation for fast synthesis."""
+    return await asyncio.to_thread(client.invoke, message)
+
+
 async def call_fast_synthesizer(
     prompt: str,
     state: GraphState | None = None,
@@ -552,6 +681,7 @@ async def call_fast_synthesizer(
     Wrapper for fast synthesis model.
 
     Used for quick operations, thought generation, and synthesis.
+    Protected by circuit breaker for fault tolerance.
     """
     callback = None
     if state:
@@ -571,10 +701,13 @@ async def call_fast_synthesizer(
         model_type="fast_synthesis", temperature=temperature, max_tokens=max_tokens
     )
 
-    # Make the LLM call
-    lc_response = await asyncio.to_thread(
-        client.invoke, prompt if not system else f"{system}\n\n{prompt}"
-    )
+    # Make the LLM call (circuit breaker protected)
+    message = prompt if not system else f"{system}\n\n{prompt}"
+    try:
+        lc_response = await _invoke_fast_synthesizer(client, message)
+    except CircuitBreakerOpenError:
+        logger.error("fast_synthesizer_circuit_open", prompt_preview=prompt[:100])
+        return "LLM service temporarily unavailable due to repeated failures", 0
     # Handle different response formats (Google AI returns list, others return string)
     content = lc_response.content if hasattr(lc_response, "content") else str(lc_response)
     if isinstance(content, list):
