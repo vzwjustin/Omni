@@ -260,20 +260,45 @@ class AnalysisExecutor:
 
                 result_data = json.loads(response.text)
 
-            # Parse findings
+            # Parse findings and validate file paths against provided files
+            provided_paths = set(file_contents.keys()) if file_contents else set()
             findings = []
+            hallucinated_count = 0
+
             for f in result_data.get("findings", []):
+                file_path = f.get("file_path", "unknown")
+
+                # Validate: only accept findings for files we actually provided
+                if provided_paths and file_path not in provided_paths:
+                    # Check partial match (e.g., "app/core/router.py" vs "router.py")
+                    matched = any(file_path.endswith(p) or p.endswith(file_path) for p in provided_paths)
+                    if not matched:
+                        hallucinated_count += 1
+                        logger.warning(
+                            "hallucinated_file_path_filtered",
+                            reported_path=file_path,
+                            provided_paths=list(provided_paths)[:5],
+                        )
+                        continue  # Skip this finding - hallucinated path
+
                 findings.append(
                     AnalysisFinding(
                         severity=f.get("severity", "medium"),
                         category=f.get("category", "unknown"),
-                        file_path=f.get("file_path", "unknown"),
+                        file_path=file_path,
                         line_number=f.get("line_number"),
                         code_snippet=f.get("code_snippet", ""),
                         issue=f.get("issue", ""),
                         recommendation=f.get("recommendation", ""),
                         effort=f.get("effort", "medium"),
                     )
+                )
+
+            if hallucinated_count > 0:
+                logger.info(
+                    "hallucinated_findings_filtered",
+                    count=hallucinated_count,
+                    remaining=len(findings),
                 )
 
             execution_time = int((time.monotonic() - start_time) * 1000)
@@ -318,11 +343,13 @@ class AnalysisExecutor:
 {framework_instructions}
 
 ## INSTRUCTIONS
-1. Analyze the provided code thoroughly
-2. Identify SPECIFIC issues with exact file paths and line numbers
-3. For each issue, provide a concrete fix recommendation
-4. Prioritize by severity (critical > high > medium > low)
-5. Be specific - vague findings are not helpful
+1. Analyze ONLY the files provided below - do not invent or hallucinate file paths
+2. Use EXACT file paths from the "FILES TO ANALYZE" section headers
+3. Identify SPECIFIC issues with exact file paths and line numbers
+4. For each issue, provide a concrete fix recommendation
+5. Prioritize by severity (critical > high > medium > low)
+6. Be specific - vague findings are not helpful
+7. CRITICAL: If a file path is not in the provided files list, DO NOT report findings for it
 
 ## RESPONSE FORMAT
 Respond with a JSON object:
@@ -350,13 +377,17 @@ Focus on ACTIONABLE findings. Skip obvious or nitpick issues.
         if context:
             prompt_parts.append(f"\n## CONTEXT\n{context[: CONTENT.SNIPPET_MAX]}")
 
-        # Add file contents
+        # Add file contents with explicit path list
         if file_contents:
-            prompt_parts.append("\n## FILES TO ANALYZE\n")
+            file_list = list(file_contents.keys())
+            prompt_parts.append(f"\n## FILES TO ANALYZE\nValid file paths: {file_list}\n")
+            prompt_parts.append("IMPORTANT: Only report findings for files in the above list.\n")
             for path, content in file_contents.items():
                 # Truncate large files but keep enough for analysis
                 truncated = content[:8000] if len(content) > 8000 else content
                 prompt_parts.append(f"\n### {path}\n```\n{truncated}\n```\n")
+        else:
+            prompt_parts.append("\n## NO FILES PROVIDED\nNo files were provided for analysis. Return empty findings list.\n")
 
         return "".join(prompt_parts)
 
