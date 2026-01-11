@@ -9,6 +9,6 @@ pytest-asyncio==0.24.0
 pytest-cov==6.0.0
 
 # Code formatting and linting
-black==24.1.1
+black==24.3.0
 isort==5.13.2
 mypy==1.8.0
