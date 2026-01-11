@@ -15,10 +15,8 @@ import structlog
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
 
-from .core.context.circuit_breaker import get_circuit_breaker
 from .core.correlation import get_correlation_id
 from .core.errors import (
-    CircuitBreakerOpenError,
     CollectionNotFoundError,
     EmbeddingError,
     RAGError,

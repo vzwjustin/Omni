@@ -27,7 +27,6 @@ from ..core.errors import (
     CircuitBreakerOpenError,
     LLMError,
     ProviderNotConfiguredError,
-    RateLimitError,
 )
 from ..core.rate_limiter import get_rate_limiter
 from ..core.settings import get_settings
@@ -205,7 +204,7 @@ def with_circuit_breaker(operation_name: str, fallback_value: Any = None) -> Cal
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         async def wrapper(*args, **kwargs):
-            from ..core.context.circuit_breaker import CircuitBreaker, get_circuit_breaker
+            from ..core.context.circuit_breaker import get_circuit_breaker
 
             breaker = get_circuit_breaker(operation_name)
 
