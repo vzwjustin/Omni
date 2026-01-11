@@ -13,6 +13,7 @@ coverage>=7.4.0
 ruff>=0.4.0
 mypy>=1.10.0
 types-requests>=2.31.0
+black>=24.3.0  # Security: CVE-2024-21503 (ReDoS vulnerability fixed in 24.3.0)
 
 # Pre-commit
 pre-commit>=3.7.0
