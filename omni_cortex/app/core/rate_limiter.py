@@ -22,6 +22,8 @@ This separation allows:
 - Efficient async operations within the rate limiter (asyncio.Lock)
 """
 
+from __future__ import annotations
+
 import asyncio
 import threading
 import time

@@ -5,15 +5,14 @@ Verifies that API keys, tokens, and other sensitive data are properly
 redacted from logs and error messages.
 """
 
-import pytest
 from app.core.logging_utils import (
+    create_safe_error_details,
+    safe_repr,
     sanitize_api_keys,
+    sanitize_dict,
     sanitize_env_vars,
     sanitize_error,
-    sanitize_dict,
-    safe_repr,
     sanitize_log_record,
-    create_safe_error_details,
 )
 
 
@@ -318,7 +317,7 @@ class TestSanitizeDict:
             'pwd': 'pass1'
         }
         result = sanitize_dict(data)
-        for key in data.keys():
+        for key in data:
             assert '[REDACTED]' in result[key]
 
 

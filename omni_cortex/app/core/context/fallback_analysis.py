@@ -9,6 +9,8 @@ This system ensures graceful degradation while maintaining useful
 functionality even when AI services are down.
 """
 
+from __future__ import annotations
+
 import os
 import re
 from dataclasses import dataclass
@@ -262,7 +264,7 @@ class EnhancedFallbackAnalyzer:
 
         return "medium"
 
-    def _generate_execution_steps(self, task_type: str, query: str) -> list[str]:
+    def _generate_execution_steps(self, task_type: str, _query: str) -> list[str]:
         """Generate execution steps based on task type."""
         steps_map = {
             "debug": [
@@ -641,7 +643,7 @@ class ComponentFallbackMethods:
     @staticmethod
     def fallback_code_search(
         query: str,
-        workspace_path: str,
+        _workspace_path: str,
     ) -> tuple[list[Any], ComponentStatusInfo]:
         """
         Fallback code search using simple grep (if available).

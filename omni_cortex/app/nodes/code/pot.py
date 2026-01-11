@@ -279,7 +279,7 @@ def _validate_code(code: str) -> tuple[bool, str]:
     return True, ""
 
 
-async def _safe_execute(code: str, timeout: float = 5.0) -> dict[str, Any]:
+async def _safe_execute(code: str, timeout: float = 5.0) -> dict[str, Any]:  # noqa: PLR0912
     """
     Run Python code in a sandboxed environment.
 

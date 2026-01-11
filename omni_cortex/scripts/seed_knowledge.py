@@ -4,7 +4,7 @@ Knowledge Seeder for Omni-Cortex
 ================================
 
 Fetches and ingests "Foundation Knowledge" from external sources (URLs, llms.txt, local files)
-into the 'learnings' collection. This allows the system to start with a baseline of 
+into the 'learnings' collection. This allows the system to start with a baseline of
 best practices rather than an empty memory.
 
 Usage:
@@ -14,12 +14,11 @@ Usage:
 
 import argparse
 import asyncio
-import aiohttp
 import logging
-import sys
 import os
-from datetime import datetime
-from typing import List, Dict, Optional
+import sys
+
+import aiohttp
 
 # Add app to path
 sys.path.append(os.getcwd())
@@ -37,19 +36,18 @@ logger = logging.getLogger("seed_knowledge")
 async def fetch_url(url: str) -> str:
     """Fetch content from a URL."""
     logger.info(f"Fetching {url}...")
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url) as response:
-            if response.status != 200:
-                raise ValueError(f"Failed to fetch URL: {response.status}")
-            return await response.text()
+    async with aiohttp.ClientSession() as session, session.get(url) as response:
+        if response.status != 200:
+            raise ValueError(f"Failed to fetch URL: {response.status}")
+        return await response.text()
 
 def read_file(path: str) -> str:
     """Read content from a local file."""
     logger.info(f"Reading {path}...")
-    with open(path, 'r', encoding='utf-8') as f:
+    with open(path, encoding='utf-8') as f:
         return f.read()
 
-def parse_sections(text: str) -> List[Dict[str, str]]:
+def parse_sections(text: str) -> list[dict[str, str]]:
     """
     Parse content into logical sections.
     Assumes Markdown structure with headers.
@@ -58,7 +56,7 @@ def parse_sections(text: str) -> List[Dict[str, str]]:
     sections = []
     current_title = "General"
     current_content = []
-    
+
     lines = text.splitlines()
     for line in lines:
         if line.strip().startswith("#"):
@@ -68,20 +66,20 @@ def parse_sections(text: str) -> List[Dict[str, str]]:
                     "title": current_title,
                     "content": "\n".join(current_content).strip()
                 })
-            
+
             # Clean header (remove # and trim)
             current_title = line.lstrip("#").strip()
             current_content = []
         else:
             current_content.append(line)
-            
+
     # Add last section
     if current_content:
         sections.append({
             "title": current_title,
             "content": "\n".join(current_content).strip()
         })
-        
+
     return sections
 
 async def seed_knowledge(source: str, is_url: bool = True):
@@ -92,7 +90,7 @@ async def seed_knowledge(source: str, is_url: bool = True):
             content = await fetch_url(source)
         else:
             content = read_file(source)
-            
+
         if not content:
             logger.error("No content retrieved.")
             return
@@ -100,21 +98,21 @@ async def seed_knowledge(source: str, is_url: bool = True):
         # 2. Parse into Chunks
         sections = parse_sections(content)
         logger.info(f"Parsed {len(sections)} sections.")
-        
+
         # 3. Ingest into Learnings
         cm = get_collection_manager()
         count = 0
-        
+
         for section in sections:
             # Skip empty or too short sections
             if len(section["content"]) < 50:
                 continue
-                
+
             # We treat the title as the "query" (what topic is this about?)
             # and the content as the "solution" (the best practice).
             topic = section["title"]
             best_practice = section["content"]
-            
+
             success = cm.add_learning(
                 query=f"Best practices for {topic}",
                 answer=best_practice,
@@ -122,15 +120,15 @@ async def seed_knowledge(source: str, is_url: bool = True):
                 success_rating=1.0, # Trusted source
                 problem_type="best_practice"
             )
-            
+
             if success:
                 count += 1
                 logger.info(f"Seeded: {topic}")
             else:
                 logger.warning(f"Failed to seed: {topic}")
-                
+
         logger.info(f"✅ Successfully seeded {count} foundation knowledges!")
-        
+
     except Exception as e:
         logger.error(f"Seeding failed: {str(e)}")
 
@@ -140,9 +138,9 @@ def main():
     group.add_argument("--url", help="URL to fetch (e.g. llms.txt)")
     group.add_argument("--file", help="Local file path")
     group.add_argument("--auto", action="store_true", help="Automatically fetch curated best practices (FastAPI, Pydantic, etc.)")
-    
+
     args = parser.parse_args()
-    
+
     # Check for API keys before proceeding
     api_key = os.getenv("OPENAI_API_KEY") or os.getenv("OPENROUTER_API_KEY")
     if not api_key:
@@ -152,7 +150,7 @@ def main():
         return
 
     # Curated list of high-quality documentation (Strictly llms.txt standard)
-    CURATED_SOURCES = [
+    curated_sources = [
         "https://docs.anthropic.com/llms.txt",                    # Anthropic Best Practices
         "https://docs.docker.com/llms.txt",                       # Docker/DevOps
         "https://python.langchain.com/llms.txt",                  # LangChain Python
@@ -170,8 +168,8 @@ def main():
     ]
 
     if args.auto:
-        logger.info(f"Starting auto-seeding from {len(CURATED_SOURCES)} sources...")
-        for url in CURATED_SOURCES:
+        logger.info(f"Starting auto-seeding from {len(curated_sources)} sources...")
+        for url in curated_sources:
             asyncio.run(seed_knowledge(url, is_url=True))
     elif args.url:
         asyncio.run(seed_knowledge(args.url, is_url=True))

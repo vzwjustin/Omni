@@ -4,6 +4,8 @@ Token Budget Integration for Context Gateway
 Integrates TokenBudgetManager and GeminiContentRanker into the context preparation flow.
 """
 
+from __future__ import annotations
+
 from typing import Any
 
 import structlog

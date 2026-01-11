@@ -4,6 +4,8 @@ Vector Store Management for Omni-Cortex
 Handles Chroma initialization, document ingestion, and collection management.
 """
 
+from __future__ import annotations
+
 import os
 import threading
 from typing import Any

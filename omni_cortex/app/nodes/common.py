@@ -11,6 +11,8 @@ Shared components used across all framework nodes:
 - ContextGateway integration for Gemini preprocessing
 """
 
+from __future__ import annotations
+
 import asyncio
 import difflib
 import functools

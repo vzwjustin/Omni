@@ -18,6 +18,8 @@ Usage:
     compressed_prompt = compress_prompt(prompt_text, rate=0.5)
 """
 
+from __future__ import annotations
+
 import json
 from typing import Any
 

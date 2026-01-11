@@ -5,6 +5,8 @@ Gemini-powered task analysis for intelligent routing.
 Offloads thinking from Claude to cheaper Gemini.
 """
 
+from __future__ import annotations
+
 from typing import Any
 
 import structlog
@@ -219,7 +221,7 @@ async def get_relevant_learnings(query: str, category: str = "") -> str:
         return ""
 
 
-async def enrich_evidence_from_chroma(
+async def enrich_evidence_from_chroma(  # noqa: C901, PLR0912
     query: str, category: str, framework_chain: list[str], task_type: str
 ) -> list[Any]:
     """

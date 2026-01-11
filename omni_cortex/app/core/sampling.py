@@ -16,6 +16,8 @@ Configuration:
 When both are false, template mode is used (server returns prompts, client executes).
 """
 
+from __future__ import annotations
+
 import asyncio
 import re
 import time
@@ -64,12 +66,12 @@ class ClientSampler:
         self.context = context
         self._sampling_supported = None  # Cached capability check
 
-    async def request_sample(
+    async def request_sample(  # noqa: C901, PLR0912
         self,
         prompt: str,
-        temperature: float = 0.7,
+        _temperature: float = 0.7,
         max_tokens: int = 4000,
-        system_prompt: str | None = None,
+        _system_prompt: str | None = None,
     ) -> str:
         """
         Request a completion from the MCP client.

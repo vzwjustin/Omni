@@ -20,12 +20,12 @@ logging.basicConfig(
     level=logging.INFO, stream=sys.stderr, format="%(levelname)s:%(name)s:%(message)s"
 )
 
-# Import correlation ID utilities
-from app.core.correlation import clear_correlation_id, set_correlation_id
-from app.core.logging import add_correlation_id
+# Import correlation ID utilities (after logging.basicConfig for proper stderr handling)
+from app.core.correlation import clear_correlation_id, set_correlation_id  # noqa: E402
+from app.core.logging import add_correlation_id  # noqa: E402
 
 # Import settings early to determine logging mode
-from app.core.settings import get_settings
+from app.core.settings import get_settings  # noqa: E402
 
 _settings = get_settings()
 
@@ -53,27 +53,28 @@ structlog.configure(
     cache_logger_on_first_use=True,
 )
 
-import contextlib
+# Remaining imports after logging/structlog configuration  # noqa: E402
+import contextlib  # noqa: E402
 
-from mcp.server import Server
-from mcp.server.stdio import stdio_server
-from mcp.types import TextContent, Tool
+from mcp.server import Server  # noqa: E402
+from mcp.server.stdio import stdio_server  # noqa: E402
+from mcp.types import TextContent, Tool  # noqa: E402
 
-from app.collection_manager import get_collection_manager
+from app.collection_manager import get_collection_manager  # noqa: E402
 
 # Import MCP sampling and settings
-from app.core.sampling import ClientSampler
-from app.core.settings import get_settings
-from app.core.vibe_dictionary import VIBE_DICTIONARY
+from app.core.sampling import ClientSampler  # noqa: E402
+from app.core.settings import get_settings  # noqa: E402
+from app.core.vibe_dictionary import VIBE_DICTIONARY  # noqa: E402
 
 # Import from graph for orchestration
-from app.graph import FRAMEWORK_NODES, router
+from app.graph import FRAMEWORK_NODES, router  # noqa: E402
 
 # Import framework prompts
-from .framework_prompts import FRAMEWORKS
+from .framework_prompts import FRAMEWORKS  # noqa: E402
 
 # Import handlers
-from .handlers import (
+from .handlers import (  # noqa: E402
     handle_compress_content,
     handle_compress_context,
     handle_compress_prompt,
@@ -110,7 +111,7 @@ LEAN_MODE = get_settings().lean_mode
 logger = structlog.get_logger("omni-cortex")
 
 
-def create_server() -> Server:
+def create_server() -> Server:  # noqa: C901, PLR0915
     """Create the MCP server with all tools."""
     server = Server("omni-cortex")
 
@@ -586,7 +587,7 @@ def create_server() -> Server:
         return tools
 
     @server.call_tool()
-    async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
+    async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:  # noqa: C901, PLR0911, PLR0912
         # Set a new correlation ID for this request
         import uuid
 

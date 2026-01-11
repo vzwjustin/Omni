@@ -13,50 +13,50 @@ Tests all error classes defined in app/core/errors.py including:
 import pytest
 
 from app.core.errors import (
-    # Base
-    OmniCortexError,
-    # Routing
-    RoutingError,
-    FrameworkNotFoundError,
-    CategoryNotFoundError,
-    # Execution
-    ExecutionError,
-    SandboxSecurityError,
-    SecurityError,  # alias
-    SandboxTimeoutError,
-    # Memory
-    OmniMemoryError,
-    MemoryError,  # alias (shadows built-in)
-    ThreadNotFoundError,
-    # RAG
-    RAGError,
-    CollectionNotFoundError,
-    EmbeddingError,
-    ContextRetrievalError,
-    # LLM
-    LLMError,
-    ProviderNotConfiguredError,
-    RateLimitError,
-    SamplerTimeout,
-    SamplerCircuitOpen,
-    # Context Gateway
-    ContextCacheError,
-    CacheInvalidationError,
     CacheCorruptionError,
-    StreamingError,
-    StreamingCancellationError,
-    ProgressEventError,
-    MultiRepoError,
-    RepositoryAccessError,
-    CrossRepoDependencyError,
+    CacheInvalidationError,
+    CategoryNotFoundError,
     CircuitBreakerError,
     CircuitBreakerOpenError,
+    CollectionNotFoundError,
+    ContentOptimizationError,
+    # Context Gateway
+    ContextCacheError,
+    ContextRetrievalError,
+    CrossRepoDependencyError,
+    DocumentationGroundingError,
+    EmbeddingError,
+    # Execution
+    ExecutionError,
+    FrameworkNotFoundError,
+    # LLM
+    LLMError,
+    MemoryError,  # alias (shadows built-in)
+    MetricsCollectionError,
+    MultiRepoError,
+    # Base
+    OmniCortexError,
+    # Memory
+    OmniMemoryError,
+    ProgressEventError,
+    ProviderNotConfiguredError,
+    # RAG
+    RAGError,
+    RateLimitError,
+    RepositoryAccessError,
+    # Routing
+    RoutingError,
+    SamplerCircuitOpen,
+    SamplerTimeout,
+    SandboxSecurityError,
+    SandboxTimeoutError,
+    SecurityError,  # alias
+    SourceAttributionError,
+    StreamingCancellationError,
+    StreamingError,
+    ThreadNotFoundError,
     TokenBudgetError,
     TokenBudgetExceededError,
-    ContentOptimizationError,
-    DocumentationGroundingError,
-    SourceAttributionError,
-    MetricsCollectionError,
 )
 
 
@@ -560,8 +560,8 @@ class TestExceptionChaining:
         try:
             try:
                 raise ValueError("Original")
-            except ValueError:
-                raise OmniCortexError("Wrapped")
+            except ValueError as err:
+                raise OmniCortexError("Wrapped") from err
         except OmniCortexError as e:
             assert e.__context__ is not None
             assert isinstance(e.__context__, ValueError)
@@ -819,18 +819,15 @@ class TestErrorUsagePatterns:
                 return self
 
             def __exit__(self, exc_type, exc_val, exc_tb):
-                if exc_type is not None and issubclass(exc_type, RoutingError):
-                    return True  # Suppress routing errors
-                return False
+                return exc_type is not None and issubclass(exc_type, RoutingError)
 
         # Routing errors suppressed
         with ErrorContext():
             raise FrameworkNotFoundError("Suppressed")
 
         # Other errors propagate
-        with pytest.raises(LLMError):
-            with ErrorContext():
-                raise LLMError("Not suppressed")
+        with pytest.raises(LLMError), ErrorContext():
+            raise LLMError("Not suppressed")
 
     def test_reraise_with_context(self):
         """Test reraising errors with additional context."""

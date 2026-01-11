@@ -12,66 +12,65 @@ Tests for:
 - Tool helpers
 """
 
-import asyncio
-import pytest
 import warnings
-from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
-from typing import Dict, Any
+from unittest.mock import AsyncMock, MagicMock, patch
 
-# Import the module under test
-from app.nodes.common import (
-    # Decorators
-    quiet_star,
-    extract_quiet_thought,
-    # PRM
-    process_reward_model,
-    batch_score_steps,
-    # DSPy optimization
-    optimize_prompt,
-    # LLM clients
-    _get_llm_client,
-    _estimate_tokens,
-    _create_google_client,
-    _create_anthropic_client,
-    _create_openai_client,
-    _create_openrouter_client,
-    PROVIDER_FACTORIES,
-    call_deep_reasoner,
-    call_fast_synthesizer,
-    # Utility functions
-    add_reasoning_step,
-    extract_code_blocks,
-    format_code_context,
-    get_rag_context,
-    generate_code_diff,
-    prepare_context_with_gemini,
-    # Tool helpers
-    run_tool,
-    list_tools_for_framework,
-    tool_descriptions,
-    # Constants
-    DEFAULT_DEEP_REASONING_TOKENS,
-    DEFAULT_FAST_SYNTHESIS_TOKENS,
-    DEFAULT_DEEP_REASONING_TEMP,
-    DEFAULT_FAST_SYNTHESIS_TEMP,
-    DEFAULT_PRM_TOKENS,
-    DEFAULT_PRM_TEMP,
-    DEFAULT_OPTIMIZATION_TOKENS,
-    DEFAULT_OPTIMIZATION_TEMP,
-    TOKENS_SCORE_PARSING,
-    TOKENS_SHORT_RESPONSE,
-    TOKENS_QUESTION,
-    TOKENS_ANALYSIS,
-    TOKENS_DETAILED,
-    TOKENS_COMPREHENSIVE,
-    TOKENS_EXTENDED,
-    TOKENS_FULL,
-    CODE_BLOCK_PATTERN,
-)
-from app.state import GraphState, create_initial_state
+import pytest
+
 from app.core.errors import LLMError, ProviderNotConfiguredError
 from app.core.settings import reset_settings
 
+# Import the module under test
+from app.nodes.common import (
+    CODE_BLOCK_PATTERN,
+    DEFAULT_DEEP_REASONING_TEMP,
+    # Constants
+    DEFAULT_DEEP_REASONING_TOKENS,
+    DEFAULT_FAST_SYNTHESIS_TEMP,
+    DEFAULT_FAST_SYNTHESIS_TOKENS,
+    DEFAULT_OPTIMIZATION_TEMP,
+    DEFAULT_OPTIMIZATION_TOKENS,
+    DEFAULT_PRM_TEMP,
+    DEFAULT_PRM_TOKENS,
+    PROVIDER_FACTORIES,
+    TOKENS_ANALYSIS,
+    TOKENS_COMPREHENSIVE,
+    TOKENS_DETAILED,
+    TOKENS_EXTENDED,
+    TOKENS_FULL,
+    TOKENS_QUESTION,
+    TOKENS_SCORE_PARSING,
+    TOKENS_SHORT_RESPONSE,
+    _create_anthropic_client,
+    _create_google_client,
+    _create_openai_client,
+    _create_openrouter_client,
+    _estimate_tokens,
+    # LLM clients
+    _get_llm_client,
+    # Utility functions
+    add_reasoning_step,
+    batch_score_steps,
+    call_deep_reasoner,
+    call_fast_synthesizer,
+    extract_code_blocks,
+    extract_quiet_thought,
+    format_code_context,
+    generate_code_diff,
+    get_rag_context,
+    list_tools_for_framework,
+    # DSPy optimization
+    optimize_prompt,
+    prepare_context_with_gemini,
+    # PRM
+    process_reward_model,
+    # Decorators
+    quiet_star,
+    # Tool helpers
+    run_tool,
+    tool_descriptions,
+)
+from app.state import GraphState, create_initial_state
 
 # =============================================================================
 # Fixtures
@@ -176,7 +175,7 @@ class TestQuietStarDecorator:
     """Tests for the @quiet_star decorator."""
 
     @pytest.mark.asyncio
-    async def test_quiet_star_enables_flag(self, basic_state):
+    async def test_quiet_star_enables_flag(self, _basic_state):
         """Test that quiet_star sets the enabled flag in working_memory."""
         @quiet_star
         async def test_node(state: GraphState) -> GraphState:
@@ -187,7 +186,7 @@ class TestQuietStarDecorator:
         assert result["working_memory"]["quiet_star_enabled"] is True
 
     @pytest.mark.asyncio
-    async def test_quiet_star_adds_instruction(self, basic_state):
+    async def test_quiet_star_adds_instruction(self, _basic_state):
         """Test that quiet_star adds the quiet instruction."""
         @quiet_star
         async def test_node(state: GraphState) -> GraphState:
@@ -228,7 +227,7 @@ class TestQuietStarDecorator:
         assert result["working_memory"]["quiet_star_enabled"] is True
 
     @pytest.mark.asyncio
-    async def test_quiet_star_returns_function_result(self, basic_state):
+    async def test_quiet_star_returns_function_result(self, _basic_state):
         """Test that quiet_star returns the wrapped function's result."""
         @quiet_star
         async def test_node(state: GraphState) -> GraphState:
@@ -239,7 +238,7 @@ class TestQuietStarDecorator:
         assert result["final_answer"] == "test answer"
 
     @pytest.mark.asyncio
-    async def test_quiet_star_preserves_function_name(self, basic_state):
+    async def test_quiet_star_preserves_function_name(self, _basic_state):
         """Test that quiet_star preserves the wrapped function's name."""
         @quiet_star
         async def my_custom_node(state: GraphState) -> GraphState:
@@ -327,7 +326,7 @@ class TestProcessRewardModel:
     """Tests for the process_reward_model function."""
 
     @pytest.mark.asyncio
-    async def test_prm_disabled_returns_default(self, mock_settings):
+    async def test_prm_disabled_returns_default(self, _mock_settings):
         """Test that disabled PRM returns default score."""
         mock_settings.enable_prm_scoring = False
 
@@ -340,7 +339,7 @@ class TestProcessRewardModel:
         assert score == 0.5
 
     @pytest.mark.asyncio
-    async def test_prm_parses_valid_score(self, mock_settings):
+    async def test_prm_parses_valid_score(self, _mock_settings):
         """Test PRM parses a valid score from response."""
         with patch("app.nodes.common.call_fast_synthesizer") as mock_call:
             mock_call.return_value = ("0.85", 10)
@@ -354,7 +353,7 @@ class TestProcessRewardModel:
             assert score == 0.85
 
     @pytest.mark.asyncio
-    async def test_prm_clamps_score_to_range(self, mock_settings):
+    async def test_prm_clamps_score_to_range(self, _mock_settings):
         """Test PRM clamps scores to 0.0-1.0 range."""
         with patch("app.nodes.common.call_fast_synthesizer") as mock_call:
             # Test score > 1.0
@@ -368,7 +367,7 @@ class TestProcessRewardModel:
             assert score == 0.0
 
     @pytest.mark.asyncio
-    async def test_prm_handles_text_with_score(self, mock_settings):
+    async def test_prm_handles_text_with_score(self, _mock_settings):
         """Test PRM extracts score from text response."""
         with patch("app.nodes.common.call_fast_synthesizer") as mock_call:
             mock_call.return_value = ("I rate this step 0.75 because it's good", 10)
@@ -378,7 +377,7 @@ class TestProcessRewardModel:
             assert score == 0.75
 
     @pytest.mark.asyncio
-    async def test_prm_handles_no_number(self, mock_settings):
+    async def test_prm_handles_no_number(self, _mock_settings):
         """Test PRM returns default when no number in response."""
         with patch("app.nodes.common.call_fast_synthesizer") as mock_call:
             mock_call.return_value = ("This is a good step", 10)
@@ -388,7 +387,7 @@ class TestProcessRewardModel:
             assert score == 0.5
 
     @pytest.mark.asyncio
-    async def test_prm_handles_llm_error(self, mock_settings):
+    async def test_prm_handles_llm_error(self, _mock_settings):
         """Test PRM returns default on LLM error."""
         with patch("app.nodes.common.call_fast_synthesizer") as mock_call:
             mock_call.side_effect = LLMError("API error")
@@ -398,7 +397,7 @@ class TestProcessRewardModel:
             assert score == 0.5
 
     @pytest.mark.asyncio
-    async def test_prm_handles_provider_error(self, mock_settings):
+    async def test_prm_handles_provider_error(self, _mock_settings):
         """Test PRM returns default on provider error."""
         with patch("app.nodes.common.call_fast_synthesizer") as mock_call:
             mock_call.side_effect = ProviderNotConfiguredError("No provider")
@@ -408,7 +407,7 @@ class TestProcessRewardModel:
             assert score == 0.5
 
     @pytest.mark.asyncio
-    async def test_prm_with_previous_steps(self, mock_settings):
+    async def test_prm_with_previous_steps(self, _mock_settings):
         """Test PRM includes previous steps in prompt."""
         with patch("app.nodes.common.call_fast_synthesizer") as mock_call:
             mock_call.return_value = ("0.8", 10)
@@ -427,7 +426,7 @@ class TestProcessRewardModel:
             assert "Step 2: Step 2" in prompt
 
     @pytest.mark.asyncio
-    async def test_prm_raises_on_unknown_error(self, mock_settings):
+    async def test_prm_raises_on_unknown_error(self, _mock_settings):
         """Test PRM wraps unknown errors in LLMError."""
         with patch("app.nodes.common.call_fast_synthesizer") as mock_call:
             mock_call.side_effect = RuntimeError("Unknown error")
@@ -442,7 +441,7 @@ class TestBatchScoreSteps:
     """Tests for the batch_score_steps function."""
 
     @pytest.mark.asyncio
-    async def test_batch_score_parallel_execution(self, mock_settings):
+    async def test_batch_score_parallel_execution(self, _mock_settings):
         """Test that batch scoring runs in parallel."""
         with patch("app.nodes.common.process_reward_model") as mock_prm:
             mock_prm.return_value = 0.8
@@ -463,7 +462,7 @@ class TestOptimizePrompt:
     """Tests for the optimize_prompt function."""
 
     @pytest.mark.asyncio
-    async def test_optimization_disabled_returns_base(self, mock_settings):
+    async def test_optimization_disabled_returns_base(self, _mock_settings):
         """Test that disabled optimization returns base prompt."""
         mock_settings.enable_dspy_optimization = False
 
@@ -473,7 +472,7 @@ class TestOptimizePrompt:
         assert result == base_prompt
 
     @pytest.mark.asyncio
-    async def test_optimization_returns_optimized_prompt(self, mock_settings):
+    async def test_optimization_returns_optimized_prompt(self, _mock_settings):
         """Test that optimization returns improved prompt."""
         with patch("app.nodes.common.call_fast_synthesizer") as mock_call:
             mock_call.return_value = ("Improved prompt with better instructions.", 100)
@@ -486,7 +485,7 @@ class TestOptimizePrompt:
             assert result == "Improved prompt with better instructions."
 
     @pytest.mark.asyncio
-    async def test_optimization_with_examples(self, mock_settings):
+    async def test_optimization_with_examples(self, _mock_settings):
         """Test optimization includes examples in prompt."""
         with patch("app.nodes.common.call_fast_synthesizer") as mock_call:
             mock_call.return_value = ("Optimized with examples", 100)
@@ -509,7 +508,7 @@ class TestOptimizePrompt:
             assert "add(1, 2)" in prompt
 
     @pytest.mark.asyncio
-    async def test_optimization_handles_llm_error(self, mock_settings):
+    async def test_optimization_handles_llm_error(self, _mock_settings):
         """Test optimization falls back to base on LLM error."""
         with patch("app.nodes.common.call_fast_synthesizer") as mock_call:
             mock_call.side_effect = LLMError("API error")
@@ -520,7 +519,7 @@ class TestOptimizePrompt:
             assert result == base_prompt
 
     @pytest.mark.asyncio
-    async def test_optimization_handles_generic_error(self, mock_settings):
+    async def test_optimization_handles_generic_error(self, _mock_settings):
         """Test optimization falls back to base on generic error."""
         with patch("app.nodes.common.call_fast_synthesizer") as mock_call:
             mock_call.side_effect = Exception("Unknown error")
@@ -545,7 +544,7 @@ class TestLLMClientCreation:
         assert "openai" in PROVIDER_FACTORIES
         assert "openrouter" in PROVIDER_FACTORIES
 
-    def test_create_google_client_without_key(self, mock_settings):
+    def test_create_google_client_without_key(self, _mock_settings):
         """Test Google client creation fails without API key."""
         mock_settings.google_api_key = None
 
@@ -554,7 +553,7 @@ class TestLLMClientCreation:
 
         assert "GOOGLE_API_KEY" in str(exc_info.value)
 
-    def test_create_anthropic_client_without_key(self, mock_settings):
+    def test_create_anthropic_client_without_key(self, _mock_settings):
         """Test Anthropic client creation fails without API key."""
         mock_settings.anthropic_api_key = None
 
@@ -563,7 +562,7 @@ class TestLLMClientCreation:
 
         assert "ANTHROPIC_API_KEY" in str(exc_info.value)
 
-    def test_create_openai_client_without_key(self, mock_settings):
+    def test_create_openai_client_without_key(self, _mock_settings):
         """Test OpenAI client creation fails without API key."""
         mock_settings.openai_api_key = None
 
@@ -572,7 +571,7 @@ class TestLLMClientCreation:
 
         assert "OPENAI_API_KEY" in str(exc_info.value)
 
-    def test_create_openrouter_client_without_key(self, mock_settings):
+    def test_create_openrouter_client_without_key(self, _mock_settings):
         """Test OpenRouter client creation fails without API key."""
         mock_settings.openrouter_api_key = None
 
@@ -581,7 +580,7 @@ class TestLLMClientCreation:
 
         assert "OPENROUTER_API_KEY" in str(exc_info.value)
 
-    def test_get_llm_client_pass_through_mode(self, mock_settings):
+    def test_get_llm_client_pass_through_mode(self, _mock_settings):
         """Test that pass-through mode raises error."""
         mock_settings.llm_provider = "pass-through"
 
@@ -590,7 +589,7 @@ class TestLLMClientCreation:
 
         assert "Pass-through mode" in str(exc_info.value)
 
-    def test_get_llm_client_no_provider(self, mock_settings):
+    def test_get_llm_client_no_provider(self, _mock_settings):
         """Test error when no provider is configured."""
         mock_settings.llm_provider = "auto"
         mock_settings.google_api_key = None
@@ -603,7 +602,7 @@ class TestLLMClientCreation:
 
         assert "No LLM provider configured" in str(exc_info.value)
 
-    def test_get_llm_client_auto_detection_google(self, mock_settings):
+    def test_get_llm_client_auto_detection_google(self, _mock_settings):
         """Test auto-detection with Google API key."""
         mock_settings.llm_provider = "auto"
         mock_settings.anthropic_api_key = None
@@ -617,7 +616,7 @@ class TestLLMClientCreation:
 
             mock_create.assert_called_once()
 
-    def test_get_llm_client_strips_provider_prefix(self, mock_settings):
+    def test_get_llm_client_strips_provider_prefix(self, _mock_settings):
         """Test that provider prefix is stripped from model name."""
         mock_settings.llm_provider = "google"
         mock_settings.deep_reasoning_model = "anthropic/claude-3-opus"
@@ -631,7 +630,7 @@ class TestLLMClientCreation:
             call_args = mock_create.call_args
             assert call_args[0][1] == "claude-3-opus"
 
-    def test_get_llm_client_preserves_prefix_for_openrouter(self, mock_settings):
+    def test_get_llm_client_preserves_prefix_for_openrouter(self, _mock_settings):
         """Test that OpenRouter keeps the full model path."""
         mock_settings.llm_provider = "openrouter"
         mock_settings.deep_reasoning_model = "anthropic/claude-3-opus"
@@ -684,7 +683,7 @@ class TestCallDeepReasoner:
     """Tests for the call_deep_reasoner function."""
 
     @pytest.mark.asyncio
-    async def test_deep_reasoner_returns_response_and_tokens(self, basic_state, mock_settings):
+    async def test_deep_reasoner_returns_response_and_tokens(self, basic_state, _mock_settings):
         """Test that deep_reasoner returns response and token count."""
         with patch("app.nodes.common._get_llm_client") as mock_get_client:
             mock_client = MagicMock()
@@ -702,7 +701,7 @@ class TestCallDeepReasoner:
             assert tokens > 0
 
     @pytest.mark.asyncio
-    async def test_deep_reasoner_with_system_prompt(self, basic_state, mock_settings):
+    async def test_deep_reasoner_with_system_prompt(self, basic_state, _mock_settings):
         """Test that system prompt is included."""
         with patch("app.nodes.common._get_llm_client") as mock_get_client:
             mock_client = MagicMock()
@@ -723,7 +722,7 @@ class TestCallDeepReasoner:
             assert "User prompt" in combined_prompt
 
     @pytest.mark.asyncio
-    async def test_deep_reasoner_with_quiet_star(self, state_with_quiet_star, mock_settings):
+    async def test_deep_reasoner_with_quiet_star(self, state_with_quiet_star, _mock_settings):
         """Test that quiet_star instruction is prepended."""
         with patch("app.nodes.common._get_llm_client") as mock_get_client:
             mock_client = MagicMock()
@@ -742,7 +741,7 @@ class TestCallDeepReasoner:
             assert "<quiet_thought>" in combined_prompt
 
     @pytest.mark.asyncio
-    async def test_deep_reasoner_extracts_quiet_thought(self, basic_state, mock_settings):
+    async def test_deep_reasoner_extracts_quiet_thought(self, basic_state, _mock_settings):
         """Test that quiet thoughts are extracted and stored."""
         with patch("app.nodes.common._get_llm_client") as mock_get_client:
             mock_client = MagicMock()
@@ -760,7 +759,7 @@ class TestCallDeepReasoner:
             assert response == "Actual response"
 
     @pytest.mark.asyncio
-    async def test_deep_reasoner_updates_token_count(self, basic_state, mock_settings):
+    async def test_deep_reasoner_updates_token_count(self, basic_state, _mock_settings):
         """Test that token count is updated in state."""
         initial_tokens = basic_state.get("tokens_used", 0)
 
@@ -779,7 +778,7 @@ class TestCallDeepReasoner:
             assert basic_state["tokens_used"] > initial_tokens
 
     @pytest.mark.asyncio
-    async def test_deep_reasoner_handles_google_response_format(self, basic_state, mock_settings):
+    async def test_deep_reasoner_handles_google_response_format(self, basic_state, _mock_settings):
         """Test handling of Google AI response format (list of dicts)."""
         with patch("app.nodes.common._get_llm_client") as mock_get_client:
             mock_client = MagicMock()
@@ -796,7 +795,7 @@ class TestCallDeepReasoner:
             assert response == "Google response"
 
     @pytest.mark.asyncio
-    async def test_deep_reasoner_callback_on_start(self, basic_state, mock_settings):
+    async def test_deep_reasoner_callback_on_start(self, basic_state, _mock_settings):
         """Test that callback on_llm_start is called."""
         callback = MagicMock()
         basic_state["working_memory"]["langchain_callback"] = callback
@@ -816,7 +815,7 @@ class TestCallDeepReasoner:
             callback.on_llm_start.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_deep_reasoner_callback_on_end(self, basic_state, mock_settings):
+    async def test_deep_reasoner_callback_on_end(self, basic_state, _mock_settings):
         """Test that callback on_llm_end is called."""
         callback = MagicMock()
         basic_state["working_memory"]["langchain_callback"] = callback
@@ -844,7 +843,7 @@ class TestCallFastSynthesizer:
     """Tests for the call_fast_synthesizer function."""
 
     @pytest.mark.asyncio
-    async def test_fast_synthesizer_returns_response(self, basic_state, mock_settings):
+    async def test_fast_synthesizer_returns_response(self, basic_state, _mock_settings):
         """Test that fast_synthesizer returns response and tokens."""
         with patch("app.nodes.common._get_llm_client") as mock_get_client:
             mock_client = MagicMock()
@@ -862,7 +861,7 @@ class TestCallFastSynthesizer:
             assert tokens > 0
 
     @pytest.mark.asyncio
-    async def test_fast_synthesizer_without_state(self, mock_settings):
+    async def test_fast_synthesizer_without_state(self, _mock_settings):
         """Test fast_synthesizer works without state."""
         with patch("app.nodes.common._get_llm_client") as mock_get_client:
             mock_client = MagicMock()
@@ -879,7 +878,7 @@ class TestCallFastSynthesizer:
             assert response == "Response"
 
     @pytest.mark.asyncio
-    async def test_fast_synthesizer_updates_token_count(self, basic_state, mock_settings):
+    async def test_fast_synthesizer_updates_token_count(self, basic_state, _mock_settings):
         """Test that token count is updated."""
         initial_tokens = basic_state.get("tokens_used", 0)
 
@@ -898,7 +897,7 @@ class TestCallFastSynthesizer:
             assert basic_state["tokens_used"] > initial_tokens
 
     @pytest.mark.asyncio
-    async def test_fast_synthesizer_with_system_prompt(self, basic_state, mock_settings):
+    async def test_fast_synthesizer_with_system_prompt(self, basic_state, _mock_settings):
         """Test that system prompt is included."""
         with patch("app.nodes.common._get_llm_client") as mock_get_client:
             mock_client = MagicMock()
@@ -925,7 +924,7 @@ class TestCallFastSynthesizer:
 class TestAddReasoningStep:
     """Tests for the add_reasoning_step function."""
 
-    def test_add_first_step(self, basic_state):
+    def test_add_first_step(self, _basic_state):
         """Test adding the first reasoning step."""
         add_reasoning_step(
             state=basic_state,
@@ -945,7 +944,7 @@ class TestAddReasoningStep:
         assert step["score"] == 0.9
         assert step["step_number"] == 1
 
-    def test_add_multiple_steps(self, basic_state):
+    def test_add_multiple_steps(self, _basic_state):
         """Test adding multiple reasoning steps."""
         for i in range(3):
             add_reasoning_step(
@@ -972,7 +971,7 @@ class TestAddReasoningStep:
 
         assert len(state["reasoning_steps"]) == 1
 
-    def test_memory_bounding(self, basic_state, mock_settings):
+    def test_memory_bounding(self, basic_state, _mock_settings):
         """Test that memory bounding limits reasoning steps."""
         mock_settings.reasoning_memory_bound = 10
 
@@ -988,7 +987,7 @@ class TestAddReasoningStep:
         # 5 initial + 1 truncation marker + (10-5) recent = 11
         assert len(basic_state["reasoning_steps"]) <= 12
 
-    def test_truncation_marker_inserted(self, basic_state, mock_settings):
+    def test_truncation_marker_inserted(self, basic_state, _mock_settings):
         """Test that truncation marker is inserted."""
         mock_settings.reasoning_memory_bound = 10
 
@@ -1123,7 +1122,7 @@ class TestFormatCodeContext:
 
             assert "Cursor position at line 10" in result
 
-    def test_format_with_rag_context(self, basic_state):
+    def test_format_with_rag_context(self, _basic_state):
         """Test formatting includes RAG context from state."""
         basic_state["working_memory"]["rag_context_formatted"] = "RAG: Similar code found"
 
@@ -1139,7 +1138,7 @@ class TestFormatCodeContext:
 
             assert "RAG: Similar code found" in result
 
-    def test_format_with_episodic_memory(self, basic_state):
+    def test_format_with_episodic_memory(self, _basic_state):
         """Test formatting includes episodic memory."""
         basic_state["episodic_memory"] = [
             {"framework": "debug", "problem": "Bug in auth", "solution": "Fixed token validation"}
@@ -1176,7 +1175,7 @@ class TestFormatCodeContext:
 class TestGetRagContext:
     """Tests for the get_rag_context function."""
 
-    def test_get_rag_context_exists(self, basic_state):
+    def test_get_rag_context_exists(self, _basic_state):
         """Test getting RAG context when it exists."""
         basic_state["working_memory"]["rag_context_formatted"] = "RAG results"
 
@@ -1184,7 +1183,7 @@ class TestGetRagContext:
 
         assert result == "RAG results"
 
-    def test_get_rag_context_missing(self, basic_state):
+    def test_get_rag_context_missing(self, _basic_state):
         """Test getting RAG context when missing."""
         result = get_rag_context(basic_state)
 
@@ -1237,7 +1236,7 @@ class TestPrepareContextWithGemini:
     """Tests for the prepare_context_with_gemini function."""
 
     @pytest.mark.asyncio
-    async def test_prepare_context_calls_gateway(self, basic_state):
+    async def test_prepare_context_calls_gateway(self, _basic_state):
         """Test that prepare_context calls the context gateway."""
         with patch("app.nodes.common.get_context_gateway") as mock_get_gateway:
             mock_gateway = MagicMock()
@@ -1255,7 +1254,7 @@ class TestPrepareContextWithGemini:
             mock_gateway.prepare_context.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_prepare_context_passes_state_info(self, basic_state):
+    async def test_prepare_context_passes_state_info(self, _basic_state):
         """Test that prepare_context passes code_snippet and file_list."""
         with patch("app.nodes.common.get_context_gateway") as mock_get_gateway:
             mock_gateway = MagicMock()
@@ -1283,7 +1282,7 @@ class TestToolHelpers:
     """Tests for tool helper functions."""
 
     @pytest.mark.asyncio
-    async def test_run_tool_calls_langchain(self, basic_state):
+    async def test_run_tool_calls_langchain(self, _basic_state):
         """Test that run_tool calls call_langchain_tool."""
         with patch("app.nodes.common.call_langchain_tool") as mock_call:
             mock_call.return_value = {"result": "success"}
@@ -1293,7 +1292,7 @@ class TestToolHelpers:
             mock_call.assert_called_once_with("test_tool", {"input": "data"}, basic_state)
             assert result == {"result": "success"}
 
-    def test_list_tools_for_framework(self, basic_state):
+    def test_list_tools_for_framework(self, _basic_state):
         """Test listing tools for a framework."""
         with patch("app.nodes.common.get_available_tools_for_framework") as mock_get:
             mock_get.return_value = ["tool1", "tool2"]
@@ -1322,7 +1321,7 @@ class TestQuietStarIntegration:
     """Integration tests for quiet_star with LLM calls."""
 
     @pytest.mark.asyncio
-    async def test_quiet_star_decorator_with_llm_call(self, mock_settings):
+    async def test_quiet_star_decorator_with_llm_call(self, _mock_settings):
         """Test that quiet_star properly integrates with LLM calls."""
         @quiet_star
         async def framework_node(state: GraphState) -> GraphState:

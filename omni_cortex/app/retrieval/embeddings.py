@@ -48,7 +48,7 @@ class GeminiEmbeddings:
         """Generate a hash key for cache lookup."""
         return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
 
-    def embed_documents(self, texts: list) -> list:
+    def embed_documents(self, texts: list) -> list:  # noqa: PLR0912
         """Embed a list of documents with cache support."""
         if not texts:
             return []
@@ -162,7 +162,7 @@ class GeminiEmbeddings:
         return embedding
 
 
-def get_embeddings() -> Any:
+def get_embeddings() -> Any:  # noqa: PLR0911
     """
     Get the appropriate embedding model based on provider configuration.
 

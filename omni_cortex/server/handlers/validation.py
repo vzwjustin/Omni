@@ -8,6 +8,8 @@ This module re-exports common validation functions from app.core.validation
 and adds handler-specific validation utilities.
 """
 
+from __future__ import annotations
+
 from typing import Any
 
 from app.core.errors import ValidationError

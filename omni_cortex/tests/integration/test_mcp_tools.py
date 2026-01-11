@@ -11,18 +11,16 @@ Tests the MCP tool handlers for:
 External dependencies (ChromaDB, LLM calls) are mocked.
 """
 
-import pytest
 import json
-import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
-from typing import List, Dict, Any
+from unittest.mock import MagicMock, patch
 
-# MCP types
-from mcp.types import TextContent
+import pytest
 
 # LangChain types for mocking
 from langchain_core.documents import Document
 
+# MCP types
+from mcp.types import TextContent
 
 # =============================================================================
 # Fixtures
@@ -48,7 +46,7 @@ def mock_collection_manager():
     }
 
     # Mock search methods to return sample documents
-    def mock_search(query: str, collection_names: List[str] = None, k: int = 5, **kwargs) -> List[Document]:
+    def mock_search(query: str, collection_names: list[str] = None, k: int = 5, **kwargs) -> list[Document]:
         return [
             Document(
                 page_content=f"Sample content for '{query}' from {collection_names}",
@@ -231,7 +229,7 @@ class TestListFrameworksTool:
         with patch('server.main.get_collection_manager') as mock_cm:
             mock_cm.return_value = MagicMock(COLLECTIONS={})
 
-            from server.main import create_server, FRAMEWORKS
+            from server.main import create_server
             server = create_server()
 
             tool_handler = server.call_tool_handler
@@ -798,7 +796,7 @@ class TestFrameworkTools:
                 "thread_id": "test-thread"
             })
 
-            text = result[0].text
+            _text = result[0].text  # noqa: F841
 
             # Memory should have been retrieved
             mock_get_memory.assert_called_once_with("test-thread")

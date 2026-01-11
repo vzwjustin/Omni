@@ -5,34 +5,31 @@ Tests the graph structure, node behavior, routing logic, state transitions,
 and integration with framework nodes.
 """
 
-import asyncio
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from typing import Dict, Any
-from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
 
 from app.graph import (
+    BASE_BACKOFF_MS,
     FRAMEWORK_NODES,
-    create_reasoning_graph,
-    route_node,
-    execute_framework_node,
-    should_continue,
-    should_continue_after_execute,
-    error_node,
-    retry_with_backoff,
+    MAX_RETRIES,
     _execute_pipeline,
     _execute_single,
     _log_framework_metrics,
-    get_checkpointer,
     cleanup_checkpointer,
+    create_reasoning_graph,
+    error_node,
+    execute_framework_node,
+    get_checkpointer,
     get_graph_with_memory,
-    graph,
+    retry_with_backoff,
+    route_node,
     router,
-    MAX_RETRIES,
-    BASE_BACKOFF_MS,
+    should_continue,
+    should_continue_after_execute,
 )
 from app.nodes.generator import get_generated_nodes
-from app.state import GraphState, create_initial_state
-
+from app.state import create_initial_state
 
 # =============================================================================
 # Test FRAMEWORK_NODES Registry
@@ -292,10 +289,12 @@ class TestExecuteFrameworkNode:
         # Mock the framework node
         mock_node = AsyncMock(return_value=minimal_state)
 
-        with patch.dict(FRAMEWORK_NODES, {"self_discover": mock_node}):
-            with patch("app.graph.log_framework_execution"):
-                with patch("app.nodes.common.list_tools_for_framework", return_value=[]):
-                    result = await execute_framework_node(minimal_state)
+        with (
+            patch.dict(FRAMEWORK_NODES, {"self_discover": mock_node}),
+            patch("app.graph.log_framework_execution"),
+            patch("app.nodes.common.list_tools_for_framework", return_value=[]),
+        ):
+            result = await execute_framework_node(minimal_state)
 
         mock_node.assert_called_once()
         assert result is not None
@@ -311,13 +310,15 @@ class TestExecuteFrameworkNode:
         mock_node1 = AsyncMock(return_value=minimal_state)
         mock_node2 = AsyncMock(return_value=minimal_state)
 
-        with patch.dict(FRAMEWORK_NODES, {
-            "step_back": mock_node1,
-            "chain_of_thought": mock_node2
-        }):
-            with patch("app.graph.log_framework_execution"):
-                with patch("app.nodes.common.list_tools_for_framework", return_value=[]):
-                    result = await execute_framework_node(minimal_state)
+        with (
+            patch.dict(FRAMEWORK_NODES, {
+                "step_back": mock_node1,
+                "chain_of_thought": mock_node2
+            }),
+            patch("app.graph.log_framework_execution"),
+            patch("app.nodes.common.list_tools_for_framework", return_value=[]),
+        ):
+            await execute_framework_node(minimal_state)
 
         # Both nodes should have been called
         mock_node1.assert_called_once()
@@ -332,10 +333,12 @@ class TestExecuteFrameworkNode:
 
         mock_fallback = AsyncMock(return_value=minimal_state)
 
-        with patch.dict(FRAMEWORK_NODES, {"self_discover": mock_fallback}, clear=False):
-            with patch("app.graph.log_framework_execution"):
-                with patch("app.nodes.common.list_tools_for_framework", return_value=[]):
-                    result = await execute_framework_node(minimal_state)
+        with (
+            patch.dict(FRAMEWORK_NODES, {"self_discover": mock_fallback}, clear=False),
+            patch("app.graph.log_framework_execution"),
+            patch("app.nodes.common.list_tools_for_framework", return_value=[]),
+        ):
+            result = await execute_framework_node(minimal_state)
 
         # Fallback should be used
         mock_fallback.assert_called_once()
@@ -351,15 +354,14 @@ class TestExecuteFrameworkNode:
 
         mock_node = AsyncMock(return_value=minimal_state)
 
-        with patch.dict(FRAMEWORK_NODES, {"self_discover": mock_node}):
-            with patch("app.graph.log_framework_execution"):
-                with patch("app.nodes.common.list_tools_for_framework", return_value=[]):
-                    with patch(
-                        "app.graph.save_to_langchain_memory",
-                        new_callable=AsyncMock
-                    ) as mock_save:
-                        result = await execute_framework_node(minimal_state)
-                        mock_save.assert_called_once()
+        with (
+            patch.dict(FRAMEWORK_NODES, {"self_discover": mock_node}),
+            patch("app.graph.log_framework_execution"),
+            patch("app.nodes.common.list_tools_for_framework", return_value=[]),
+            patch("app.graph.save_to_langchain_memory", new_callable=AsyncMock) as mock_save,
+        ):
+            await execute_framework_node(minimal_state)
+            mock_save.assert_called_once()
 
 
 # =============================================================================
@@ -397,7 +399,7 @@ class TestExecutePipeline:
             await _execute_pipeline(
                 minimal_state,
                 framework_chain,
-                lambda name, state: []
+                lambda _name, _state: []
             )
 
         assert execution_order == ["fw1", "fw2", "fw3"]
@@ -424,7 +426,7 @@ class TestExecutePipeline:
             result = await _execute_pipeline(
                 minimal_state,
                 framework_chain,
-                lambda name, state: []
+                lambda _name, _state: []
             )
 
         # Should have intermediate result from fw1
@@ -450,7 +452,7 @@ class TestExecutePipeline:
             result = await _execute_pipeline(
                 minimal_state,
                 framework_chain,
-                lambda name, state: []
+                lambda _name, _state: []
             )
 
         # fw1 should be executed once, then pipeline fails on unknown_framework
@@ -477,7 +479,7 @@ class TestExecutePipeline:
             result = await _execute_pipeline(
                 minimal_state,
                 framework_chain,
-                lambda name, state: []
+                lambda _name, _state: []
             )
 
         assert result["working_memory"]["executed_chain"] == ["fw_a", "fw_b"]
@@ -505,7 +507,7 @@ class TestExecuteSingle:
             await _execute_single(
                 minimal_state,
                 "test_framework",
-                lambda name, state: []
+                lambda _name, _state: []
             )
 
         assert called == ["mock_framework"]
@@ -525,7 +527,7 @@ class TestExecuteSingle:
             result = await _execute_single(
                 minimal_state,
                 "nonexistent",
-                lambda name, state: []
+                lambda _name, _state: []
             )
 
         assert fallback_called == ["self_discover"]
@@ -586,7 +588,7 @@ class TestCheckpointerLifecycle:
     @pytest.mark.asyncio
     async def test_get_checkpointer_creates_singleton(self):
         """Test that get_checkpointer creates a singleton instance."""
-        with patch("app.graph.AsyncSqliteSaver") as MockSaver:
+        with patch("app.graph.AsyncSqliteSaver") as MockSaver:  # noqa: N806
             mock_instance = MagicMock()
             MockSaver.from_conn_string = AsyncMock(return_value=mock_instance)
 
@@ -674,19 +676,21 @@ class TestGraphIntegration:
             state["framework_chain"] = ["active_inference"]
             return state
 
-        with patch.object(router, "route", side_effect=mock_route):
-            with patch.dict(FRAMEWORK_NODES, {"active_inference": mock_framework_node}):
-                with patch("app.graph.log_framework_execution"):
-                    with patch("app.graph.enhance_state_with_langchain", new_callable=AsyncMock, return_value=minimal_state):
-                        with patch("app.nodes.common.list_tools_for_framework", return_value=[]):
-                            # Execute route node
-                            state_after_route = await route_node(minimal_state)
-                            assert state_after_route["selected_framework"] == "active_inference"
+        with (
+            patch.object(router, "route", side_effect=mock_route),
+            patch.dict(FRAMEWORK_NODES, {"active_inference": mock_framework_node}),
+            patch("app.graph.log_framework_execution"),
+            patch("app.graph.enhance_state_with_langchain", new_callable=AsyncMock, return_value=minimal_state),
+            patch("app.nodes.common.list_tools_for_framework", return_value=[]),
+        ):
+            # Execute route node
+            state_after_route = await route_node(minimal_state)
+            assert state_after_route["selected_framework"] == "active_inference"
 
-                            # Execute framework node
-                            state_after_execute = await execute_framework_node(state_after_route)
-                            assert state_after_execute["final_answer"] == "Debug complete"
-                            assert state_after_execute["confidence_score"] == 0.9
+            # Execute framework node
+            state_after_execute = await execute_framework_node(state_after_route)
+            assert state_after_execute["final_answer"] == "Debug complete"
+            assert state_after_execute["confidence_score"] == 0.9
 
     @pytest.mark.asyncio
     async def test_graph_ainvoke_with_mocks(self):
@@ -707,12 +711,14 @@ class TestGraphIntegration:
             state["confidence_score"] = 0.8
             return state
 
-        with patch.object(router, "route", side_effect=mock_route):
-            with patch.dict(FRAMEWORK_NODES, {"self_discover": mock_node}):
-                with patch("app.graph.log_framework_execution"):
-                    with patch("app.graph.enhance_state_with_langchain", new_callable=AsyncMock, side_effect=lambda s, t: s):
-                        with patch("app.nodes.common.list_tools_for_framework", return_value=[]):
-                            result = await test_graph.ainvoke(state)
+        with (
+            patch.object(router, "route", side_effect=mock_route),
+            patch.dict(FRAMEWORK_NODES, {"self_discover": mock_node}),
+            patch("app.graph.log_framework_execution"),
+            patch("app.graph.enhance_state_with_langchain", new_callable=AsyncMock, side_effect=lambda s, _t: s),
+            patch("app.nodes.common.list_tools_for_framework", return_value=[]),
+        ):
+            result = await test_graph.ainvoke(state)
 
         assert result["final_answer"] == "Mocked answer"
         assert result["confidence_score"] == 0.8
@@ -756,13 +762,15 @@ class TestStateTransitions:
             state["selected_framework"] = "test"
             return state
 
-        with patch.object(router, "route", side_effect=mock_route):
-            with patch.dict(FRAMEWORK_NODES, {"test": mock_node}):
-                with patch("app.graph.log_framework_execution"):
-                    with patch("app.graph.enhance_state_with_langchain", new_callable=AsyncMock, return_value=full_state):
-                        with patch("app.nodes.common.list_tools_for_framework", return_value=[]):
-                            state = await route_node(full_state)
-                            state = await execute_framework_node(state)
+        with (
+            patch.object(router, "route", side_effect=mock_route),
+            patch.dict(FRAMEWORK_NODES, {"test": mock_node}),
+            patch("app.graph.log_framework_execution"),
+            patch("app.graph.enhance_state_with_langchain", new_callable=AsyncMock, return_value=full_state),
+            patch("app.nodes.common.list_tools_for_framework", return_value=[]),
+        ):
+            state = await route_node(full_state)
+            state = await execute_framework_node(state)
 
         assert state["query"] == original_query
         assert state["code_snippet"] == original_code
@@ -782,13 +790,15 @@ class TestStateTransitions:
             state["framework_chain"] = ["test", "test"]  # Run twice in pipeline
             return state
 
-        with patch.object(router, "route", side_effect=mock_route):
-            with patch.dict(FRAMEWORK_NODES, {"test": mock_node}):
-                with patch("app.graph.log_framework_execution"):
-                    with patch("app.graph.enhance_state_with_langchain", new_callable=AsyncMock, return_value=minimal_state):
-                        with patch("app.nodes.common.list_tools_for_framework", return_value=[]):
-                            state = await route_node(minimal_state)
-                            state = await execute_framework_node(state)
+        with (
+            patch.object(router, "route", side_effect=mock_route),
+            patch.dict(FRAMEWORK_NODES, {"test": mock_node}),
+            patch("app.graph.log_framework_execution"),
+            patch("app.graph.enhance_state_with_langchain", new_callable=AsyncMock, return_value=minimal_state),
+            patch("app.nodes.common.list_tools_for_framework", return_value=[]),
+        ):
+            state = await route_node(minimal_state)
+            state = await execute_framework_node(state)
 
         # Should have accumulated: 100 + 50 + 50 = 200
         assert state["tokens_used"] == 200
@@ -808,13 +818,15 @@ class TestStateTransitions:
             state["framework_chain"] = []
             return state
 
-        with patch.object(router, "route", side_effect=mock_route):
-            with patch.dict(FRAMEWORK_NODES, {"test": mock_node}):
-                with patch("app.graph.log_framework_execution"):
-                    with patch("app.graph.enhance_state_with_langchain", new_callable=AsyncMock, return_value=minimal_state):
-                        with patch("app.nodes.common.list_tools_for_framework", return_value=[]):
-                            state = await route_node(minimal_state)
-                            state = await execute_framework_node(state)
+        with (
+            patch.object(router, "route", side_effect=mock_route),
+            patch.dict(FRAMEWORK_NODES, {"test": mock_node}),
+            patch("app.graph.log_framework_execution"),
+            patch("app.graph.enhance_state_with_langchain", new_callable=AsyncMock, return_value=minimal_state),
+            patch("app.nodes.common.list_tools_for_framework", return_value=[]),
+        ):
+            state = await route_node(minimal_state)
+            state = await execute_framework_node(state)
 
         assert state["confidence_score"] == 0.95
 
@@ -847,14 +859,16 @@ class TestErrorHandling:
         async def failing_node(state):
             raise ValueError("Framework execution failed")
 
-        with patch.dict(FRAMEWORK_NODES, {"failing_framework": failing_node}):
-            with patch("app.nodes.common.list_tools_for_framework", return_value=[]):
-                with patch("app.graph.log_framework_execution"):
-                    # Now execution should handle the error gracefully instead of raising
-                    result = await execute_framework_node(minimal_state)
-                    # Error should be caught and safe defaults set
-                    assert result["confidence_score"] == 0.0
-                    assert "Framework execution failed" in result.get("final_answer", "")
+        with (
+            patch.dict(FRAMEWORK_NODES, {"failing_framework": failing_node}),
+            patch("app.nodes.common.list_tools_for_framework", return_value=[]),
+            patch("app.graph.log_framework_execution"),
+        ):
+            # Now execution should handle the error gracefully instead of raising
+            result = await execute_framework_node(minimal_state)
+            # Error should be caught and safe defaults set
+            assert result["confidence_score"] == 0.0
+            assert "Framework execution failed" in result.get("final_answer", "")
 
 
 # =============================================================================

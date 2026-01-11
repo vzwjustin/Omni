@@ -8,13 +8,12 @@ Tests:
 - State management through pipeline
 """
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
 
-from app.state import GraphState
 from app.graph import FRAMEWORK_NODES, router
-
+from app.state import GraphState
 
 # =============================================================================
 # Fixtures
@@ -164,7 +163,7 @@ class TestFrameworkExecution:
             assert result.get("confidence_score", 0) >= 0
 
     @pytest.mark.asyncio
-    async def test_unknown_framework_handled(self, base_state):
+    async def test_unknown_framework_handled(self, _base_state):
         """Test handling of unknown framework names."""
         assert "nonexistent_framework" not in FRAMEWORK_NODES
 

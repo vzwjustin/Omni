@@ -9,20 +9,17 @@ Provides mock objects and test utilities for:
 """
 
 import asyncio
-import pytest
-from collections import OrderedDict
-from typing import Any, Dict, List, Optional
 from unittest.mock import AsyncMock, MagicMock, patch
 
-# Import actual modules for testing
-from app.state import GraphState, create_initial_state, MemoryStore
+import pytest
+
 from app.langchain_integration import (
     OmniCortexMemory,
-    get_memory,
 )
 from app.memory.manager import get_memory_store, get_memory_store_lock
-from app.core.constants import LIMITS
 
+# Import actual modules for testing
+from app.state import GraphState, MemoryStore, create_initial_state
 
 # =============================================================================
 # State Fixtures
@@ -130,7 +127,7 @@ async def clean_memory_store():
 @pytest.fixture
 def mock_router():
     """Create a mock HyperRouter for testing."""
-    with patch("app.core.router.HyperRouter") as MockRouter:
+    with patch("app.core.router.HyperRouter") as MockRouter:  # noqa: N806
         mock_instance = MagicMock()
         mock_instance.route = AsyncMock(return_value={
             "selected_framework": "active_inference",
@@ -269,7 +266,7 @@ def mock_collection_manager():
     }
 
     # Mock search method
-    def mock_search(query: str, collection_names: List[str] = None, k: int = 5, **kwargs):
+    def mock_search(query: str, collection_names: list[str] = None, k: int = 5, **kwargs):
         return [
             Document(
                 page_content=f"Result for query: {query}",
@@ -283,9 +280,11 @@ def mock_collection_manager():
     mock_manager.search_by_function = MagicMock(return_value=[])
     mock_manager.search_by_class = MagicMock(return_value=[])
 
-    with patch('server.main.get_collection_manager', return_value=mock_manager):
-        with patch('app.langchain_integration.get_collection_manager', return_value=mock_manager):
-            yield mock_manager
+    with (
+        patch('server.main.get_collection_manager', return_value=mock_manager),
+        patch('app.langchain_integration.get_collection_manager', return_value=mock_manager),
+    ):
+        yield mock_manager
 
 
 @pytest.fixture

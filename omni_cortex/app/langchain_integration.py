@@ -33,6 +33,7 @@ from .core.constants import CONTENT
 from .core.correlation import get_correlation_id
 from .core.errors import RAGError
 from .memory import MAX_MEMORY_THREADS, OmniCortexMemory, get_memory
+from .memory.enrichment import enhance_state_with_langchain, save_to_langchain_memory
 from .memory.manager import get_memory_store, get_memory_store_lock
 
 # Models
@@ -241,15 +242,6 @@ AVAILABLE_TOOLS = [
     save_learning,
 ] + _enhanced_tools
 
-
-# =============================================================================
-# State Enrichment - Re-exported from memory submodule
-# =============================================================================
-
-from .memory.enrichment import (
-    enhance_state_with_langchain,
-    save_to_langchain_memory,
-)
 
 # =============================================================================
 # All Exports

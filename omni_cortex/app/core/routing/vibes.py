@@ -4,6 +4,8 @@ Vibe Matching Service
 Handles heuristic and keyword-based routing ("vibes") to categorize tasks.
 """
 
+from __future__ import annotations
+
 import re
 from re import Pattern
 

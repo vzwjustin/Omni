@@ -4,6 +4,8 @@ Structured Brief Generator for Omni-Cortex
 Generates GeminiRouterOutput with ClaudeCodeBrief for handoff protocol.
 """
 
+from __future__ import annotations
+
 import time
 from typing import TYPE_CHECKING
 
@@ -18,6 +20,7 @@ from .task_analysis import (
 )
 
 if TYPE_CHECKING:
+    from ..router import HyperRouter
     from ..schemas import (
         ClaudeCodeBrief,
         DetectedSignal,
@@ -42,18 +45,18 @@ class StructuredBriefGenerator:
     Gemini orchestrates, Claude executes.
     """
 
-    def __init__(self, router: "HyperRouter"):
+    def __init__(self, router: HyperRouter):
         """Initialize with parent router for framework selection."""
         self.router = router
 
-    async def generate(
+    async def generate(  # noqa: PLR0912, PLR0915
         self,
         query: str,
         context: str | None = None,
         code_snippet: str | None = None,
         ide_context: str | None = None,
         file_list: list[str] | None = None,
-    ) -> "GeminiRouterOutput":
+    ) -> GeminiRouterOutput:
         """Generate a structured GeminiRouterOutput with ClaudeCodeBrief."""
         from ..schemas import (
             DEFAULT_STOP_CONDITIONS,
@@ -299,7 +302,7 @@ class StructuredBriefGenerator:
 
     def _detect_signals(
         self, query: str, context: str | None, code_snippet: str | None
-    ) -> list["DetectedSignal"]:
+    ) -> list[DetectedSignal]:
         """Detect signals from input to guide framework selection."""
         from ..schemas import DetectedSignal, SignalType
 
@@ -382,7 +385,7 @@ class StructuredBriefGenerator:
 
         return signals
 
-    def _detect_task_type(self, query: str, signals: list["DetectedSignal"]) -> "TaskType":
+    def _detect_task_type(self, query: str, signals: list[DetectedSignal]) -> TaskType:  # noqa: PLR0911
         """Determine task type from query and signals."""
         from ..schemas import SignalType, TaskType
 
@@ -416,8 +419,8 @@ class StructuredBriefGenerator:
         return TaskType.IMPLEMENT
 
     def _assess_risk(
-        self, query: str, context: str | None, signals: list["DetectedSignal"]
-    ) -> "RiskLevel":
+        self, query: str, context: str | None, signals: list[DetectedSignal]
+    ) -> RiskLevel:
         """Assess risk level of the task."""
         from ..schemas import RiskLevel, SignalType
 
@@ -439,7 +442,7 @@ class StructuredBriefGenerator:
 
         return RiskLevel.LOW
 
-    def _get_expected_outputs(self, role: "StageRole") -> list["OutputType"]:
+    def _get_expected_outputs(self, role: StageRole) -> list[OutputType]:
         """Get expected outputs for a stage role."""
         from ..schemas import OutputType, StageRole
 
@@ -451,7 +454,7 @@ class StructuredBriefGenerator:
             return [OutputType.PATCH_PLAN, OutputType.VERIFICATION_PLAN, OutputType.NEXT_ACTIONS]
 
     def _calculate_confidence(
-        self, signals: list["DetectedSignal"], framework_chain: list[str], category: str
+        self, signals: list[DetectedSignal], framework_chain: list[str], category: str
     ) -> float:
         """Calculate confidence score for the routing decision."""
         base = 0.5
@@ -496,7 +499,7 @@ class StructuredBriefGenerator:
 
         return assumptions if assumptions else ["Standard implementation approach is acceptable"]
 
-    def _generate_falsifiers(self, query: str, signals: list["DetectedSignal"]) -> list[str]:
+    def _generate_falsifiers(self, _query: str, signals: list[DetectedSignal]) -> list[str]:
         """Generate conditions that would invalidate the approach."""
         falsifiers = [
             "If the root cause is in a different module than identified",
@@ -508,7 +511,7 @@ class StructuredBriefGenerator:
 
         return falsifiers[:5]
 
-    def _generate_objective(self, query: str, task_type: "TaskType") -> str:
+    def _generate_objective(self, query: str, task_type: TaskType) -> str:
         """Generate a clear objective statement."""
         from ..schemas import TaskType
 
@@ -562,7 +565,7 @@ class StructuredBriefGenerator:
         return areas[:5]
 
     def _generate_execution_plan(
-        self, query: str, framework_chain: list[str], task_type: "TaskType"
+        self, _query: str, framework_chain: list[str], task_type: TaskType
     ) -> list[str]:
         """Generate step-by-step execution plan."""
         from ..schemas import TaskType
@@ -600,7 +603,7 @@ class StructuredBriefGenerator:
                 "Verify results",
             ]
 
-    def _suggest_verification_commands(self, task_type: "TaskType") -> list[str]:
+    def _suggest_verification_commands(self, task_type: TaskType) -> list[str]:
         """Suggest verification commands based on task type."""
         from ..schemas import TaskType
 
@@ -615,7 +618,7 @@ class StructuredBriefGenerator:
 
         return base
 
-    def _generate_acceptance_criteria(self, query: str, task_type: "TaskType") -> list[str]:
+    def _generate_acceptance_criteria(self, _query: str, task_type: TaskType) -> list[str]:
         """Generate acceptance criteria."""
         from ..schemas import TaskType
 
@@ -631,7 +634,7 @@ class StructuredBriefGenerator:
         criteria.append("No new linting errors")
         return criteria[:4]
 
-    def _generate_open_questions(self, query: str, signals: list["DetectedSignal"]) -> list[str]:
+    def _generate_open_questions(self, query: str, signals: list[DetectedSignal]) -> list[str]:
         """Generate open questions that may need clarification."""
         questions = []
 
@@ -643,7 +646,7 @@ class StructuredBriefGenerator:
 
         return questions[:3]
 
-    def _enforce_token_budget(self, brief: "ClaudeCodeBrief") -> "ClaudeCodeBrief":
+    def _enforce_token_budget(self, brief: ClaudeCodeBrief) -> ClaudeCodeBrief:
         """
         Log token usage for monitoring - NO content removal.
 
@@ -665,10 +668,3 @@ class StructuredBriefGenerator:
 
         # Never trim - return as-is
         return brief
-
-
-# Type hint for router reference
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from ..router import HyperRouter

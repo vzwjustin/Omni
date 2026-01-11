@@ -16,6 +16,8 @@ Usage:
     prompt += format_examples_section(examples, "reasoning")
 """
 
+from __future__ import annotations
+
 import structlog
 
 from ..collection_manager import get_collection_manager

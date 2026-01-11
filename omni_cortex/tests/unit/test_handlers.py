@@ -5,10 +5,10 @@ Tests the handler layer to ensure proper validation, error handling,
 and integration with router and context gateway components.
 """
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from mcp.types import TextContent
 
+import pytest
+from mcp.types import TextContent
 
 # =============================================================================
 # Reason Handler Tests
@@ -151,14 +151,14 @@ class TestValidation:
 
     def test_validate_query_empty(self):
         """Test that empty query fails validation."""
-        from server.handlers.validation import validate_query, ValidationError
+        from server.handlers.validation import ValidationError, validate_query
 
         with pytest.raises(ValidationError):
             validate_query("", required=True)
 
     def test_validate_query_whitespace_only(self):
         """Test that whitespace-only query fails validation."""
-        from server.handlers.validation import validate_query, ValidationError
+        from server.handlers.validation import ValidationError, validate_query
 
         with pytest.raises(ValidationError):
             validate_query("   ", required=True)
@@ -337,7 +337,6 @@ class TestRAGHandlers:
     async def test_handle_search_documentation_empty_query(self):
         """Test search with empty query."""
         from server.handlers.rag_handlers import handle_search_documentation
-        from server.handlers.validation import ValidationError
 
         arguments = {"query": ""}
 

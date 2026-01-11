@@ -8,6 +8,8 @@ Implements intelligent caching with:
 - Stale cache fallback for resilience
 """
 
+from __future__ import annotations
+
 import asyncio
 import hashlib
 import re
@@ -35,7 +37,7 @@ logger = structlog.get_logger("context_cache")
 class WorkspaceChangeHandler(FileSystemEventHandler):
     """File system event handler for workspace change detection."""
 
-    def __init__(self, cache: "ContextCache", workspace_path: str):
+    def __init__(self, cache: ContextCache, workspace_path: str):
         self.cache = cache
         self.workspace_path = workspace_path
         super().__init__()

@@ -11,6 +11,8 @@ The circuit breaker prevents cascading failures by failing fast when
 a service is experiencing issues, then gradually testing recovery.
 """
 
+from __future__ import annotations
+
 import random
 import threading
 from collections.abc import Awaitable, Callable

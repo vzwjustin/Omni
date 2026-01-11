@@ -8,6 +8,8 @@ Analyzes user queries to understand:
 - Execution plan
 """
 
+from __future__ import annotations
+
 import asyncio
 import json
 import re
@@ -88,7 +90,7 @@ def _sanitize_prompt_input(text: str, max_length: int = 50000) -> str:
 
     # Remove null bytes and other control characters (except newlines/tabs)
     text = "".join(
-        c for c in text if c == "\n" or c == "\t" or (ord(c) >= 32 and ord(c) < 127) or ord(c) > 127
+        c for c in text if c in {"\n", "\t"} or (ord(c) >= 32 and ord(c) < 127) or ord(c) > 127
     )
 
     # Escape common prompt injection patterns (case-insensitive)
@@ -159,7 +161,7 @@ class QueryAnalyzer:
                 )
         return self._model
 
-    async def analyze(
+    async def analyze(  # noqa: PLR0912, PLR0915
         self,
         query: str,
         code_context: str | None = None,
@@ -630,7 +632,7 @@ Be specific and actionable. Focus on what Claude needs to execute effectively.""
 
         return min(score, 1.0)
 
-    def check_thinking_mode_availability(self) -> dict[str, Any]:
+    def check_thinking_mode_availability(self) -> dict[str, Any]:  # noqa: PLR0911
         """
         Check if thinking mode is available for the configured model.
 

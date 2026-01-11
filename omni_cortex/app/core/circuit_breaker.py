@@ -5,6 +5,8 @@ Prevents cascading failures by failing fast when a service is down.
 Automatically recovers when service becomes available again.
 """
 
+from __future__ import annotations
+
 import asyncio
 import time
 from collections.abc import Callable

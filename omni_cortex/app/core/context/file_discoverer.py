@@ -9,9 +9,12 @@ Discovers and ranks relevant files in a workspace using:
 Refactored to offload blocking I/O to thread pool and use scandir for performance.
 """
 
+from __future__ import annotations
+
 import asyncio
 import json
 import os
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import structlog
@@ -40,10 +43,6 @@ except ImportError:
         types = None
 
 logger = structlog.get_logger("context.file_discoverer")
-
-# Import dataclass from parent - will be available after refactor
-# For now, define inline to avoid circular imports
-from dataclasses import dataclass, field
 
 
 @dataclass

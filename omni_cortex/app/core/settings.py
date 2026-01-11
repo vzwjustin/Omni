@@ -4,6 +4,8 @@ Centralized Settings for Omni-Cortex
 All configuration in one place with validation.
 """
 
+from __future__ import annotations
+
 import threading
 from pathlib import Path
 

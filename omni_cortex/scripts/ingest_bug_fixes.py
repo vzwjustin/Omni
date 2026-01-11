@@ -17,22 +17,22 @@ Usage:
     python3 scripts/ingest_bug_fixes.py --dataset learningfixes
 """
 
+from __future__ import annotations
+
 import argparse
 import asyncio
-import logging
-import sys
-import os
 import json
+import logging
+import os
+import sys
 import tempfile
-import shutil
-from pathlib import Path
-from typing import List, Dict, Optional, Tuple
 from datetime import datetime
+from pathlib import Path
 
-# Add app to path
+# Add app to path - must be before app imports
 sys.path.append(os.getcwd())
 
-from app.collection_manager import get_collection_manager
+from app.collection_manager import get_collection_manager  # noqa: E402
 
 # Configure logging
 logging.basicConfig(
@@ -60,7 +60,7 @@ async def download_git_repo(url: str, target_dir: Path) -> bool:
         return False
 
 
-def parse_pyresbugs(dataset_dir: Path) -> List[Dict[str, str]]:
+def parse_pyresbugs(dataset_dir: Path) -> list[dict[str, str]]:
     """
     Parse PyResBugs dataset.
 
@@ -87,7 +87,7 @@ def parse_pyresbugs(dataset_dir: Path) -> List[Dict[str, str]]:
 
         for json_file in json_files:
             try:
-                with open(json_file, 'r', encoding='utf-8') as f:
+                with open(json_file, encoding='utf-8') as f:
                     data = json.load(f)
 
                 # Handle different JSON structures
@@ -108,7 +108,7 @@ def parse_pyresbugs(dataset_dir: Path) -> List[Dict[str, str]]:
     return bug_fixes
 
 
-def extract_pyresbugs_item(item: Dict) -> Optional[Dict[str, str]]:
+def extract_pyresbugs_item(item: dict) -> dict[str, str] | None:
     """Extract bug-fix pair from PyResBugs item."""
     try:
         # Adapt to actual JSON structure (may need adjustment)
@@ -133,7 +133,7 @@ def extract_pyresbugs_item(item: Dict) -> Optional[Dict[str, str]]:
         return None
 
 
-def parse_hapybug(dataset_dir: Path) -> List[Dict[str, str]]:
+def parse_hapybug(dataset_dir: Path) -> list[dict[str, str]]:
     """
     Parse HaPy-Bug dataset.
 
@@ -173,7 +173,7 @@ def parse_hapybug(dataset_dir: Path) -> List[Dict[str, str]]:
     json_files = list(dataset_dir.rglob("*.json"))
     for json_file in json_files:
         try:
-            with open(json_file, 'r', encoding='utf-8') as f:
+            with open(json_file, encoding='utf-8') as f:
                 data = json.load(f)
                 if isinstance(data, list):
                     for item in data:
@@ -188,7 +188,7 @@ def parse_hapybug(dataset_dir: Path) -> List[Dict[str, str]]:
     return bug_fixes
 
 
-def parse_learningfixes(dataset_dir: Path) -> List[Dict[str, str]]:
+def parse_learningfixes(dataset_dir: Path) -> list[dict[str, str]]:  # noqa: C901, PLR0912
     """
     Parse Learning-Fixes dataset.
 
@@ -224,9 +224,9 @@ def parse_learningfixes(dataset_dir: Path) -> List[Dict[str, str]]:
 
             if fixed_file and buggy_file.exists() and fixed_file.exists():
                 try:
-                    with open(buggy_file, 'r', encoding='utf-8') as f:
+                    with open(buggy_file, encoding='utf-8') as f:
                         buggy_code = f.read()
-                    with open(fixed_file, 'r', encoding='utf-8') as f:
+                    with open(fixed_file, encoding='utf-8') as f:
                         fixed_code = f.read()
 
                     bug_fixes.append({
@@ -245,7 +245,7 @@ def parse_learningfixes(dataset_dir: Path) -> List[Dict[str, str]]:
     json_files = list(dataset_dir.rglob("*.json")) + list(dataset_dir.rglob("*.jsonl"))
     for json_file in json_files:
         try:
-            with open(json_file, 'r', encoding='utf-8') as f:
+            with open(json_file, encoding='utf-8') as f:
                 if json_file.suffix == ".jsonl":
                     for line in f:
                         item = json.loads(line)
@@ -267,11 +267,11 @@ def parse_learningfixes(dataset_dir: Path) -> List[Dict[str, str]]:
     return bug_fixes
 
 
-async def ingest_dataset(dataset_name: str, repo_url: Optional[str] = None):
+async def ingest_dataset(dataset_name: str, repo_url: str | None = None):
     """Main ingestion logic for a dataset."""
 
     # Dataset configurations
-    DATASETS = {
+    datasets = {
         "pyresbugs": {
             "url": "https://github.com/dessertlab/PyResBugs.git",
             "parser": parse_pyresbugs
@@ -286,16 +286,16 @@ async def ingest_dataset(dataset_name: str, repo_url: Optional[str] = None):
         }
     }
 
-    if dataset_name not in DATASETS:
+    if dataset_name not in datasets:
         logger.error(f"Unknown dataset: {dataset_name}")
         return
 
-    config = DATASETS[dataset_name]
+    config = datasets[dataset_name]
     url = repo_url or config["url"]
 
     if not url:
         logger.warning(f"No URL configured for {dataset_name}. Please provide --url")
-        logger.warning(f"Or manually download and use --local-path")
+        logger.warning("Or manually download and use --local-path")
         return
 
     # Create temp directory for download
@@ -320,7 +320,7 @@ async def ingest_dataset(dataset_name: str, repo_url: Optional[str] = None):
         await ingest_bug_fixes(bug_fixes, dataset_name)
 
 
-async def ingest_bug_fixes(bug_fixes: List[Dict[str, str]], source: str):
+async def ingest_bug_fixes(bug_fixes: list[dict[str, str]], source: str):
     """Ingest bug-fix pairs into the debugging_knowledge collection."""
 
     cm = get_collection_manager()
@@ -391,13 +391,13 @@ Fix Pattern: Code was modified to resolve {bug_fix.get('bug_type', 'unknown')} i
 async def ingest_from_local(dataset_name: str, local_path: str):
     """Ingest from a local directory."""
 
-    PARSERS = {
+    parsers = {
         "pyresbugs": parse_pyresbugs,
         "hapybug": parse_hapybug,
         "learningfixes": parse_learningfixes
     }
 
-    if dataset_name not in PARSERS:
+    if dataset_name not in parsers:
         logger.error(f"Unknown dataset: {dataset_name}")
         return
 
@@ -407,7 +407,7 @@ async def ingest_from_local(dataset_name: str, local_path: str):
         return
 
     logger.info(f"Parsing {dataset_name} from {local_path}...")
-    bug_fixes = PARSERS[dataset_name](dataset_dir)
+    bug_fixes = parsers[dataset_name](dataset_dir)
     logger.info(f"✓ Parsed {len(bug_fixes)} bug-fix pairs")
 
     if bug_fixes:

@@ -9,6 +9,8 @@ Utility functions and classes to support the enhanced context gateway functional
 - Circuit breaker utilities
 """
 
+from __future__ import annotations
+
 import hashlib
 import json
 import os
@@ -155,7 +157,7 @@ class CacheKeyGenerator:
         return hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
 
     @staticmethod
-    def generate_workspace_fingerprint(workspace_path: str) -> str:
+    def generate_workspace_fingerprint(workspace_path: str) -> str:  # noqa: C901, PLR0912
         """
         Generate a fingerprint for workspace state.
 

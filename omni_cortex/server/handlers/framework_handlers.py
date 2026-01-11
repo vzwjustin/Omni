@@ -31,7 +31,7 @@ from .validation import (
 logger = structlog.get_logger("omni-cortex.framework_handlers")
 
 
-async def handle_think_framework(
+async def handle_think_framework(  # noqa: C901, PLR0912, PLR0915
     fw_name: str,
     arguments: dict,
     sampler,

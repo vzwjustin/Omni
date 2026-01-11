@@ -10,30 +10,30 @@ import traceback
 # Ensure we can import app modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-def main():
+def main():  # noqa: PLR0915
     print("=" * 60)
     print("ChromaDB Search Debug")
     print("=" * 60)
-    
+
     # Check environment
     persist_dir = os.getenv("CHROMA_PERSIST_DIR", "/app/data/chroma")
     openai_key = os.getenv("OPENAI_API_KEY", "")
-    
-    print(f"\n1. Environment:")
+
+    print("\n1. Environment:")
     print(f"   CHROMA_PERSIST_DIR: {persist_dir}")
     print(f"   OPENAI_API_KEY set: {bool(openai_key)}")
     print(f"   Key prefix: {openai_key[:20]}..." if openai_key else "   No key!")
-    
+
     # Check if chroma directory exists
     if os.path.exists(persist_dir):
         files = os.listdir(persist_dir)
         print(f"   Chroma dir exists: {files}")
     else:
-        print(f"   ERROR: Chroma dir does not exist!")
+        print("   ERROR: Chroma dir does not exist!")
         return
-    
+
     # Try to initialize embeddings
-    print(f"\n2. Initializing Embeddings...")
+    print("\n2. Initializing Embeddings...")
     try:
         from langchain_openai import OpenAIEmbeddings
         embeddings = OpenAIEmbeddings(
@@ -41,7 +41,7 @@ def main():
             api_key=openai_key
         )
         print("   ✓ OpenAIEmbeddings initialized")
-        
+
         # Test embedding a query
         print("   Testing embedding generation...")
         test_embed = embeddings.embed_query("test query")
@@ -50,9 +50,9 @@ def main():
         print(f"   ✗ Embedding error: {e}")
         traceback.print_exc()
         return
-    
+
     # Try to load vectorstore
-    print(f"\n3. Loading Vectorstore...")
+    print("\n3. Loading Vectorstore...")
     try:
         from langchain_chroma import Chroma
         vs = Chroma(
@@ -60,8 +60,8 @@ def main():
             persist_directory=persist_dir,
             embedding_function=embeddings
         )
-        print(f"   ✓ Chroma vectorstore loaded")
-        
+        print("   ✓ Chroma vectorstore loaded")
+
         # Check collection info
         if hasattr(vs, '_collection'):
             coll = vs._collection
@@ -74,9 +74,9 @@ def main():
         print(f"   ✗ Vectorstore error: {e}")
         traceback.print_exc()
         return
-    
+
     # Try a search
-    print(f"\n4. Testing Search...")
+    print("\n4. Testing Search...")
     test_queries = [
         "framework reasoning",
         "def main",
@@ -84,7 +84,7 @@ def main():
         "import",
         "LangChain"
     ]
-    
+
     for query in test_queries:
         print(f"\n   Query: '{query}'")
         try:
@@ -97,7 +97,7 @@ def main():
         except Exception as e:
             print(f"   ✗ Search error: {e}")
             traceback.print_exc()
-    
+
     print("\n" + "=" * 60)
     print("Debug Complete")
     print("=" * 60)

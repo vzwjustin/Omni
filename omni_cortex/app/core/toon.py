@@ -27,6 +27,8 @@ References:
 - https://www.intuz.com/blog/reduce-llm-token-costs-using-toon-format
 """
 
+from __future__ import annotations
+
 import json
 from typing import Any
 
@@ -61,7 +63,7 @@ class TOONEncoder:
         """
         return self._encode_value(data)
 
-    def _encode_value(self, value: Any, indent: int = 0) -> str:
+    def _encode_value(self, value: Any, indent: int = 0) -> str:  # noqa: PLR0911
         """Encode a single value."""
         if value is None:
             return "null"

@@ -6,6 +6,8 @@ and CLAUDE.md management. Complements Gemini's prepare_context
 by handling token-level optimizations.
 """
 
+from __future__ import annotations
+
 import re
 from pathlib import Path
 
@@ -38,7 +40,7 @@ def count_tokens(text: str) -> int:
     return len(text) // 4
 
 
-def compress_content(content: str, target_reduction: float = 0.3) -> dict:
+def compress_content(content: str, target_reduction: float = 0.3) -> dict:  # noqa: PLR0912
     """
     Compress content by removing comments, whitespace, and less important lines.
 
@@ -146,7 +148,7 @@ def compress_content(content: str, target_reduction: float = 0.3) -> dict:
     }
 
 
-def detect_truncation(text: str) -> dict:
+def detect_truncation(text: str) -> dict:  # noqa: PLR0912
     """
     Detect if text appears to be truncated.
 

@@ -12,6 +12,8 @@ This module provides the ContextGatewayMetrics class that serves as the
 central metrics collection point for all context gateway operations.
 """
 
+from __future__ import annotations
+
 import statistics
 from collections import defaultdict
 from dataclasses import dataclass, field

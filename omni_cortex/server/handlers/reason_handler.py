@@ -8,6 +8,8 @@ Now supports EXECUTION MODE: When execute=true, Gemini actually analyzes
 the code and returns specific findings instead of just returning a template.
 """
 
+from __future__ import annotations
+
 import asyncio
 import sys
 import traceback
@@ -30,7 +32,7 @@ from .validation import (
 logger = structlog.get_logger("omni-cortex.reason_handler")
 
 
-async def handle_reason(
+async def handle_reason(  # noqa: PLR0915
     arguments: dict,
     router,
 ) -> list[TextContent]:
@@ -118,14 +120,14 @@ async def handle_reason(
 
     # Generate structured brief using the new protocol
     # Timeout for LLM calls to prevent indefinite hangs
-    BRIEF_TIMEOUT_SECONDS = 30.0
+    brief_timeout_seconds = 30.0
 
     try:
         router_output = await asyncio.wait_for(
             router.generate_structured_brief(
                 query=query, context=context, code_snippet=None, ide_context=None, file_list=None
             ),
-            timeout=BRIEF_TIMEOUT_SECONDS,
+            timeout=brief_timeout_seconds,
         )
 
         # Build output with pipeline metadata + Claude brief
@@ -161,7 +163,7 @@ async def handle_reason(
         # Fall back to simple template mode to ensure user always gets a response.
         logger.warning(
             "structured_brief_timeout",
-            timeout_seconds=BRIEF_TIMEOUT_SECONDS,
+            timeout_seconds=brief_timeout_seconds,
             query_preview=query[:50] if query else "",
             hint="LLM call timed out, falling back to simple template mode",
         )
@@ -200,7 +202,7 @@ async def handle_reason(
             arguments=arguments,
             thread_id=thread_id,
             success=True,
-            error=f"timeout_fallback: {BRIEF_TIMEOUT_SECONDS}s",
+            error=f"timeout_fallback: {brief_timeout_seconds}s",
         )
 
     except Exception as e:

@@ -5,6 +5,8 @@ Provides structured metadata, intelligent chunking, and specialized collections
 for high-quality semantic retrieval across the codebase.
 """
 
+from __future__ import annotations
+
 import ast
 import re
 from dataclasses import asdict, dataclass
@@ -294,7 +296,7 @@ class MarkdownAnalyzer:
 
     @staticmethod
     def _create_section_chunk(
-        header: str, content: str, file_path: str, index: int
+        _header: str, content: str, file_path: str, index: int
     ) -> tuple[str, DocumentMetadata]:
         """Create chunk with metadata for a markdown section."""
         metadata = DocumentMetadata(
@@ -327,7 +329,7 @@ class MarkdownAnalyzer:
         return tags
 
 
-def categorize_file(file_path: Path) -> FileCategory:
+def categorize_file(file_path: Path) -> FileCategory:  # noqa: PLR0911
     """Determine file category based on path and name."""
     path_str = str(file_path).lower()
     name = file_path.name.lower()

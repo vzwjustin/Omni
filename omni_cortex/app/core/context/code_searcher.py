@@ -6,6 +6,8 @@ Searches the codebase using:
 - git log for commit history search
 """
 
+from __future__ import annotations
+
 import asyncio
 import os
 import shutil
@@ -231,7 +233,7 @@ JWT"""
                             query=search_term,
                             results=output[: CONTENT.COMMAND_OUTPUT],
                             file_count=file_count,
-                            match_count=len([l for l in lines if search_term in l]),
+                            match_count=len([line for line in lines if search_term in line]),
                         )
                     )
 

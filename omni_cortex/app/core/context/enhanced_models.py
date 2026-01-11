@@ -11,6 +11,8 @@ New data models to support:
 - Advanced resilience patterns
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
@@ -352,7 +354,7 @@ class EnhancedStructuredContext:
     gateway_metrics: ContextGatewayMetrics | None = None
     cross_repo_dependencies: list[CrossRepoDependency] = field(default_factory=list)
 
-    def to_claude_prompt_enhanced(self) -> str:
+    def to_claude_prompt_enhanced(self) -> str:  # noqa: C901, PLR0912, PLR0915
         """Enhanced prompt with quality indicators and source links."""
         sections = []
 

@@ -9,16 +9,16 @@ Tests the app.langchain_integration memory module including:
 - get_memory() async retrieval
 """
 
-import pytest
-from unittest.mock import patch, MagicMock
-from langchain_core.messages import HumanMessage, AIMessage
 
+import pytest
+from langchain_core.messages import AIMessage, HumanMessage
+
+from app.core.constants import LIMITS
 from app.langchain_integration import (
     OmniCortexMemory,
     get_memory,
 )
 from app.memory.manager import get_memory_store, get_memory_store_lock
-from app.core.constants import LIMITS
 
 # Aliases for test compatibility
 _memory_store = get_memory_store()
@@ -167,7 +167,7 @@ class TestGetMemory:
     """Tests for the async get_memory() function."""
 
     @pytest.mark.asyncio
-    async def test_get_memory_creates_new(self, clean_memory_store):
+    async def test_get_memory_creates_new(self, _clean_memory_store):
         """Test that get_memory creates new memory for unknown thread."""
         thread_id = "new-thread-12345"
 
@@ -177,7 +177,7 @@ class TestGetMemory:
         assert isinstance(memory, OmniCortexMemory)
 
     @pytest.mark.asyncio
-    async def test_get_memory_returns_existing(self, clean_memory_store):
+    async def test_get_memory_returns_existing(self, _clean_memory_store):
         """Test that get_memory returns existing memory for known thread."""
         thread_id = "existing-thread"
 
@@ -255,7 +255,7 @@ class TestMemoryIntegration:
     """Integration tests for memory with state."""
 
     @pytest.mark.asyncio
-    async def test_memory_with_full_workflow(self, clean_memory_store):
+    async def test_memory_with_full_workflow(self, _clean_memory_store):
         """Test memory through a simulated workflow."""
         thread_id = "workflow-test"
 

@@ -197,7 +197,7 @@ Provide:
 
 
 @quiet_star
-async def tree_of_thoughts_node(state: GraphState) -> GraphState:
+async def tree_of_thoughts_node(state: GraphState) -> GraphState:  # noqa: PLR0915
     """
     Tree of Thoughts Framework - REAL IMPLEMENTATION
 

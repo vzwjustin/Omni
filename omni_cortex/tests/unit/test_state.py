@@ -7,10 +7,8 @@ Tests the app.state module including:
 - MemoryStore operations
 """
 
-import pytest
-from typing import get_type_hints
 
-from app.state import GraphState, create_initial_state, MemoryStore
+from app.state import create_initial_state
 
 
 class TestCreateInitialState:

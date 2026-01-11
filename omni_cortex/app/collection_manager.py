@@ -7,6 +7,8 @@ enabling precise retrieval based on context.
 All search operations are protected by circuit breakers for fault tolerance.
 """
 
+from __future__ import annotations
+
 import os
 import threading
 from typing import Any
@@ -139,7 +141,7 @@ class CollectionManager:
                     raise RAGError(f"Failed to load collection {collection_name}: {e}") from e
                 return None
 
-    def search(
+    def search(  # noqa: PLR0912
         self,
         query: str,
         collection_names: list[str] | None = None,
@@ -421,7 +423,7 @@ class CollectionManager:
             )
             raise RAGError(f"Failed to add documents to {collection_name}: {e}") from e
 
-    def route_to_collection(self, metadata: dict[str, Any]) -> str:
+    def route_to_collection(self, metadata: dict[str, Any]) -> str:  # noqa: PLR0911
         """Determine which collection a document belongs to based on metadata."""
         category = metadata.get("category", "")
         metadata.get("file_type", "")

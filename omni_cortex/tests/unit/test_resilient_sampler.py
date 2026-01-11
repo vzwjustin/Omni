@@ -1,17 +1,19 @@
 """Tests for ResilientSampler with timeout, retry, and circuit breaker."""
-import pytest
 import asyncio
 import time
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
+from app.core.errors import LLMError, SamplerCircuitOpen, SamplerTimeout
 from app.core.sampling import (
-    ResilientSampler,
     ClientSampler,
+    ResilientSampler,
     SamplingNotSupportedError,
-    extract_score,
     extract_json_object,
+    extract_score,
 )
 from app.nodes.common import extract_code_blocks
-from app.core.errors import SamplerTimeout, SamplerCircuitOpen, LLMError
 
 
 class TestResilientSampler:

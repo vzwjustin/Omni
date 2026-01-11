@@ -5,6 +5,8 @@ Estimates task complexity based on query, code context, and file lists.
 Used to determine routing strategy and model selection.
 """
 
+from __future__ import annotations
+
 import re
 
 

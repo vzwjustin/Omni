@@ -20,6 +20,8 @@ This module uses composition with specialized components:
 - CodeSearcher: Codebase search via grep/git
 """
 
+from __future__ import annotations
+
 import asyncio
 import threading
 import time
@@ -156,7 +158,7 @@ class StructuredContext:
     token_budget: int = LLM.CONTEXT_TOKEN_BUDGET  # Max tokens for Claude prompt
     actual_tokens: int = 0  # Actual token count after generation
 
-    def to_claude_prompt(self) -> str:
+    def to_claude_prompt(self) -> str:  # noqa: C901, PLR0912, PLR0915
         """Format as rich context prompt for Claude."""
         sections = []
 
@@ -621,7 +623,7 @@ class ContextGateway:
         fallback_analyzer = get_fallback_analyzer()
         return fallback_analyzer.analyze(query)
 
-    async def prepare_context(
+    async def prepare_context(  # noqa: C901, PLR0912, PLR0915
         self,
         query: str,
         workspace_path: str | None = None,

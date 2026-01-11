@@ -19,21 +19,18 @@ Tests the app.core.router module including:
 import asyncio
 import hashlib
 import time
-import pytest
-from typing import Dict, Any, List, Optional, Tuple
-from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
-from app.core.router import HyperRouter, SPECIALIST_PROMPT_TEMPLATE
-from app.core.routing import CATEGORIES, FRAMEWORKS, infer_task_type
-from app.state import GraphState, create_initial_state
+import pytest
+
 from app.core.errors import (
-    RoutingError,
-    FrameworkNotFoundError,
     LLMError,
     ProviderNotConfiguredError,
     RateLimitError,
 )
-
+from app.core.router import HyperRouter
+from app.core.routing import CATEGORIES, FRAMEWORKS, infer_task_type
+from app.state import GraphState, create_initial_state
 
 # =============================================================================
 # Fixtures

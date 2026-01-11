@@ -12,6 +12,8 @@ Usage:
     result = await node(state)
 """
 
+from __future__ import annotations
+
 from collections.abc import Callable
 
 import structlog

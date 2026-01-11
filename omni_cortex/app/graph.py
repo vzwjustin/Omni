@@ -5,6 +5,8 @@ Defines the graph structure for orchestrating reasoning frameworks
 with proper state management and memory persistence.
 """
 
+from __future__ import annotations
+
 import asyncio
 import os
 import time

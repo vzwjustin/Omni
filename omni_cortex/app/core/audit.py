@@ -4,6 +4,8 @@ Audit Logging for Omni-Cortex
 Provides security audit trail for all framework executions and tool calls.
 """
 
+from __future__ import annotations
+
 from datetime import datetime
 from typing import Any
 

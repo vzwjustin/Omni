@@ -1,9 +1,8 @@
 """Tests for correlation ID utilities."""
-import pytest
 from app.core.correlation import (
+    clear_correlation_id,
     get_correlation_id,
     set_correlation_id,
-    clear_correlation_id,
 )
 
 

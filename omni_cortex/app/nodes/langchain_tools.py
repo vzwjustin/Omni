@@ -7,6 +7,8 @@ for enhanced capabilities like code execution, documentation search, etc.
 Refactored to include security checks for dangerous tools.
 """
 
+from __future__ import annotations
+
 import os
 from typing import Any
 

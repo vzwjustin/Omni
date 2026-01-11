@@ -6,6 +6,8 @@ Supports framework chaining for complex multi-step tasks.
 Designed for vibe coders and senior engineers who just want it to work.
 """
 
+from __future__ import annotations
+
 import asyncio
 import hashlib
 import heapq
@@ -185,7 +187,7 @@ class HyperRouter:
     # HIERARCHICAL ROUTING - Stage 2: Specialist Agent Selection
     # ==========================================================================
 
-    @lru_cache(maxsize=16)
+    @lru_cache(maxsize=16)  # noqa: B019
     def _get_specialist_prompt_template(self, category: str) -> tuple:
         """
         Generate the static parts of a specialist agent prompt for a category.
@@ -294,7 +296,7 @@ class HyperRouter:
         Returns None on failure to allow graceful fallback.
         """
         # Timeout for LLM calls to prevent indefinite hangs
-        LLM_TIMEOUT_SECONDS = 30.0
+        llm_timeout_seconds = 30.0
 
         try:
             from ..langchain_integration import get_chat_model
@@ -303,7 +305,7 @@ class HyperRouter:
             llm = get_chat_model("fast")
 
             # Wrap LLM call with timeout to prevent indefinite blocking
-            response = await asyncio.wait_for(llm.ainvoke(prompt), timeout=LLM_TIMEOUT_SECONDS)
+            response = await asyncio.wait_for(llm.ainvoke(prompt), timeout=llm_timeout_seconds)
 
             response_text = self._extract_response_text(response)
             return self._parse_specialist_response(response_text)
@@ -312,7 +314,7 @@ class HyperRouter:
             logger.warning(
                 "specialist_agent_timeout",
                 category=category,
-                timeout_seconds=LLM_TIMEOUT_SECONDS,
+                timeout_seconds=llm_timeout_seconds,
                 hint="LLM call timed out, falling back to local pattern matching",
             )
         except RateLimitError as e:
@@ -352,7 +354,7 @@ class HyperRouter:
             return content[0].get("text", str(content)) if content else ""
         return content
 
-    def _parse_specialist_response(self, response_text: str) -> tuple[list[str], str] | None:
+    def _parse_specialist_response(self, response_text: str) -> tuple[list[str], str] | None:  # noqa: PLR0911
         """Parse the specialist agent response to extract frameworks and reasoning."""
         frameworks_line = ""
         reasoning = ""
@@ -433,7 +435,7 @@ class HyperRouter:
 
         return chain, reasoning, category
 
-    async def auto_select_framework(
+    async def auto_select_framework(  # noqa: PLR0911
         self, query: str, code_snippet: str | None = None, ide_context: str | None = None
     ) -> tuple[str, str]:
         """
@@ -495,7 +497,7 @@ class HyperRouter:
         """Estimate task complexity on 0-1 scale."""
         return self._complexity_estimator.estimate(query, code_snippet, file_list)
 
-    async def route(self, state: GraphState, use_ai: bool = True) -> GraphState:
+    async def route(self, state: GraphState, use_ai: bool = True) -> GraphState:  # noqa: C901, PLR0912, PLR0915
         """
         Route the task to the best framework(s).
 
@@ -577,7 +579,7 @@ class HyperRouter:
             )
 
         # Add reasoning step with size limit to prevent unbounded growth
-        MAX_REASONING_STEPS = 100
+        max_reasoning_steps = 100
         if "reasoning_steps" not in state:
             state["reasoning_steps"] = []
         reasoning_steps = state["reasoning_steps"]
@@ -596,8 +598,8 @@ class HyperRouter:
             }
         )
         # Trim to max size, keeping most recent entries
-        if len(reasoning_steps) > MAX_REASONING_STEPS:
-            reasoning_steps = reasoning_steps[-MAX_REASONING_STEPS:]
+        if len(reasoning_steps) > max_reasoning_steps:
+            reasoning_steps = reasoning_steps[-max_reasoning_steps:]
         state["reasoning_steps"] = reasoning_steps
 
         return state
@@ -629,7 +631,7 @@ class HyperRouter:
         code_snippet: str | None = None,
         ide_context: str | None = None,
         file_list: list[str] | None = None,
-    ) -> "GeminiRouterOutput":
+    ) -> GeminiRouterOutput:
         """
         Generate a structured GeminiRouterOutput with ClaudeCodeBrief.
 

@@ -10,33 +10,32 @@ Tests cover:
 - Backward compatibility with VIBE_DICTIONARY
 """
 
-import pytest
-from typing import Dict, List, Any
 
+import pytest
+
+from app.core.errors import FrameworkNotFoundError
+from app.core.routing import get_framework_info
 from app.frameworks.registry import (
+    FRAMEWORKS,
+    VIBE_DICTIONARY,
     # Core data structures
     FrameworkCategory,
     FrameworkDefinition,
-    FRAMEWORKS,
-    VIBE_DICTIONARY,
-    # Registration
-    register,
-    # Retrieval functions
-    get_framework,
-    get_framework_safe,
-    get_frameworks_by_category,
-    get_all_vibes,
-    get_framework_names,
-    infer_task_type,
-    get_frameworks_dict,
-    list_by_category,
     count,
     find_by_vibe,
+    get_all_vibes,
+    # Retrieval functions
+    get_framework,
+    get_framework_names,
+    get_framework_safe,
+    get_frameworks_by_category,
+    get_frameworks_dict,
+    infer_task_type,
+    list_by_category,
     match_vibes,
+    # Registration
+    register,
 )
-from app.core.errors import FrameworkNotFoundError
-from app.core.routing import get_framework_info
-
 
 # =============================================================================
 # FrameworkCategory Enum Tests
@@ -422,7 +421,7 @@ class TestGetAllVibes:
     def test_keys_are_framework_names(self):
         """Test that keys are valid framework names."""
         vibes = get_all_vibes()
-        for name in vibes.keys():
+        for name in vibes:
             assert name in FRAMEWORKS, f"Unknown framework name in vibes: {name}"
 
     def test_values_are_lists_of_strings(self):
@@ -436,7 +435,7 @@ class TestGetAllVibes:
     def test_all_frameworks_have_vibes(self):
         """Test that every framework has at least one vibe."""
         vibes = get_all_vibes()
-        for name in FRAMEWORKS.keys():
+        for name in FRAMEWORKS:
             assert name in vibes, f"Framework {name} missing from vibes"
             assert len(vibes[name]) > 0, f"Framework {name} has no vibes"
 
@@ -535,7 +534,7 @@ class TestGetFrameworkInfo:
 
     def test_all_frameworks_have_valid_info(self):
         """Test that all frameworks return valid info."""
-        for name in FRAMEWORKS.keys():
+        for name in FRAMEWORKS:
             info = get_framework_info(name)
             assert info["name"] != ""
             assert info["category"] in [cat.value for cat in FrameworkCategory]
@@ -565,7 +564,7 @@ class TestInferTaskType:
 
     def test_all_frameworks_have_task_type(self):
         """Test that all frameworks have a task type (not 'unknown')."""
-        for name in FRAMEWORKS.keys():
+        for name in FRAMEWORKS:
             task_type = infer_task_type(name)
             # Note: some frameworks legitimately have task_type="unknown"
             # in their definition, but most should have meaningful types
@@ -622,7 +621,7 @@ class TestListByCategory:
         """Test that keys are category value strings."""
         result = list_by_category()
         valid_categories = [cat.value for cat in FrameworkCategory]
-        for key in result.keys():
+        for key in result:
             assert key in valid_categories, f"Invalid category key: {key}"
 
     def test_values_are_lists_of_names(self):
@@ -733,7 +732,7 @@ class TestFindByVibe:
             ("security audit", ["red_team", "chain_of_verification"]),
         ]
 
-        for vibe, expected_frameworks in test_cases:
+        for vibe, _expected_frameworks in test_cases:
             fw = find_by_vibe(vibe)
             if fw is not None:
                 # Just verify it returns a valid framework
@@ -835,7 +834,7 @@ class TestVibeDictionaryCompatibility:
     def test_vibe_dictionary_matches_get_all_vibes(self):
         """Test that VIBE_DICTIONARY equals get_all_vibes()."""
         vibes = get_all_vibes()
-        assert VIBE_DICTIONARY == vibes
+        assert vibes == VIBE_DICTIONARY
 
     def test_vibe_dictionary_has_all_frameworks(self):
         """Test that VIBE_DICTIONARY includes all frameworks."""

@@ -4,6 +4,8 @@ Output Parsers for Omni-Cortex
 Structured output parsing using Pydantic models.
 """
 
+from __future__ import annotations
+
 from langchain_core.output_parsers import PydanticOutputParser
 from pydantic import BaseModel, Field
 

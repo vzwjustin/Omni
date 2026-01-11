@@ -37,7 +37,7 @@ class FrameworkValidator:
 
         return self.issues
 
-    def _validate_framework(self, name: str, definition: FrameworkDefinition):
+    def _validate_framework(self, name: str, definition: FrameworkDefinition):  # noqa: C901, PLR0912
         """Validate a single framework definition."""
         # Name validation
         if definition.name != name:

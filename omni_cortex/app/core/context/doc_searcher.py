@@ -239,7 +239,7 @@ Focus on actionable, technical content."""
             logger.warning("doc_search_failed", error=str(e), error_type=type(e).__name__)
             return []
 
-    async def search_knowledge_base(self, query: str, task_type: str) -> list[DocumentationContext]:
+    async def search_knowledge_base(self, query: str, task_type: str) -> list[DocumentationContext]:  # noqa: C901, PLR0912
         """
         Search ChromaDB collections for relevant framework docs, learnings, and patterns.
 
@@ -742,12 +742,11 @@ Focus on actionable, technical content."""
         prioritized = self._prioritize_by_authority(merged)
 
         # Add warning if web search failed
-        if web_search_failed and prioritized:
-            # Add a note to the first result
-            if prioritized[0].snippet:
-                prioritized[
-                    0
-                ].snippet = f"[Note: Web search unavailable, showing local results only]\n\n{prioritized[0].snippet}"
+        if web_search_failed and prioritized and prioritized[0].snippet:
+            prioritized[0].snippet = (
+                f"[Note: Web search unavailable, showing local results only]\n\n"
+                f"{prioritized[0].snippet}"
+            )
 
         self.logger.info(
             "search_with_fallback_complete",

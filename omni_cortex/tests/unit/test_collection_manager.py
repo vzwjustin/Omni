@@ -13,25 +13,21 @@ Tests the app.collection_manager module including:
 - Deduplication logic
 """
 
-import pytest
 import threading
-from datetime import datetime
-from typing import Any, Dict, List, Optional
-from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
+import pytest
 from langchain_core.documents import Document
 
 from app.collection_manager import (
     CollectionManager,
     get_collection_manager,
-    _collection_manager_lock,
 )
 from app.core.errors import (
-    RAGError,
     CollectionNotFoundError,
     EmbeddingError,
+    RAGError,
 )
-
 
 # =============================================================================
 # Fixtures
@@ -63,7 +59,7 @@ def mock_chroma_collection():
 @pytest.fixture
 def collection_manager_with_mocks(mock_embeddings, mock_chroma_collection, tmp_path):
     """Create a CollectionManager with mocked dependencies."""
-    with patch("app.collection_manager.Chroma") as MockChroma:
+    with patch("app.collection_manager.Chroma") as MockChroma:  # noqa: N806
         MockChroma.return_value = mock_chroma_collection
 
         with patch("app.collection_manager._get_embeddings") as mock_get_embed:
@@ -251,7 +247,7 @@ class TestGetCollection:
 
     def test_get_collection_creates_new(self, tmp_path, mock_embeddings, mock_chroma_collection):
         """Test that new collections are created when not cached."""
-        with patch("app.collection_manager.Chroma") as MockChroma:
+        with patch("app.collection_manager.Chroma") as MockChroma:  # noqa: N806
             MockChroma.return_value = mock_chroma_collection
 
             manager = CollectionManager(persist_dir=str(tmp_path))
@@ -283,7 +279,7 @@ class TestGetCollection:
 
     def test_get_collection_chroma_error_returns_none(self, tmp_path, mock_embeddings):
         """Test that Chroma errors return None by default."""
-        with patch("app.collection_manager.Chroma") as MockChroma:
+        with patch("app.collection_manager.Chroma") as MockChroma:  # noqa: N806
             MockChroma.side_effect = RuntimeError("ChromaDB connection failed")
 
             manager = CollectionManager(persist_dir=str(tmp_path))
@@ -295,7 +291,7 @@ class TestGetCollection:
 
     def test_get_collection_chroma_error_raises_when_requested(self, tmp_path, mock_embeddings):
         """Test that Chroma errors raise RAGError when raise_on_error=True."""
-        with patch("app.collection_manager.Chroma") as MockChroma:
+        with patch("app.collection_manager.Chroma") as MockChroma:  # noqa: N806
             MockChroma.side_effect = RuntimeError("ChromaDB connection failed")
 
             manager = CollectionManager(persist_dir=str(tmp_path))
@@ -1100,7 +1096,7 @@ class TestDeduplicateResults:
 class TestGetCollectionManager:
     """Tests for get_collection_manager() function."""
 
-    def test_get_collection_manager_returns_singleton(self, tmp_path):
+    def test_get_collection_manager_returns_singleton(self, _tmp_path):
         """Test that get_collection_manager returns same instance."""
         import app.collection_manager as cm
 
@@ -1109,7 +1105,7 @@ class TestGetCollectionManager:
         cm._collection_manager = None
 
         try:
-            with patch.object(cm, "CollectionManager") as MockCM:
+            with patch.object(cm, "CollectionManager") as MockCM:  # noqa: N806
                 mock_instance = MagicMock()
                 MockCM.return_value = mock_instance
 
@@ -1121,7 +1117,7 @@ class TestGetCollectionManager:
         finally:
             cm._collection_manager = original
 
-    def test_get_collection_manager_thread_safe(self, tmp_path):
+    def test_get_collection_manager_thread_safe(self, _tmp_path):
         """Test that get_collection_manager is thread-safe."""
         import app.collection_manager as cm
 

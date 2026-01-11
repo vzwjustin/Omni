@@ -24,7 +24,9 @@ class OmniCortexCallback(BaseCallbackHandler):
         self.total_tokens = 0
         self.llm_calls = 0
 
-    def on_llm_start(self, serialized: dict[str, Any], prompts: list[str], **kwargs) -> None:
+    def on_llm_start(
+        self, _serialized: dict[str, Any], prompts: list[str], **_kwargs: Any
+    ) -> None:
         """Track LLM call start."""
         self.llm_calls += 1
         logger.info(
@@ -34,7 +36,7 @@ class OmniCortexCallback(BaseCallbackHandler):
             prompt_count=len(prompts),
         )
 
-    def on_llm_end(self, response, **kwargs) -> None:
+    def on_llm_end(self, response: Any, **_kwargs: Any) -> None:
         """Track LLM call completion and token usage."""
         if response is None:
             logger.warning("on_llm_end_null_response", thread_id=self.thread_id)
@@ -58,11 +60,11 @@ class OmniCortexCallback(BaseCallbackHandler):
                 cumulative_tokens=self.total_tokens,
             )
 
-    def on_llm_error(self, error: Exception, **kwargs) -> None:
+    def on_llm_error(self, error: Exception, **_kwargs: Any) -> None:
         """Track LLM errors."""
         logger.error("llm_call_error", thread_id=self.thread_id, error=str(error))
 
-    def on_tool_start(self, serialized: dict[str, Any], input_str: str, **kwargs) -> None:
+    def on_tool_start(self, serialized: dict[str, Any], input_str: str, **_kwargs: Any) -> None:
         """Track tool usage."""
         logger.info(
             "tool_start",
@@ -71,6 +73,6 @@ class OmniCortexCallback(BaseCallbackHandler):
             input=input_str[: CONTENT.QUERY_LOG],
         )
 
-    def on_tool_end(self, output: str, **kwargs) -> None:
+    def on_tool_end(self, output: str, **_kwargs: Any) -> None:
         """Track tool completion."""
         logger.info("tool_end", thread_id=self.thread_id, output_length=len(output))

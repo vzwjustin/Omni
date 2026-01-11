@@ -11,6 +11,8 @@ Thinking mode is a Gemini feature that enables deeper reasoning at the cost of
 additional tokens. This optimizer ensures thinking mode is used effectively.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum

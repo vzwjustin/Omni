@@ -2,9 +2,7 @@
 MCP Tool Handlers for Omni-Cortex
 
 Modular handlers for different tool categories.
-"""
 
-"""
 This package intentionally uses **lazy imports**.
 
 Why:

@@ -7,6 +7,8 @@ with the context gateway for continuous context optimization.
 This is a reference implementation showing the integration pattern.
 """
 
+from __future__ import annotations
+
 import asyncio
 import uuid
 

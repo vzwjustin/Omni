@@ -10,6 +10,8 @@ Usage:
     result = await execute_framework(config, sampler, query, context)
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from typing import Any
 

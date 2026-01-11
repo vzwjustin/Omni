@@ -11,6 +11,7 @@ Usage:
 """
 
 import sys
+
 sys.path.insert(0, '.')
 
 from app.frameworks.validation import FrameworkValidator
@@ -18,13 +19,13 @@ from app.frameworks.validation import FrameworkValidator
 if __name__ == "__main__":
     print("🔍 Validating Omni Cortex Framework Registry...")
     print("=" * 60)
-    
+
     validator = FrameworkValidator()
     issues = validator.validate_all()
     validator.print_report()
-    
+
     summary = validator.get_summary()
-    
+
     print("\n" + "=" * 60)
     if summary["error"] > 0:
         print("❌ Validation FAILED - fix errors before committing")

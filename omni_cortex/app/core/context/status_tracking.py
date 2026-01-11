@@ -5,6 +5,8 @@ Provides comprehensive status tracking, error reporting, and component
 health monitoring for the context gateway system.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any

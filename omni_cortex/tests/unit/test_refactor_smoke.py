@@ -5,8 +5,9 @@ Tests that __repr__ methods don't throw, settings load correctly,
 and error classes work as expected.
 """
 
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 
 
 class TestReprMethods:
@@ -43,7 +44,7 @@ class TestReprMethods:
 
     def test_omni_cortex_error_repr(self):
         """OmniCortexError.__repr__ should show message and details."""
-        from app.core.errors import OmniCortexError, FrameworkNotFoundError
+        from app.core.errors import FrameworkNotFoundError, OmniCortexError
 
         # Basic error
         err = OmniCortexError("Something failed")
@@ -64,7 +65,7 @@ class TestReprMethods:
 
         # Mock a response that will fail .text access
         bad_response = MagicMock()
-        bad_response.text = property(lambda self: (_ for _ in ()).throw(ValueError("blocked")))
+        bad_response.text = property(lambda _self: (_ for _ in ()).throw(ValueError("blocked")))
         del bad_response.text  # Remove to force AttributeError
         bad_response.candidates = None
 
@@ -187,8 +188,9 @@ class TestSettings:
 
     def test_settings_lean_mode_default(self):
         """lean_mode should default to True."""
-        from app.core.settings import get_settings, reset_settings
         import os
+
+        from app.core.settings import get_settings, reset_settings
 
         # Clear env var if set
         old_val = os.environ.pop("LEAN_MODE", None)
@@ -228,11 +230,11 @@ class TestErrorHierarchy:
     def test_error_inheritance(self):
         """Errors should inherit from OmniCortexError."""
         from app.core.errors import (
-            OmniCortexError,
-            RoutingError,
-            FrameworkNotFoundError,
-            RAGError,
             EmbeddingError,
+            FrameworkNotFoundError,
+            OmniCortexError,
+            RAGError,
+            RoutingError,
         )
 
         assert issubclass(RoutingError, OmniCortexError)
@@ -260,10 +262,7 @@ class TestCollectionManagerImports:
         """CollectionManager should import custom errors."""
         # This will fail if imports are broken
         from app.collection_manager import (
-            CollectionManager,
             RAGError,
-            CollectionNotFoundError,
-            EmbeddingError,
         )
 
         # Verify they're the right types
@@ -296,8 +295,8 @@ class TestFrameworkRegistry:
 
     def test_get_framework_info_unknown_raises(self):
         """get_framework_info with raise_on_unknown=True should raise."""
-        from app.core.routing import get_framework_info
         from app.core.errors import FrameworkNotFoundError
+        from app.core.routing import get_framework_info
 
         with pytest.raises(FrameworkNotFoundError) as exc_info:
             get_framework_info("nonexistent_framework_xyz", raise_on_unknown=True)
@@ -310,8 +309,8 @@ class TestRouterWrapper:
 
     def test_router_get_framework_info_passes_raise_on_unknown(self):
         """HyperRouter.get_framework_info should pass raise_on_unknown."""
-        from app.core.router import HyperRouter
         from app.core.errors import FrameworkNotFoundError
+        from app.core.router import HyperRouter
 
         router = HyperRouter()
 

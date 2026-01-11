@@ -4,16 +4,18 @@ Unit tests for token reduction integration.
 Tests the integration of TOON and LLMLingua-2 for token optimization.
 """
 
-import pytest
 import json
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
+
+import pytest
+
 from app.core.token_reduction import (
     TokenReductionManager,
-    get_manager,
-    serialize_to_toon,
     deserialize_from_toon,
+    get_manager,
+    get_reduction_stats,
     reduce_tokens,
-    get_reduction_stats
+    serialize_to_toon,
 )
 
 

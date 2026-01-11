@@ -7,6 +7,8 @@ preventing race conditions in async graph execution.
 Optimized to use shallow copies for performance.
 """
 
+from __future__ import annotations
+
 from typing import Any, TypeVar
 
 from .state import GraphState

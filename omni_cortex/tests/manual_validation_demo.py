@@ -7,14 +7,15 @@ blocks various injection attacks while allowing legitimate input.
 """
 
 import sys
+
 sys.path.insert(0, '/app')
 
 from app.core.validation import (
-    sanitize_query,
-    sanitize_file_path,
-    validate_thread_id,
-    validate_boolean,
     ValidationError,
+    sanitize_file_path,
+    sanitize_query,
+    validate_boolean,
+    validate_thread_id,
 )
 
 

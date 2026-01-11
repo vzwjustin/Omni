@@ -97,12 +97,20 @@ class RateLimitError(LLMError):
     """API rate limit exceeded."""
 
 
-class SamplerTimeout(LLMError):
+class SamplerTimeoutError(LLMError):
     """Sampler request timed out."""
 
 
-class SamplerCircuitOpen(LLMError):
+# Backwards compatibility alias
+SamplerTimeout = SamplerTimeoutError  # noqa: N818
+
+
+class SamplerCircuitOpenError(LLMError):
     """Circuit breaker is open, sampler unavailable."""
+
+
+# Backwards compatibility alias
+SamplerCircuitOpen = SamplerCircuitOpenError  # noqa: N818
 
 
 # Context Gateway Enhancement errors

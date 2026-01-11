@@ -4,15 +4,17 @@ Unit tests for TOON (Token-Oriented Object Notation) serialization.
 Tests the TOON encoder/decoder and token reduction capabilities.
 """
 
-import pytest
 import json
+
+import pytest
+
 from app.core.toon import (
-    TOONEncoder,
     TOONDecoder,
-    to_toon,
+    TOONEncoder,
     from_toon,
     get_compression_ratio,
-    get_token_savings
+    get_token_savings,
+    to_toon,
 )
 
 

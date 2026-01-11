@@ -5,6 +5,8 @@ Protects against prompt injection, XSS, and other injection attacks.
 All user input should be sanitized through these functions.
 """
 
+from __future__ import annotations
+
 import re
 
 from app.core.errors import ValidationError

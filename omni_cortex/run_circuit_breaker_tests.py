@@ -5,19 +5,20 @@ Runs without pytest to verify circuit breaker state machine.
 """
 
 import asyncio
+import contextlib
 import sys
-import time
+
 from app.core.circuit_breaker import (
     CircuitBreaker,
     CircuitState,
-    llm_circuit_breaker,
-    embedding_circuit_breaker,
-    chromadb_circuit_breaker,
-    filesystem_circuit_breaker,
-    call_llm_protected,
-    call_embedding_protected,
     call_chromadb_protected,
+    call_embedding_protected,
+    call_llm_protected,
+    chromadb_circuit_breaker,
+    embedding_circuit_breaker,
+    filesystem_circuit_breaker,
     get_all_breaker_states,
+    llm_circuit_breaker,
     reset_all_breakers,
 )
 from app.core.errors import CircuitBreakerOpenError
@@ -131,18 +132,14 @@ async def test_3_failures_increment_count():
         raise ValueError("Test failure")
 
     # First failure
-    try:
+    with contextlib.suppress(ValueError):
         await breaker.call(failing_call)
-    except ValueError:
-        pass
     result.assert_equal(breaker.failure_count, 1, "Failure count = 1 after first failure")
     result.assert_equal(breaker.state, CircuitState.CLOSED, "State still CLOSED")
 
     # Second failure
-    try:
+    with contextlib.suppress(ValueError):
         await breaker.call(failing_call)
-    except ValueError:
-        pass
     result.assert_equal(breaker.failure_count, 2, "Failure count = 2 after second failure")
     result.assert_equal(breaker.state, CircuitState.CLOSED, "State still CLOSED")
 
@@ -160,11 +157,9 @@ async def test_4_open_state_after_threshold():
         raise ValueError("Test failure")
 
     # Fail exactly failure_threshold times
-    for i in range(breaker.failure_threshold):
-        try:
+    for _ in range(breaker.failure_threshold):
+        with contextlib.suppress(ValueError):
             await breaker.call(failing_call)
-        except ValueError:
-            pass
 
     result.assert_equal(breaker.state, CircuitState.OPEN, "State is OPEN after threshold")
     result.assert_equal(breaker.failure_count, 3, "Failure count = 3")
@@ -184,11 +179,9 @@ async def test_4b_open_state_rejects_calls():
         raise ValueError("Test failure")
 
     # Open the circuit
-    for i in range(breaker.failure_threshold):
-        try:
+    for _ in range(breaker.failure_threshold):
+        with contextlib.suppress(ValueError):
             await breaker.call(failing_call)
-        except ValueError:
-            pass
 
     result.assert_equal(breaker.state, CircuitState.OPEN, "Circuit is OPEN")
 
@@ -220,11 +213,9 @@ async def test_5_transition_to_half_open():
         raise ValueError("Test failure")
 
     # Open the circuit
-    for i in range(breaker.failure_threshold):
-        try:
+    for _ in range(breaker.failure_threshold):
+        with contextlib.suppress(ValueError):
             await breaker.call(failing_call)
-        except ValueError:
-            pass
 
     result.assert_equal(breaker.state, CircuitState.OPEN, "Circuit is OPEN")
 
@@ -255,11 +246,9 @@ async def test_6_recovery_to_closed():
         raise ValueError("Test failure")
 
     # Open the circuit
-    for i in range(breaker.failure_threshold):
-        try:
+    for _ in range(breaker.failure_threshold):
+        with contextlib.suppress(ValueError):
             await breaker.call(failing_call)
-        except ValueError:
-            pass
 
     result.assert_equal(breaker.state, CircuitState.OPEN, "Circuit is OPEN")
 
@@ -295,11 +284,9 @@ async def test_6b_half_open_returns_to_open():
         raise ValueError("Test failure")
 
     # Open the circuit
-    for i in range(breaker.failure_threshold):
-        try:
+    for _ in range(breaker.failure_threshold):
+        with contextlib.suppress(ValueError):
             await breaker.call(failing_call)
-        except ValueError:
-            pass
 
     result.assert_equal(breaker.state, CircuitState.OPEN, "Circuit is OPEN")
 
@@ -307,10 +294,8 @@ async def test_6b_half_open_returns_to_open():
     await asyncio.sleep(1.1)
 
     # Fail in HALF_OPEN
-    try:
+    with contextlib.suppress(ValueError):
         await breaker.call(failing_call)
-    except ValueError:
-        pass
 
     result.assert_equal(breaker.state, CircuitState.OPEN, "State is back to OPEN")
 
@@ -397,16 +382,12 @@ async def test_10_successful_call_resets_failures():
         return "success"
 
     # Accumulate some failures
-    try:
+    with contextlib.suppress(ValueError):
         await breaker.call(failing_call)
-    except ValueError:
-        pass
     result.assert_equal(breaker.failure_count, 1, "Failure count = 1")
 
-    try:
+    with contextlib.suppress(ValueError):
         await breaker.call(failing_call)
-    except ValueError:
-        pass
     result.assert_equal(breaker.failure_count, 2, "Failure count = 2")
 
     # Successful call should reset

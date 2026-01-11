@@ -10,17 +10,18 @@ This test suite verifies that the validation module properly blocks:
 """
 
 import pytest
+
 from app.core.validation import (
     ValidationError,
-    sanitize_query,
     sanitize_code_snippet,
     sanitize_context,
     sanitize_file_path,
-    validate_thread_id,
-    validate_framework_name,
+    sanitize_query,
     validate_boolean,
-    validate_integer,
     validate_float,
+    validate_framework_name,
+    validate_integer,
+    validate_thread_id,
 )
 
 

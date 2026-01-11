@@ -19,6 +19,8 @@ Usage:
         return framework  # "active_inference"
 """
 
+from __future__ import annotations
+
 from functools import lru_cache
 
 # =========================================================================
@@ -1457,7 +1459,7 @@ def match_vibes(query: str) -> str | None:
 
     Returns:
         Framework name if strong match found, None otherwise.
-        
+
     Note:
         Cached for performance (maxsize=256). Same query returns cached result.
     """

@@ -5,6 +5,8 @@ Extends ContextGateway to provide streaming progress events during context prepa
 Supports cancellation and completion time estimation.
 """
 
+from __future__ import annotations
+
 import asyncio
 import time
 from collections.abc import Callable
@@ -167,7 +169,7 @@ class StreamingContextGateway(ContextGateway):
             except Exception as e:
                 logger.warning("progress_callback_failed", component=component, error=str(e))
 
-    async def prepare_context_streaming(
+    async def prepare_context_streaming(  # noqa: C901, PLR0912, PLR0915
         self,
         query: str,
         progress_callback: Callable[[ProgressEvent], None],

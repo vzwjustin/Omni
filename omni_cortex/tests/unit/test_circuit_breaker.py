@@ -4,20 +4,21 @@ Tests for Circuit Breaker State Machine
 Verifies correct transitions between CLOSED -> OPEN -> HALF_OPEN -> CLOSED states.
 """
 
-import pytest
 import asyncio
-import time
+
+import pytest
+
 from app.core.circuit_breaker import (
     CircuitBreaker,
     CircuitState,
-    llm_circuit_breaker,
-    embedding_circuit_breaker,
-    chromadb_circuit_breaker,
-    filesystem_circuit_breaker,
-    call_llm_protected,
-    call_embedding_protected,
     call_chromadb_protected,
+    call_embedding_protected,
+    call_llm_protected,
+    chromadb_circuit_breaker,
+    embedding_circuit_breaker,
+    filesystem_circuit_breaker,
     get_all_breaker_states,
+    llm_circuit_breaker,
     reset_all_breakers,
 )
 from app.core.errors import CircuitBreakerOpenError
@@ -80,7 +81,7 @@ class TestCircuitBreakerStateMachine:
             raise ValueError("Test failure")
 
         # Fail exactly failure_threshold times
-        for i in range(breaker.failure_threshold):
+        for _ in range(breaker.failure_threshold):
             with pytest.raises(ValueError):
                 await breaker.call(failing_call)
 
@@ -96,7 +97,7 @@ class TestCircuitBreakerStateMachine:
             raise ValueError("Test failure")
 
         # Open the circuit
-        for i in range(breaker.failure_threshold):
+        for _ in range(breaker.failure_threshold):
             with pytest.raises(ValueError):
                 await breaker.call(failing_call)
 
@@ -123,7 +124,7 @@ class TestCircuitBreakerStateMachine:
             raise ValueError("Test failure")
 
         # Open the circuit
-        for i in range(breaker.failure_threshold):
+        for _ in range(breaker.failure_threshold):
             with pytest.raises(ValueError):
                 await breaker.call(failing_call)
 
@@ -149,7 +150,7 @@ class TestCircuitBreakerStateMachine:
             raise ValueError("Test failure")
 
         # Open the circuit
-        for i in range(breaker.failure_threshold):
+        for _ in range(breaker.failure_threshold):
             with pytest.raises(ValueError):
                 await breaker.call(failing_call)
 
@@ -180,7 +181,7 @@ class TestCircuitBreakerStateMachine:
             raise ValueError("Test failure")
 
         # Open the circuit
-        for i in range(breaker.failure_threshold):
+        for _ in range(breaker.failure_threshold):
             with pytest.raises(ValueError):
                 await breaker.call(failing_call)
 
@@ -237,7 +238,7 @@ class TestCircuitBreakerStateMachine:
             raise ValueError("Test failure")
 
         # Open the circuit
-        for i in range(breaker.failure_threshold):
+        for _ in range(breaker.failure_threshold):
             with pytest.raises(ValueError):
                 await breaker.call(failing_call)
 
@@ -344,7 +345,7 @@ class TestProtectedWrappers:
             raise RuntimeError("LLM failure")
 
         # Open the LLM circuit (threshold = 3)
-        for i in range(3):
+        for _ in range(3):
             with pytest.raises(RuntimeError):
                 await call_llm_protected(failing_llm_call)
 
@@ -425,7 +426,7 @@ class TestEdgeCases:
             raise ValueError("Test failure")
 
         # Multiple failures should not open circuit
-        for i in range(5):
+        for _ in range(5):
             with pytest.raises(ValueError):
                 await breaker.call(failing_call)
 
@@ -445,7 +446,7 @@ class TestEdgeCases:
             raise ValueError("Test failure")
 
         # Open the circuit
-        for i in range(2):
+        for _ in range(2):
             with pytest.raises(ValueError):
                 await breaker.call(failing_call)
 

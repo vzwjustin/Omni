@@ -9,6 +9,8 @@ This is the missing piece that makes the MCP tools actually useful -
 Gemini does the analysis work, not just orchestration.
 """
 
+from __future__ import annotations
+
 import asyncio
 import json
 from dataclasses import dataclass, field

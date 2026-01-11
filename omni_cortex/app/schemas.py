@@ -4,6 +4,8 @@ Pydantic Schemas for Omni-Cortex MCP Server
 Defines request/response models for reasoning operations.
 """
 
+from __future__ import annotations
+
 from pydantic import BaseModel, Field
 
 

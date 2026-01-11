@@ -5,6 +5,8 @@ Implements the structured handoff protocol between Gemini (orchestration)
 and Claude Code (execution) with evidence-gated pipelines.
 """
 
+from __future__ import annotations
+
 import uuid
 from datetime import datetime
 from enum import Enum
@@ -253,7 +255,7 @@ class ClaudeCodeBrief(BaseModel):
     assumptions: list[str] = Field(default_factory=list)
     open_questions: list[str] = Field(default_factory=list)
 
-    def to_prompt(self) -> str:
+    def to_prompt(self) -> str:  # noqa: C901, PLR0912
         """Convert brief to Claude-friendly prompt format."""
         lines = [f"# Objective: {self.objective}", f"Task Type: {self.task_type.value}", ""]
 
@@ -315,7 +317,7 @@ class ClaudeCodeBrief(BaseModel):
 
         return "\n".join(lines)
 
-    def to_compact_prompt(self) -> str:
+    def to_compact_prompt(self) -> str:  # noqa: PLR0912
         """Token-optimized brief format - rich context, efficient format."""
         lines = [f"**{self.task_type.value}**: {self.objective}"]
 
@@ -366,7 +368,7 @@ class ClaudeCodeBrief(BaseModel):
 
         return "\n".join(lines)
 
-    def to_surgical_prompt(self) -> str:
+    def to_surgical_prompt(self) -> str:  # noqa: C901, PLR0912
         """
         Token-efficient brief that preserves ALL information.
 

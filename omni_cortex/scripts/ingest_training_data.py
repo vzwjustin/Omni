@@ -24,18 +24,18 @@ Usage:
     python3 scripts/ingest_training_data.py --dataset python-bugs
 """
 
+from __future__ import annotations
+
 import argparse
 import logging
-import sys
 import os
+import sys
 from datetime import datetime
-from typing import List, Dict, Optional
-from pathlib import Path
 
-# Add app to path
+# Add app to path - must be before app imports
 sys.path.append(os.getcwd())
 
-from app.collection_manager import get_collection_manager
+from app.collection_manager import get_collection_manager  # noqa: E402
 
 # Configure logging
 logging.basicConfig(
@@ -113,7 +113,7 @@ DATASETS = {
 }
 
 
-def load_hf_dataset(hf_name: str, max_samples: Optional[int] = None):
+def load_hf_dataset(hf_name: str, max_samples: int | None = None):
     """Load dataset from HuggingFace Hub with optional sampling."""
     try:
         from datasets import load_dataset
@@ -141,7 +141,7 @@ def load_hf_dataset(hf_name: str, max_samples: Optional[int] = None):
 
 # ===== PARSERS FOR EACH DATASET =====
 
-def parse_python_bugs(dataset) -> List[Dict[str, str]]:
+def parse_python_bugs(dataset) -> list[dict[str, str]]:
     """Parse Muennighoff/python-bugs dataset."""
     examples = []
     for item in dataset:
@@ -167,7 +167,7 @@ def parse_python_bugs(dataset) -> List[Dict[str, str]]:
     return examples
 
 
-def parse_bugnet(dataset) -> List[Dict[str, str]]:
+def parse_bugnet(dataset) -> list[dict[str, str]]:
     """Parse alexjercan/bugnet dataset."""
     examples = []
     for item in dataset:
@@ -192,7 +192,7 @@ def parse_bugnet(dataset) -> List[Dict[str, str]]:
     return examples
 
 
-def parse_code_feedback(dataset) -> List[Dict[str, str]]:
+def parse_code_feedback(dataset) -> list[dict[str, str]]:
     """Parse HuggingFaceH4/Code-Feedback dataset."""
     examples = []
     for item in dataset:
@@ -216,7 +216,7 @@ def parse_code_feedback(dataset) -> List[Dict[str, str]]:
     return examples
 
 
-def parse_cot_general(dataset) -> List[Dict[str, str]]:
+def parse_cot_general(dataset) -> list[dict[str, str]]:
     """Parse moremilk/General_Inquiry_Thinking-Chain-Of-Thought."""
     examples = []
     for item in dataset:
@@ -241,7 +241,7 @@ def parse_cot_general(dataset) -> List[Dict[str, str]]:
     return examples
 
 
-def parse_cot_chatml(dataset) -> List[Dict[str, str]]:
+def parse_cot_chatml(dataset) -> list[dict[str, str]]:
     """Parse AlekseyKorshuk/chain-of-thoughts-chatml."""
     examples = []
     for item in dataset:
@@ -279,7 +279,7 @@ def parse_cot_chatml(dataset) -> List[Dict[str, str]]:
     return examples
 
 
-def parse_tiny_codes(dataset) -> List[Dict[str, str]]:
+def parse_tiny_codes(dataset) -> list[dict[str, str]]:
     """Parse nampdn-ai/tiny-codes."""
     examples = []
     for item in dataset:
@@ -304,7 +304,7 @@ def parse_tiny_codes(dataset) -> List[Dict[str, str]]:
     return examples
 
 
-def parse_helpful_instructions(dataset) -> List[Dict[str, str]]:
+def parse_helpful_instructions(dataset) -> list[dict[str, str]]:
     """Parse HuggingFaceH4/helpful_instructions."""
     examples = []
     for item in dataset:
@@ -328,7 +328,7 @@ def parse_helpful_instructions(dataset) -> List[Dict[str, str]]:
     return examples
 
 
-def ingest_debugging_examples(examples: List[Dict[str, str]], source: str):
+def ingest_debugging_examples(examples: list[dict[str, str]], source: str):
     """Ingest debugging examples into debugging_knowledge collection."""
     cm = get_collection_manager()
 
@@ -378,7 +378,7 @@ Source: {ex.get('source', source)}
     logger.info(f"✅ Ingested {ingested} debugging examples!")
 
 
-def ingest_reasoning_examples(examples: List[Dict[str, str]], source: str):
+def ingest_reasoning_examples(examples: list[dict[str, str]], source: str):
     """Ingest reasoning examples into reasoning_knowledge collection."""
     cm = get_collection_manager()
 
@@ -422,7 +422,7 @@ Source: {ex.get('source', source)}
     logger.info(f"✅ Ingested {ingested} reasoning examples!")
 
 
-def ingest_instruction_examples(examples: List[Dict[str, str]], source: str):
+def ingest_instruction_examples(examples: list[dict[str, str]], source: str):
     """Ingest instruction examples into instruction_knowledge collection."""
     cm = get_collection_manager()
 
@@ -546,7 +546,7 @@ def main():
     # Ingest datasets
     if args.all:
         logger.info("Starting ingestion of all datasets...")
-        for key in DATASETS.keys():
+        for key in DATASETS:
             ingest_dataset(key)
     elif args.category:
         logger.info(f"Ingesting all {args.category} datasets...")

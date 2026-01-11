@@ -44,7 +44,7 @@ from .validation import (
 logger = structlog.get_logger("omni-cortex")
 
 
-async def handle_list_frameworks(arguments: dict) -> list[TextContent]:
+async def handle_list_frameworks(_arguments: dict) -> list[TextContent]:
     """List all thinking frameworks by category."""
     output = f"# Omni-Cortex: {len(FRAMEWORKS)} Thinking Frameworks\n\n"
     for cat in [
@@ -212,7 +212,7 @@ async def handle_execute_code(arguments: dict) -> list[TextContent]:
     return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
 
-async def handle_health(arguments: dict, manager, lean_mode: bool) -> list[TextContent]:
+async def handle_health(_arguments: dict, manager, lean_mode: bool) -> list[TextContent]:
     """Check server health and capabilities."""
     from app.core.context.context_cache import get_context_cache
     from app.core.settings import get_settings
@@ -301,7 +301,7 @@ async def handle_health(arguments: dict, manager, lean_mode: bool) -> list[TextC
     return [TextContent(type="text", text=json.dumps(health_data, indent=2))]
 
 
-async def handle_prepare_context(arguments: dict) -> list[TextContent]:
+async def handle_prepare_context(arguments: dict) -> list[TextContent]:  # noqa: PLR0912, PLR0915
     """Gemini-powered context preparation with enhanced features."""
     from app.core.settings import get_settings
 
@@ -388,14 +388,13 @@ async def handle_prepare_context(arguments: dict) -> list[TextContent]:
             metadata_parts = []
 
             # Cache status
-            if hasattr(context, "cache_metadata") and context.cache_metadata:
-                if context.cache_metadata.cache_hit:
-                    cache_age = int(context.cache_metadata.cache_age.total_seconds())
-                    cache_status = f"Cache Hit ({cache_age}s old"
-                    if context.cache_metadata.is_stale_fallback:
-                        cache_status += ", stale fallback"
-                    cache_status += ")"
-                    metadata_parts.append(cache_status)
+            if hasattr(context, "cache_metadata") and context.cache_metadata and context.cache_metadata.cache_hit:
+                cache_age = int(context.cache_metadata.cache_age.total_seconds())
+                cache_status = f"Cache Hit ({cache_age}s old"
+                if context.cache_metadata.is_stale_fallback:
+                    cache_status += ", stale fallback"
+                cache_status += ")"
+                metadata_parts.append(cache_status)
 
             # Quality metrics
             if hasattr(context, "quality_metrics") and context.quality_metrics:
@@ -491,7 +490,7 @@ async def handle_detect_truncation(arguments: dict) -> list[TextContent]:
     return [TextContent(type="text", text=json.dumps(result, indent=2))]
 
 
-async def handle_manage_claude_md(arguments: dict) -> list[TextContent]:
+async def handle_manage_claude_md(arguments: dict) -> list[TextContent]:  # noqa: PLR0911
     """Analyze, generate, or inject rules into CLAUDE.md files."""
     valid_actions = ["analyze", "generate", "inject", "list_presets"]
     valid_project_types = ["general", "python", "typescript", "react", "rust"]
@@ -681,7 +680,7 @@ async def handle_prepare_context_streaming(arguments: dict) -> list[TextContent]
         ]
 
 
-async def handle_context_cache_status(arguments: dict) -> list[TextContent]:
+async def handle_context_cache_status(_arguments: dict) -> list[TextContent]:
     """Get context cache status and statistics."""
     from app.core.context.context_cache import get_context_cache
 

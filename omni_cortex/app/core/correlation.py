@@ -1,5 +1,7 @@
 """Request correlation ID management for distributed tracing."""
 
+from __future__ import annotations
+
 import contextvars
 import uuid
 

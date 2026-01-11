@@ -8,6 +8,8 @@ Extends FileDiscoverer to handle multiple repositories in a workspace:
 - Handles repository access failures gracefully
 """
 
+from __future__ import annotations
+
 import asyncio
 import os
 import re
@@ -510,7 +512,7 @@ class MultiRepoFileDiscoverer(FileDiscoverer):
 
         return filtered_files
 
-    def _matches_gitignore_pattern(self, file_path: str, pattern: str) -> bool:
+    def _matches_gitignore_pattern(self, file_path: str, pattern: str) -> bool:  # noqa: PLR0911
         """
         Check if file path matches a .gitignore pattern.
 
@@ -666,7 +668,7 @@ class MultiRepoFileDiscoverer(FileDiscoverer):
         except Exception:
             return None
 
-    def _detect_cross_repo_references(
+    def _detect_cross_repo_references(  # noqa: PLR0912
         self, content: str, file_path: str, source_repo: RepoInfo, repo_by_name: dict[str, RepoInfo]
     ) -> list[CrossRepoDependency]:
         """

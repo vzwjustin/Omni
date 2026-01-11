@@ -8,6 +8,8 @@ Implements intelligent token budget management with:
 - Gemini-based content ranking and optimization
 """
 
+from __future__ import annotations
+
 import asyncio
 from typing import Any
 
@@ -136,7 +138,7 @@ class TokenBudgetManager:
         return base_budget
 
     def allocate_budget(
-        self, total_budget: int, task_type: str | None = None, complexity: str | None = None
+        self, total_budget: int, task_type: str | None = None, _complexity: str | None = None
     ) -> TokenBudgetAllocation:
         """
         Allocate total budget across components.
@@ -641,7 +643,7 @@ Summary:"""
             ]
 
     async def filter_low_value_content(
-        self, query: str, files: list[EnhancedFileContext], relevance_threshold: float = 0.3
+        self, _query: str, files: list[EnhancedFileContext], relevance_threshold: float = 0.3
     ) -> tuple[list[EnhancedFileContext], list[str]]:
         """
         Filter out low-value files based on relevance.

@@ -33,7 +33,7 @@ def _format_rag_context(rag_context: list) -> str:
     return "\n".join(parts)
 
 
-async def enhance_state_with_langchain(state: GraphState, thread_id: str) -> GraphState:
+async def enhance_state_with_langchain(state: GraphState, thread_id: str) -> GraphState:  # noqa: PLR0912, PLR0915
     """
     Enhance GraphState with LangChain memory, context, and RAG-retrieved documents.
 

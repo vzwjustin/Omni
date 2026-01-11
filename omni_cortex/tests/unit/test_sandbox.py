@@ -16,10 +16,10 @@ BLOCKS such patterns. The dangerous code is never actually executed.
 import pytest
 
 from app.nodes.code.pot import (
-    _safe_execute,
-    _validate_code,
     ALLOWED_IMPORTS,
     SAFE_BUILTINS,
+    _safe_execute,
+    _validate_code,
 )
 
 

@@ -17,6 +17,8 @@ References:
 - https://www.microsoft.com/en-us/research/blog/llmlingua-innovating-llm-efficiency-with-prompt-compression/
 """
 
+from __future__ import annotations
+
 import os
 from typing import Any
 

@@ -10,6 +10,8 @@ This module provides:
 - Feedback loop for improving context preparation over time
 """
 
+from __future__ import annotations
+
 import re
 from collections import defaultdict
 from dataclasses import dataclass, field

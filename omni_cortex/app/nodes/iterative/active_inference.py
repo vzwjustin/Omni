@@ -11,6 +11,8 @@ Implements a genuine hypothesis-test-update loop for debugging:
 This is a framework, not a prompt template.
 """
 
+from __future__ import annotations
+
 import re
 from dataclasses import dataclass
 

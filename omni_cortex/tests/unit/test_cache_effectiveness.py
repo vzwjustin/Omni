@@ -4,8 +4,10 @@ Unit tests for cache effectiveness tracking.
 Tests cache hit/miss metrics, token savings calculation, and dashboard functionality.
 """
 
+from datetime import datetime
+
 import pytest
-from datetime import datetime, timedelta
+
 from app.core.context.context_cache import ContextCache
 from app.core.context.enhanced_models import CacheEntry
 
@@ -86,9 +88,9 @@ def test_invalidation_tracking(cache):
     cache._track_invalidation("ttl_expired", 3)
     cache._track_invalidation("size_limit", 2)
     cache._track_invalidation("manual", 1)
-    
+
     stats = cache.get_stats()
-    
+
     assert stats["invalidations"]["workspace_change"] == 5
     assert stats["invalidations"]["ttl_expired"] == 3
     assert stats["invalidations"]["size_limit"] == 2
@@ -159,12 +161,12 @@ def test_clear_tracks_invalidation(cache):
         workspace_fingerprint="fp2",
         query_hash="qh2"
     )
-    
+
     # Clear cache
     cache.clear()
-    
+
     stats = cache.get_stats()
-    
+
     # Should track manual invalidation
     assert stats["invalidations"]["manual"] == 2
     assert len(cache._cache) == 0
@@ -190,7 +192,7 @@ async def test_multiple_cache_types(cache):
 def test_zero_division_in_hit_rate(cache):
     """Test that hit rate calculation handles zero requests."""
     stats = cache.get_stats()
-    
+
     # With no requests, hit rate should be 0.0
     for cache_type in ["query_analysis", "file_discovery", "documentation"]:
         assert stats["hit_rates"][cache_type] == 0.0

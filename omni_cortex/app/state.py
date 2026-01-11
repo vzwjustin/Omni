@@ -5,6 +5,8 @@ Defines the state structure that flows through reasoning frameworks.
 Refactored to use composition and strictly typed sub-states.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from typing import Any, TypedDict
 
